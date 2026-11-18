@@ -659,7 +659,7 @@ pub enum ResultRenderer {
         unit: HeadTailUnit,
         /// The elision marker — a `hh-tmpl/1` `Text` leaf rendered with
         /// `{threshold, head, tail, unit, omitted}` (the declared slot set).
-        marker: Text,
+        marker: Box<Text>,
     },
 }
 

@@ -458,9 +458,10 @@ impl ExecutionRequirement {
 /// `exec_defaults` that does not name `stdio` keeps it); `merged` dups
 /// stderr onto the stdout pipe at spawn so the journal is one ordered
 /// stream (mini's `stderr=STDOUT` semantics).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ExecStdio {
     /// Two pipes — the pre-R6.39 shape.
+    #[default]
     Separate,
     /// One ordered stream (stderr dup'd onto stdout at spawn).
     Merged,
@@ -512,12 +513,6 @@ impl ExecDefaults {
     /// byte-identical to the unarmed path.
     pub fn is_empty(&self) -> bool {
         self == &ExecDefaults::default()
-    }
-}
-
-impl Default for ExecStdio {
-    fn default() -> Self {
-        ExecStdio::Separate
     }
 }
 

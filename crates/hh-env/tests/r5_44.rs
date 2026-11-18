@@ -134,7 +134,7 @@ fn cell_base() -> u64 {
 
 fn open_at(root: &Path, ms: u64, ids: u64) -> (Store, String, Lease) {
     let mut s = Store::open_with(
-        root.to_path_buf(),
+        root,
         Box::new(ManualClock::at(ms)),
         Some(Box::new(SeqIds::starting_at(ids))),
         DEFAULT_BLOB_MAX_BYTES,
@@ -149,7 +149,7 @@ fn open_at(root: &Path, ms: u64, ids: u64) -> (Store, String, Lease) {
 fn open_at_clk(root: &Path, ms: u64, ids: u64) -> (ManualClock, Store, String, Lease) {
     let clk = ManualClock::at(ms);
     let mut s = Store::open_with(
-        root.to_path_buf(),
+        root,
         Box::new(clk.clone()),
         Some(Box::new(SeqIds::starting_at(ids))),
         DEFAULT_BLOB_MAX_BYTES,
@@ -163,7 +163,7 @@ fn open_at_clk(root: &Path, ms: u64, ids: u64) -> (ManualClock, Store, String, L
 
 fn reopen(root: &Path, ms: u64, ids: u64) -> Store {
     Store::open_with(
-        root.to_path_buf(),
+        root,
         Box::new(ManualClock::at(ms)),
         Some(Box::new(SeqIds::starting_at(ids))),
         DEFAULT_BLOB_MAX_BYTES,
@@ -1226,7 +1226,7 @@ fn suspend_cell(
     };
     // The session survives the suspend — the executor goes back (a
     // dropped executor kills the helper the resume needs).
-    let _ = cell.driver.return_executor(&cell.env_id, exec.inner);
+    cell.driver.return_executor(&cell.env_id, exec.inner);
     (permission_id, eid, cap, bind, sb)
 }
 
@@ -2261,7 +2261,7 @@ fn worksheet_facts() -> WorksheetFacts {
         total_micros: q.total_micros,
         unknown_exposure_bounded: true,
         pilot_subjects: None,
-        pilot_floor_met: 2 * 1 * 5 >= 10 * 1,
+        pilot_floor_met: true, // 2 floors × 5 subjects = 10 ≥ the 10-floor
         pilot_state: String::new(),
         quote_only: vec![],
         blocked: vec![],
@@ -2452,31 +2452,25 @@ fn run_matrix(repairs: &RepairsFacts) -> (Vec<Leg>, OpsReport, Vec<String>) {
             LegVerdict::Verified
         },
         &[
-            ("o8_detector".into(), {
+            ("o8_detector", {
                 let (d, s) = report.o8_detected();
                 format!("{d}/{s}")
             }),
-            ("render".into(), stage_render.to_canonical_string()),
+            ("render", stage_render.to_canonical_string()),
         ],
     ));
     legs.push(leg(
         "repairs",
         evaluate_repairs(repairs),
         &[
-            ("backend_honest".into(), repairs.backend_honest.to_string()),
+            ("backend_honest", repairs.backend_honest.to_string()),
             (
-                "exec_inside_container".into(),
+                "exec_inside_container",
                 repairs.exec_inside_container.to_string(),
             ),
-            (
-                "probe_live_channel".into(),
-                repairs.probe_live_channel.to_string(),
-            ),
-            (
-                "probe_reconnect".into(),
-                repairs.probe_reconnect.to_string(),
-            ),
-            ("discharged".into(), DISCHARGED.join(",")),
+            ("probe_live_channel", repairs.probe_live_channel.to_string()),
+            ("probe_reconnect", repairs.probe_reconnect.to_string()),
+            ("discharged", DISCHARGED.join(",")),
         ],
     ));
     legs.push(leg(

@@ -226,17 +226,12 @@ impl OpsLiveReport {
             ("seed", Json::Int(self.seed as i64)),
             (
                 "discharged_predicates",
-                Json::Arr(
-                    self.discharged_predicates
-                        .iter()
-                        .map(|s| Json::str(s))
-                        .collect(),
-                ),
+                Json::Arr(self.discharged_predicates.iter().map(Json::str).collect()),
             ),
             ("admission", Json::str(&self.admission)),
             (
                 "attempts",
-                Json::Arr(self.attempts.iter().map(|s| Json::str(s)).collect()),
+                Json::Arr(self.attempts.iter().map(Json::str).collect()),
             ),
             (
                 "legs",

@@ -569,7 +569,7 @@ impl BodySource for hharness_wire::http::BodyReader<std::io::BufReader<Box<dyn B
             hharness_wire::http::HttpError::Timeout => {
                 std::io::Error::new(std::io::ErrorKind::TimedOut, "upstream read deadline")
             }
-            other => std::io::Error::new(std::io::ErrorKind::Other, other.to_string()),
+            other => std::io::Error::other(other.to_string()),
         })
     }
 }
@@ -973,26 +973,26 @@ pub trait StoreAccess {
     fn read_store<R>(&self, f: impl FnOnce(&Store) -> R) -> R;
 }
 
-impl<'a> StoreAccess for &'a mut Store {
+impl StoreAccess for &mut Store {
     fn with_store<R>(&mut self, f: impl FnOnce(&mut Store) -> R) -> R {
-        f(&mut **self)
+        f(self)
     }
     fn read_store<R>(&self, f: impl FnOnce(&Store) -> R) -> R {
-        f(&**self)
+        f(self)
     }
 }
 
-impl<'a> StoreAccess for &'a std::sync::Mutex<Store> {
+impl StoreAccess for &std::sync::Mutex<Store> {
     fn with_store<R>(&mut self, f: impl FnOnce(&mut Store) -> R) -> R {
         // Poison recovery: a panicked conn thread leaves the ledger
         // consistent (each append is one critical section) — the lock is
         // recovered, never propagated as a second failure.
         let mut g = self.lock().unwrap_or_else(|p| p.into_inner());
-        f(&mut *g)
+        f(&mut g)
     }
     fn read_store<R>(&self, f: impl FnOnce(&Store) -> R) -> R {
         let g = self.lock().unwrap_or_else(|p| p.into_inner());
-        f(&*g)
+        f(&g)
     }
 }
 

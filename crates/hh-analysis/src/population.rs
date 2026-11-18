@@ -98,6 +98,7 @@ pub fn planned_population(
 /// where present (a pending row withholds `outcome_class` — it projects
 /// no `EvalRun`, so the attempt's settled class is the fallback), else
 /// the attempt's own folded facts.
+#[allow(clippy::too_many_arguments)] // the subject record's own member arity.
 fn subject(
     runs: &[EvalRun],
     metric_ref: &str,

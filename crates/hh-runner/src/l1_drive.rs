@@ -823,7 +823,7 @@ impl ToyMini {
                     ),
                 ]));
                 d.executed_actions.push(Vec::new());
-                return StepOutcome::Continue;
+                StepOutcome::Continue
             }
             Ok(actions) => {
                 *format_errors = 0;

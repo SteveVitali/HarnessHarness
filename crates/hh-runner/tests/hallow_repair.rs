@@ -10,7 +10,7 @@
 //! signature rule.
 
 use std::collections::BTreeMap;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use hharness_runner::cell::{run_cell, CellError, CellExec, CellOps, CellOutcome, CellPlan};
 use hharness_runner::verdict::{self, MediatorRow};

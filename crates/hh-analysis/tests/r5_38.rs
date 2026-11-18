@@ -48,10 +48,10 @@ fn binary_pairs(tasks: u32, repeats: u32, cp: u32, cm: u32, u: u32) -> Json {
                 (Json::Int(PPM), Json::Int(PPM))
             };
             pairs.push(Json::obj([
-                ("task_id", Json::str(&format!("t{:02}", t + 1))),
+                ("task_id", Json::str(format!("t{:02}", t + 1))),
                 ("repeat", Json::Int(r as i64)),
-                ("pair_id", Json::str(&format!("pair-{k}"))),
-                ("subject", Json::str(&format!("subj-{k}"))),
+                ("pair_id", Json::str(format!("pair-{k}"))),
+                ("subject", Json::str(format!("subj-{k}"))),
                 ("phase", Json::str("parity")),
                 ("stratum", Json::str("held_out")),
                 ("h", h),
@@ -83,10 +83,10 @@ fn value_pairs(tasks: u32, repeats: u32, vals: &[(i64, i64)]) -> Json {
         for r in 0..repeats {
             let (h, o) = vals[k % vals.len()];
             pairs.push(Json::obj([
-                ("task_id", Json::str(&format!("t{:02}", t + 1))),
+                ("task_id", Json::str(format!("t{:02}", t + 1))),
                 ("repeat", Json::Int(r as i64)),
-                ("pair_id", Json::str(&format!("pair-{k}"))),
-                ("subject", Json::str(&format!("subj-{k}"))),
+                ("pair_id", Json::str(format!("pair-{k}"))),
+                ("subject", Json::str(format!("subj-{k}"))),
                 ("phase", Json::str("parity")),
                 ("stratum", Json::str("held_out")),
                 ("h", Json::Int(h)),
@@ -190,7 +190,7 @@ impl<'a> In<'a> {
     }
 }
 
-fn ep<'a>(body: &'a Json, name: &str) -> Json {
+fn ep(body: &Json, name: &str) -> Json {
     body.get(kl::KIND)
         .and_then(|k| k.get("endpoints"))
         .and_then(|e| match e {
@@ -210,7 +210,7 @@ fn verdict_of(e: &Json) -> &str {
         .unwrap()
 }
 
-fn interval_of<'a>(e: &'a Json, member: &str) -> (i64, i64) {
+fn interval_of(e: &Json, member: &str) -> (i64, i64) {
     let i = e
         .get("equivalence_verdict")
         .and_then(|v| v.get(member))
@@ -298,7 +298,7 @@ fn routed_binary_equivalent_touching() {
         Some(150)
     );
     assert_eq!(
-        e.get("metadata").and_then(|_| Some(())),
+        e.get("metadata").map(|_| ()),
         None,
         "metadata sits on the section, not the endpoint"
     );

@@ -399,7 +399,7 @@ fn carried_facts() -> CarriedFacts {
         arr(member(&j, "legs"))
             .iter()
             .find(|l| member(l, "name").as_str() == Some(leg))
-            .map(|l| member(&member(l, "facts"), k).as_str().unwrap().to_string())
+            .map(|l| member(member(l, "facts"), k).as_str().unwrap().to_string())
             .unwrap()
     };
     let flag = |k: &str| matches!(member(&j, k), Json::Bool(true));

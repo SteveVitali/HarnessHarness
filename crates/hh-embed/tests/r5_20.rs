@@ -676,7 +676,7 @@ fn prepared_leg(
         canonical_len: 0,
     };
     plan.canonical_len = codec::serialize(&plan).len() as u64;
-    let mut creds = NoCredentials::default();
+    let mut creds = NoCredentials;
     let mut acc = Account::open(&mut store, &run).unwrap();
     let call = prepare(
         &mut acc,
@@ -957,8 +957,8 @@ fn ac1_clear_tool_results_view_reaches_exact_provider_bytes() {
         Some(member_view_hash(&member).as_str())
     );
     // Aged-out results never reappear; in-bound items reach the wire.
-    for i in 0..4 {
-        if sel.omitted.contains(&item_id(&obs[i])) {
+    for (i, o) in obs.iter().enumerate().take(4) {
+        if sel.omitted.contains(&item_id(o)) {
             assert!(
                 !body_s.contains(&format!("MARKER-CTR-{}", i + 1)),
                 "aged-out result reappeared"
@@ -1097,9 +1097,9 @@ fn ac1_restart_fallback_and_retry_preserve_the_wire() {
         member_of(&members4, "view_hash").and_then(Json::as_str),
         Some(member_view_hash(&member2).as_str())
     );
-    for i in 0..3 {
+    for (i, o) in obs.iter().enumerate().take(3) {
         let marker = format!("MARKER-R-{}", i + 1);
-        if sel2.omitted.contains(&item_id(&obs[i])) {
+        if sel2.omitted.contains(&item_id(o)) {
             assert!(!body4.contains(&marker), "fallback-omitted on the wire");
         } else {
             assert!(body4.contains(&marker), "fallback-retained missing");
@@ -1237,7 +1237,7 @@ fn ac2_label_capability_and_mutated_bytes_fail() {
     };
     open_turn(&mut store, &run, &lease);
     let dialect = dialects::openai_compatible();
-    let mut creds = NoCredentials::default();
+    let mut creds = NoCredentials;
     let mut acc = Account::open(&mut store, &run).unwrap();
     let bad_cap_plan = ProviderRequestPlan {
         dialect_id: dialect.dialect_id.clone(),

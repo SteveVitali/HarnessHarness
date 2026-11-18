@@ -291,7 +291,7 @@ fn wc_mediator_socket_path_records_requests_and_decides() {
 /// *allowed* request `502 Bad Gateway` — `apt-get update` dead under
 /// mediation → `verifier_unavailable:bootstrap:signature` with
 /// `denied_hosts: []` (a cap, not a deny). This leg drives a `GET` for a
-/// >8 MiB body through the socket: pre-repair the reply head is `502`;
+/// an 8+ MiB body through the socket: pre-repair the reply head is `502`;
 /// repaired it is `200` and every forwarded byte lands, with the
 /// `security.egress.decided{allow}` row intact.
 #[test]

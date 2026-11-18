@@ -95,6 +95,7 @@ fn relay_bridges_loopback_to_socket() {
     drop(c);
     up.join().unwrap();
     let _ = child.kill();
+    let _ = child.wait();
     // Closed-name refusal: `model|egress` only.
     let out = Command::new(bin)
         .args(["--pair", "evil=1=/x"])

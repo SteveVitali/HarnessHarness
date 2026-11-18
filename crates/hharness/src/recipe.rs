@@ -899,7 +899,7 @@ pub fn run_recipe(svc: &mut EmbedService, plan: &RecipePlan) -> Result<RecipeRec
                 seam: "receipt",
                 detail: format!("{}: {e:?}", leg.run_id),
             })?;
-        pins.insert(leg.run_id.clone(), head.seq as u64);
+        pins.insert(leg.run_id.clone(), head.seq);
         manifests.insert(
             leg.run_id.clone(),
             svc.store()

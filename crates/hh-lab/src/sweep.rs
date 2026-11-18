@@ -571,7 +571,7 @@ pub fn materialize_level(
     let overrides: Result<Vec<Override>, SweepRefusal> = spellings
         .iter()
         .map(|s| {
-            Override::parse(*s).map_err(|e| SweepRefusal::UnexpressibleSurface {
+            Override::parse(s).map_err(|e| SweepRefusal::UnexpressibleSurface {
                 detail: format!("{level_id}: spelling `{s}`: {e}"),
             })
         })
@@ -615,9 +615,7 @@ pub fn materialize_level(
     let level_spec = LevelSpec {
         level_id: level_id.to_string(),
         ref_: version_id.clone(),
-        overrides: Some(Json::Arr(
-            point.overrides.iter().map(|s| Json::str(s)).collect(),
-        )),
+        overrides: Some(Json::Arr(point.overrides.iter().map(Json::str).collect())),
         label: SWEEP_VARIANT_LABEL.to_string(),
         class: ParticipantClass::Native,
         non_portable: false,
@@ -676,7 +674,7 @@ pub fn json_diff(a: &Json, b: &Json, path: &str, out: &mut Vec<String>) {
                     None => out.push(format!("{path}/{k}")),
                 }
             }
-            for (k, _) in mb {
+            for k in mb.keys() {
                 if !ma.contains_key(k) {
                     out.push(format!("{path}/{k}"));
                 }

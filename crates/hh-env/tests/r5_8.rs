@@ -464,13 +464,6 @@ fn read_all(store: &Store, run: &str) -> Vec<hharness_ledger::event::EventEnvelo
         .events
 }
 
-fn class_count(store: &Store, run: &str, class: &str) -> usize {
-    read_all(store, run)
-        .iter()
-        .filter(|e| e.class == class)
-        .count()
-}
-
 fn effect_scoped(store: &Store, run: &str, ef: &str, class: &str) -> usize {
     read_all(store, run)
         .iter()
@@ -734,7 +727,7 @@ fn r58_adopted_refuses_args_mismatch() {
     let (mut store, run, lease, _clock) = open("args-mismatch");
     // Intended carrying a recorded `args_canonical_hash` that the
     // presented dispatch cannot match.
-    let m = EventMinter::new(&mut store, &run);
+    let m = EventMinter::new(&store, &run);
     let mut t = m.mint("lifecycle.turn.started", Json::obj([])).unwrap();
     t.scope.turn_id = Some("turn-1".into());
     let mut i = m

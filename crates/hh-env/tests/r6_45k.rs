@@ -881,13 +881,13 @@ fn ac3_ordering_holds_under_concurrency() {
                 for i in 0..4 {
                     let _ = (tag, i);
                     let mut guard = store.lock().unwrap_or_else(|p| p.into_inner());
-                    let ev1 = hharness_env::events::EventMinter::new(&*guard, run)
+                    let ev1 = hharness_env::events::EventMinter::new(&guard, run)
                         .mint(
                             "security.egress.requested",
                             hharness_wire::json::Json::obj([]),
                         )
                         .unwrap();
-                    let ev2 = hharness_env::events::EventMinter::new(&*guard, run)
+                    let ev2 = hharness_env::events::EventMinter::new(&guard, run)
                         .mint(
                             "security.egress.decided",
                             hharness_wire::json::Json::obj([]),

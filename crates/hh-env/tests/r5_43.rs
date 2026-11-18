@@ -565,16 +565,18 @@ fn sweep_hh_env_containers() {
     }
 }
 
+type SubjectDrive = (
+    SubjectOutcome,
+    Option<Vec<u8>>,
+    Option<(Store, String, String)>,
+);
+
 fn drive_subject(
     subject_id: &str,
     task: &str,
     submission_text: &str,
     retry_setup: bool,
-) -> (
-    SubjectOutcome,
-    Option<Vec<u8>>,
-    Option<(Store, String, String)>,
-) {
+) -> SubjectDrive {
     let mut out = SubjectOutcome {
         subject_id: subject_id.to_string(),
         task: task.to_string(),
@@ -678,7 +680,7 @@ fn drive_subject(
             Ok(_) => out.dispatch = Some("other".to_string()),
             Err(e) => {
                 out.failure = Some(format!("dispatch:{e}"));
-                let _ = driver.return_executor(&env_id, exec);
+                driver.return_executor(&env_id, exec);
                 let _ = driver.teardown(&mut store, &lease, &env_id);
                 return (out, artifact, keep);
             }
@@ -782,6 +784,7 @@ fn mint_seal(store: &mut Store, run: &str, lease: &Lease) -> EventRef {
 /// instrument run id for controls — `useful_acceptance`'s subject fold
 /// reads the bind id, never the run coordinate; the run id stays bound
 /// in `spec.subject_run_id`).
+#[allow(clippy::too_many_arguments)] // the oracle grading seam genuinely takes these.
 fn grade_attempt(
     store: &mut Store,
     instrument: &str,
@@ -1011,7 +1014,7 @@ fn worksheet_facts() -> WorksheetFacts {
         total_micros: q.total_micros,
         unknown_exposure_bounded: true,
         pilot_subjects: None,
-        pilot_floor_met: 2 * 1 * 5 >= 10 * 1,
+        pilot_floor_met: true, // 2 floors × 5 subjects = 10 ≥ the 10-floor
         pilot_state: String::new(),
         quote_only: vec![],
         blocked: vec![],

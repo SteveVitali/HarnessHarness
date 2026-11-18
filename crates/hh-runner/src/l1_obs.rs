@@ -242,7 +242,7 @@ impl ObsReplay {
     }
 
     /// The next recorded raw — `observation_overrun` past the end.
-    pub fn next(&mut self) -> Result<RawObservation, L1Error> {
+    pub fn next_raw(&mut self) -> Result<RawObservation, L1Error> {
         self.core
             .next()
             .map_err(|e| err("observation_overrun", e.to_string()))
@@ -261,7 +261,7 @@ impl ObsReplay {
 
 impl L1Exec for ObsReplay {
     fn run(&mut self, _command: &str) -> Result<RawObservation, L1Error> {
-        self.next()
+        self.next_raw()
     }
 }
 

@@ -160,7 +160,7 @@ fn refusal_name(r: &Result<pa::ParityAdmission, pa::AdmissionError>) -> String {
     match r {
         Ok(_) => "admitted".to_string(),
         Err(e) => format!("{e:?}")
-            .split(|c: char| c == ' ' || c == '(' || c == '{')
+            .split([' ', '(', '{'])
             .next()
             .unwrap()
             .to_string(),

@@ -263,7 +263,7 @@ fn instrument_with_verdict(
         &irun,
         "verification.oracle.verdict",
         Json::obj([
-            ("invocation_ref", Json::str(&format!("{irun}:evt-inv-1"))),
+            ("invocation_ref", Json::str(format!("{irun}:evt-inv-1"))),
             ("subject_run", Json::str(subject_run)),
             ("submission_ref", Json::str(submission_ref)),
             ("oracle_ref", Json::str("oracle:o1")),
@@ -408,9 +408,8 @@ fn pending_blocks_scheduler_and_counts_open() {
         // scheduling tick never re-offers the pending plan.
         let _ = e.settle(&rpid);
         let _ = e.settle(&rpid);
-        match e.next().unwrap() {
-            NextVerdict::Plan { run_plan_id } => assert_ne!(run_plan_id, rpid),
-            _ => {}
+        if let NextVerdict::Plan { run_plan_id } = e.next().unwrap() {
+            assert_ne!(run_plan_id, rpid)
         }
         view
     };

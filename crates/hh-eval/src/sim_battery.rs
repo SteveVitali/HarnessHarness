@@ -694,7 +694,7 @@ impl ScenarioReport {
                 "first_failure",
                 self.first_failure
                     .as_ref()
-                    .map(|f| Json::str(f))
+                    .map(Json::str)
                     .unwrap_or(Json::Null),
             ),
             ("availability_ppm", Json::Int(self.availability_ppm)),

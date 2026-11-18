@@ -48,21 +48,21 @@ fn pairs() -> Json {
         for r in 0..5 {
             let k = t * 5 + r;
             v.push(Json::obj([
-                ("task_id", Json::str(&format!("t{:02}", t + 1))),
+                ("task_id", Json::str(format!("t{:02}", t + 1))),
                 ("repeat", Json::Int(r)),
-                ("pair_id", Json::str(&format!("pair-{k}"))),
-                ("subject", Json::str(&format!("subj-{k}"))),
+                ("pair_id", Json::str(format!("pair-{k}"))),
+                ("subject", Json::str(format!("subj-{k}"))),
                 ("phase", Json::str("parity")),
                 ("stratum", Json::str("held_out")),
                 ("policy", Json::str(if k % 2 == 0 { "A" } else { "B" })),
-                ("h_run_ref", Json::str(&format!("run-h-{k}"))),
-                ("o_run_ref", Json::str(&format!("run-o-{k}"))),
-                ("h_verdict_ref", Json::str(&format!("v-h-{k}"))),
-                ("o_verdict_ref", Json::str(&format!("v-o-{k}"))),
-                ("replay_ref", Json::str(&format!("replay-{k}"))),
+                ("h_run_ref", Json::str(format!("run-h-{k}"))),
+                ("o_run_ref", Json::str(format!("run-o-{k}"))),
+                ("h_verdict_ref", Json::str(format!("v-h-{k}"))),
+                ("o_verdict_ref", Json::str(format!("v-o-{k}"))),
+                ("replay_ref", Json::str(format!("replay-{k}"))),
                 ("attempt", Json::Int(1)),
-                ("seed_requested", Json::Int(42 + k as i64)),
-                ("seed_honoured", Json::Int(42 + k as i64)),
+                ("seed_requested", Json::Int(42 + k)),
+                ("seed_honoured", Json::Int(42 + k)),
                 ("h", Json::Int(1_000_000)),
                 ("o", Json::Int(1_000_000)),
             ]));
@@ -90,14 +90,14 @@ fn manifest() -> Json {
 fn dim_entry(dim: &str, kind: &str, margin: &str, applicability: &str) -> Json {
     let mut e = vec![
         ("dimension", Json::str(dim)),
-        ("metric_ref", Json::str(&format!("m/{dim}"))),
-        ("estimand", Json::str(&format!("{dim}_estimand"))),
+        ("metric_ref", Json::str(format!("m/{dim}"))),
+        ("estimand", Json::str(format!("{dim}_estimand"))),
         ("estimand_kind", Json::str(kind)),
         ("population", Json::str("all_planned_pairs")),
         ("unit", Json::str("ppm")),
         ("margin_ref", Json::str(margin)),
         ("applicability", Json::str(applicability)),
-        ("evidence_ref", Json::str(&format!("ev/{dim}"))),
+        ("evidence_ref", Json::str(format!("ev/{dim}"))),
     ];
     if matches!(kind, "bounded" | "relative") {
         e.push(("range", Json::Arr(vec![Json::Int(0), Json::Int(1_000_000)])));
@@ -644,10 +644,10 @@ fn manifest_integrity_refusals() {
             for r in 0..repeats {
                 let k = t * repeats + r;
                 v.push(Json::obj([
-                    ("task_id", Json::str(&format!("t{:02}", t + 1))),
+                    ("task_id", Json::str(format!("t{:02}", t + 1))),
                     ("repeat", Json::Int(r)),
-                    ("pair_id", Json::str(&format!("pair-{k}"))),
-                    ("subject", Json::str(&format!("subj-{k}"))),
+                    ("pair_id", Json::str(format!("pair-{k}"))),
+                    ("subject", Json::str(format!("subj-{k}"))),
                     ("phase", Json::str("parity")),
                     ("stratum", Json::str("held_out")),
                     ("policy", Json::str("A")),

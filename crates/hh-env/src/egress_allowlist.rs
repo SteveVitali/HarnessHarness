@@ -2,11 +2,11 @@
 //! REQ-XB-113/114/115/116/129, absorbing ADR-C2-C) — the single paid-cell
 //! network posture of experiments-spec §3.5: podman `--network none` for
 //! the cell's whole life, `net.mode = mediated`, exactly the two
-//! bind-mounted unix sockets `{model, egress}` that `hh-cell-relay` (PID
-//! 1) bridges from in-cell loopback ports, per-phase host-side policy
-//! under the sealed `set_phase` schedule, and the declared residuals
-//! (`unix_socket` ×2, `tls_opaque`, `approved_host_body`, `dns_names`,
-//! `side_channel`).
+//! bind-mounted unix sockets `{model, egress}` that `hh-cell-relay`
+//! (PID 1) bridges from in-cell loopback ports, per-phase host-side
+//! policy under the sealed `set_phase` schedule, and the declared
+//! residuals (`unix_socket` ×2, `tls_opaque`, `approved_host_body`,
+//! `dns_names`, `side_channel`).
 //!
 //! First-pass allowlist (Q-X55): the agent phase reaches only the model
 //! proxy and apt/PyPI/npm/crates — no `github.com` and no named-host

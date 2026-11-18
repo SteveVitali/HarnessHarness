@@ -617,7 +617,7 @@ impl ExperimentSlot {
         // native` requires it, and a present `hir` is strictly
         // member-checked (the one member table, `crate::native::check_hir`).
         let pm = obj(j, "participant")?;
-        crate::native::check_participant(&Json::Obj(pm.clone())).map_err(|e| err(e))?;
+        crate::native::check_participant(&Json::Obj(pm.clone())).map_err(err)?;
         let tm = obj(j, "trajectory")?;
         // `native_log` (R6.25/REQ-XC-317 — the hashed `/logs/agent`
         // copy-out) and `atif_absent` (REQ-XC-318 — the reported

@@ -29,7 +29,7 @@ use hharness_hir::refs::{ComponentVariantRef, EnvironmentRef, ProfileRef, Ref};
 use hharness_provenance::{HumanRole, Origin, PersistenceScope, ProvenanceRecord};
 use hharness_wire::json::Json;
 
-fn arr<'a>(j: &'a Json) -> &'a Vec<Json> {
+fn arr(j: &Json) -> &Vec<Json> {
     match j {
         Json::Arr(v) => v,
         _ => panic!("not an array: {j:?}"),
@@ -335,25 +335,18 @@ fn ac2_completion_declaration_read() {
     // `stop_rule = submit` + no completion capability ⇒ no arm — the
     // marker rule needs no claim surface (the AC-2 leg).
     let p = BTreeMap::from([("stop_rule".to_string(), Json::str("submit"))]);
-    assert_eq!(
-        completion_surface_arm(&doc_with_control_params(p)).unwrap(),
-        false
-    );
+    assert!(!completion_surface_arm(&doc_with_control_params(p)).unwrap());
     // The amended object form `{submit: {marker, …}}` reads the same.
     let p = BTreeMap::from([(
         "stop_rule".to_string(),
         Json::obj([("submit", Json::obj([("marker", Json::str("COMPLETE"))]))]),
     )]);
-    assert_eq!(
-        completion_surface_arm(&doc_with_control_params(p)).unwrap(),
-        false
-    );
+    assert!(!completion_surface_arm(&doc_with_control_params(p)).unwrap());
     // `no_action`/`either` need a claim surface ⇒ armed.
     for sr in ["no_action", "either"] {
         let p = BTreeMap::from([("stop_rule".to_string(), Json::str(sr))]);
-        assert_eq!(
+        assert!(
             completion_surface_arm(&doc_with_control_params(p)).unwrap(),
-            true,
             "{sr}"
         );
     }
@@ -362,23 +355,14 @@ fn ac2_completion_declaration_read() {
         ("stop_rule".to_string(), Json::str("no_action")),
         ("completion_surface".to_string(), Json::str("none")),
     ]);
-    assert_eq!(
-        completion_surface_arm(&doc_with_control_params(p)).unwrap(),
-        false
-    );
+    assert!(!completion_surface_arm(&doc_with_control_params(p)).unwrap());
     let p = BTreeMap::from([
         ("stop_rule".to_string(), Json::str("submit")),
         ("completion_surface".to_string(), Json::str("hh.submit")),
     ]);
-    assert_eq!(
-        completion_surface_arm(&doc_with_control_params(p)).unwrap(),
-        true
-    );
+    assert!(completion_surface_arm(&doc_with_control_params(p)).unwrap());
     // No slot params at all ⇒ the variant preset (`submit`) ⇒ no arm.
-    assert_eq!(
-        completion_surface_arm(&doc_with_control_params(BTreeMap::new())).unwrap(),
-        false
-    );
+    assert!(!completion_surface_arm(&doc_with_control_params(BTreeMap::new())).unwrap());
     // Unknown spellings refuse typed, never silently coerce.
     let p = BTreeMap::from([("completion_surface".to_string(), Json::str("bogus"))]);
     assert!(completion_surface_arm(&doc_with_control_params(p)).is_err());

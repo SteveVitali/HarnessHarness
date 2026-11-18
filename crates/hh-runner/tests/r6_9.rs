@@ -51,7 +51,7 @@ impl CellOps for RecordingCell {
             .fs
             .iter()
             .filter(|e| !e.contains('/') || e.split('/').nth(1).is_some())
-            .map(|e| e.clone())
+            .cloned()
             .collect::<Vec<_>>())
     }
     fn cp_in(&mut self, _host_src: &Path, container_dst: &str) -> Result<(), CellError> {
@@ -302,7 +302,11 @@ fn bootstrap_truth_table() {
         decision: "error".into(),
     };
     // reward 0 + no ctrf + deny → bootstrap:egress_denied
-    let v = classify(&files(Some("0"), None, None, None), &[deny.clone()], false);
+    let v = classify(
+        &files(Some("0"), None, None, None),
+        std::slice::from_ref(&deny),
+        false,
+    );
     assert_eq!(
         v.classification,
         "verifier_unavailable:bootstrap:egress_denied"
@@ -465,8 +469,8 @@ fn declared_deadlines_enforced_in_record() {
     let (_a, dig) = addr.split_once(':').unwrap();
     let bytes = store
         .get_blob(&hharness_identity::idp::ContentAddress {
-            idp: "idp/1".into(),
-            algorithm: "sha256".into(),
+            idp: "idp/1",
+            algorithm: "sha256",
             digest: dig.to_string(),
             media_type: "application/json".into(),
             size: 0,

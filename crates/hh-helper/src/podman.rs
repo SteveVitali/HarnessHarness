@@ -622,7 +622,7 @@ pub fn wrap_kill(argv: &[String], deadline_ms: Option<u64>) -> Vec<String> {
         return argv.to_vec();
     };
     let dur = |v: u64| -> String {
-        if v % 1000 == 0 {
+        if v.is_multiple_of(1000) {
             format!("{}", v / 1000)
         } else {
             format!(

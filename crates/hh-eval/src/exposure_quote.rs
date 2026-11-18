@@ -1044,7 +1044,7 @@ pub fn build_quote(decl: &QuoteDecl) -> Result<ExposureQuote, QuoteError> {
         }
         // Unset enforceable bounds block the dependent action.
         if matches!(stage, "pilot" | "confirmation") {
-            for (component, _) in &cap {
+            for component in cap.keys() {
                 if !env_seen.contains(component) {
                     blockers.insert(format!("exposure:bound_unset:{component}"));
                 }

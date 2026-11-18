@@ -107,7 +107,7 @@ fn open(tag: &str) -> (Store, String, Lease) {
 /// and the blob pool fold from the WAL; no new run is minted).
 fn reopen(root: &std::path::Path) -> Store {
     Store::open_with(
-        root.to_path_buf(),
+        root,
         Box::new(ManualClock::at(1_000)),
         Some(Box::new(SeqIds::new())),
         DEFAULT_BLOB_MAX_BYTES,
@@ -459,11 +459,11 @@ fn renderer() -> ResultRenderer {
         head: 4,
         tail: 4,
         unit: HeadTailUnit::Chars,
-        marker: Text::new(
+        marker: Box::new(Text::new(
             "...[{{omitted}} omitted]...".to_string(),
             "test:owner".to_string(),
             ProvenanceRecord::kernel("t", 0),
-        ),
+        )),
     }
 }
 
@@ -909,7 +909,7 @@ fn ac3_kill_and_resume_reserves_the_recorded_bytes() {
     );
     // The call row the transcript pairs on — minted after the dispatch
     // (it closes `mc.1`).
-    let m = EventMinter::new(&mut store, &run);
+    let m = EventMinter::new(&store, &run);
     let mut e = m
         .mint(
             "model.call.completed",
@@ -988,11 +988,11 @@ fn ac3_kill_and_resume_reserves_the_recorded_bytes() {
             head: 4,
             tail: 4,
             unit: HeadTailUnit::Chars,
-            marker: Text::new(
+            marker: Box::new(Text::new(
                 "...[{{omitted}} omitted]...".to_string(),
                 "test:owner".to_string(),
                 ProvenanceRecord::kernel("t", 0),
-            ),
+            )),
         },
         &BTreeMap::from([
             ("output".to_string(), Json::str(out_str.to_string())),
@@ -1088,7 +1088,7 @@ fn ac4_unarmed_and_rendererless_stay_byte_identical() {
             ),
         ]);
         // Mint the completed row so the fold pairs the call.
-        let m = EventMinter::new(&mut store, &run);
+        let m = EventMinter::new(&store, &run);
         let mut e = m.mint("model.call.completed", completed).unwrap();
         e.scope = Scope {
             turn_id: Some("turn-1".into()),

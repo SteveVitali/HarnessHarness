@@ -944,11 +944,11 @@ fn compile_typed_renderer(
                 head,
                 tail,
                 unit,
-                marker: Text::new(
+                marker: Box::new(Text::new(
                     marker.to_string(),
                     profile_coord.to_string(),
                     kernel.clone(),
-                ),
+                )),
             }))
         }
         other => Err(bad(format!(
@@ -1115,7 +1115,7 @@ fn lower_layout(
     // `definition` authority) gates the leaf; a `hh-tmpl/1` leaf
     // compiles its template now (strict undefined's compile half).
     for (sec, node_id) in &section_templates {
-        let role = sections.get(sec).map(|s| s.role.clone()).flatten();
+        let role = sections.get(sec).and_then(|s| s.role.clone());
         if !sections.contains_key(sec) {
             return Err(CompileError::UnexpressibleSurface {
                 entity: node_id.clone(),

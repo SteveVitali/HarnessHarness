@@ -126,7 +126,7 @@ fn submission(task: &hharness_lab::bench::TaskRecord, payload_hex: &str) -> Subm
     let mut s = Submission {
         submission_id: String::new(),
         task_id: task.task_id.clone(),
-        artifact_refs: vec!["sha256:aa".repeat(1)],
+        artifact_refs: vec!["sha256:aa".to_string()],
         payload_hex: payload_hex.to_string(),
         applied: true,
         apply_error: None,

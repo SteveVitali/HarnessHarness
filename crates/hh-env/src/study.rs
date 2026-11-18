@@ -1428,7 +1428,7 @@ pub fn evaluate_efficacy(f: &EfficacyFacts) -> LegVerdict {
 /// pass — the unavailable families stay unavailable. The parity
 /// family records the verified tranche; the efficacy and sharp-null
 /// families are the state-dependent members — `REQUIRED_EFFICACY`
-////`REQUIRED_SHARP_NULL` hold the completed-cohort spellings.
+// `REQUIRED_SHARP_NULL` hold the completed-cohort spellings.
 pub const REQUIRED_FAMILIES: [(&str, &str); 7] = [
     ("task_mixture", "descriptive{pilot_recomputed}"),
     ("parity", "executed{verified_30_30}"),

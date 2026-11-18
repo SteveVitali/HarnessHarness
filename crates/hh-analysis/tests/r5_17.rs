@@ -48,6 +48,7 @@ use hharness_wire::Json;
 
 #[rustfmt::skip]
 #[derive(Debug)]
+#[allow(dead_code)] // the payloads are the {:?} diagnosis in failures.
 enum Verdict {
     Pass,
     Fail { expected: String, actual: String },

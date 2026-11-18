@@ -71,6 +71,7 @@ pub struct MechanismDecl {
 const R: &str = "subject_ratio→task_mean→equal_task";
 const C: &str = "subject_count";
 
+#[allow(clippy::too_many_arguments)] // the record's own member arity.
 const fn decl(
     name: &'static str,
     unit: &'static str,
@@ -471,7 +472,7 @@ fn ratio_or(num: i64, den: i64) -> MechanismOutcome {
 /// The `(c, seq, id)` delivered-in-window rows across every completed
 /// compaction — artefact deliveries and memory reads, overlapping
 /// `(c,event)` membership retained.
-fn deliveries<'a>(f: &'a LedgerFacts, stop: u64) -> Vec<(&'a CompactionRow, u64, &'a str)> {
+fn deliveries(f: &LedgerFacts, stop: u64) -> Vec<(&CompactionRow, u64, &str)> {
     let mut v = Vec::new();
     for c in completed(f) {
         for a in &f.artefacts_delivered {

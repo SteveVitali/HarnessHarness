@@ -405,8 +405,10 @@ fn ac4_legs_stable_prefix_and_first_divergence() {
 
     // Injected request divergence at turn 2 → detected at the right
     // step and leg (strict L1.1 refuses; the diff record names it).
-    let mut plan = DivergencePlan::default();
-    plan.request_patch = Some((2, vec![("temperature".into(), Json::Int(1))]));
+    let plan = DivergencePlan {
+        request_patch: Some((2, vec![("temperature".into(), Json::Int(1))])),
+        ..Default::default()
+    };
     let out = run_sequence(
         &seq,
         &make_o(),
@@ -441,8 +443,10 @@ fn ac4_l12_gates_inside_prefix_reports_beyond() {
         raw(&format!("{SUBMIT_MARKER}\n"), 0),
     ]));
     // Divergence at turn 1 (within the stable prefix) → fail.
-    let mut plan = DivergencePlan::default();
-    plan.request_patch = Some((1, vec![("temperature".into(), Json::Int(1))]));
+    let plan = DivergencePlan {
+        request_patch: Some((1, vec![("temperature".into(), Json::Int(1))])),
+        ..Default::default()
+    };
     let out = run_sequence(
         &seq,
         &make_o(),
@@ -457,8 +461,10 @@ fn ac4_l12_gates_inside_prefix_reports_beyond() {
     assert_eq!(out.l1_2.result, "fail");
     // Divergence only at turn 2 (= s+1, the excluded turn) → reported,
     // never a fail.
-    let mut plan = DivergencePlan::default();
-    plan.request_patch = Some((2, vec![("temperature".into(), Json::Int(1))]));
+    let plan = DivergencePlan {
+        request_patch: Some((2, vec![("temperature".into(), Json::Int(1))])),
+        ..Default::default()
+    };
     let out = run_sequence(
         &seq,
         &make_o(),
@@ -614,8 +620,10 @@ fn ac6_records_shape_and_diff_per_failed_trajectory() {
     assert_eq!(check_l1_conformance(&conf), Vec::<String>::new());
     // A failed trajectory emits a diff record per gated divergence and
     // the conformance carries it; validators pin the shape.
-    let mut plan = DivergencePlan::default();
-    plan.request_patch = Some((2, vec![("temperature".into(), Json::Int(1))]));
+    let plan = DivergencePlan {
+        request_patch: Some((2, vec![("temperature".into(), Json::Int(1))])),
+        ..Default::default()
+    };
     let out = run_sequence(
         &seq,
         &make_o(),

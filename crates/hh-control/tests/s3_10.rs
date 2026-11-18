@@ -2334,15 +2334,16 @@ fn inv5_attempt_series_key_on_the_innermost_scope() {
     );
 }
 
-/// A `tool_use` response rejected at G-INTERPRET (`control.output.rejected`
-/// + `guard.fired{format_error}`) must not *also* push `Cue::ModelCompleted`
-/// — the suppressed batch minted no `action.tool.proposed`, so the cue's
-/// `tool_use` arm read an empty `pending_intents` as a fresh format error,
-/// double-charging the streak, and the stale `GuardFired` cue then burned
-/// a whole model call on the next iteration (whose own `ModelCompleted`
-/// found the intents drained and charged a phantom third). One response,
-/// one interpretation: the guard's cue is it — every valid batch `act`s
-/// on its own `ModelCompleted` and a rejection costs exactly one retry.
+/// A `tool_use` response rejected at G-INTERPRET (the
+/// `control.output.rejected` + `guard.fired{format_error}` pair) must not
+/// *also* push `Cue::ModelCompleted` — the suppressed batch minted no
+/// `action.tool.proposed`, so the cue's `tool_use` arm read an empty
+/// `pending_intents` as a fresh format error, double-charging the streak,
+/// and the stale `GuardFired` cue then burned a whole model call on the
+/// next iteration (whose own `ModelCompleted` found the intents drained
+/// and charged a phantom third). One response, one interpretation: the
+/// guard's cue is it — every valid batch `act`s on its own
+/// `ModelCompleted` and a rejection costs exactly one retry.
 #[test]
 fn rejected_batch_suppresses_model_completed_cue() {
     let mut sink = MemSink::new();

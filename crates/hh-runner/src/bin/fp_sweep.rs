@@ -78,7 +78,7 @@ fn emit(repo: &Path, inputs: &BTreeMap<String, String>) {
         ("baseline_ref", Json::str(&m.baseline_version_id)),
         (
             "override_spellings",
-            Json::Arr(m.spellings.iter().map(|s| Json::str(s)).collect()),
+            Json::Arr(m.spellings.iter().map(Json::str).collect()),
         ),
         ("sealed", m.sealed_level_json),
         ("label", Json::str(hharness_lab::sweep::SWEEP_VARIANT_LABEL)),

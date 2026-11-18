@@ -696,7 +696,7 @@ fn ex01(
             seam: "store",
             detail: format!("{run_id}: {e:?}"),
         })?;
-    let finish = first(&evs, "lifecycle.run.finished");
+    let finish = first(evs, "lifecycle.run.finished");
     checks.push(match finish {
         Some(f)
             if str_at(&f.payload, "status") == Some("succeeded")
@@ -729,7 +729,7 @@ fn ex01(
             .manifest(&run_id)
             .ok()
             .and_then(|m| m.harness_def_ref.clone());
-        let submission = all(&evs, "action.effect.observed").iter().find_map(|e| {
+        let submission = all(evs, "action.effect.observed").iter().find_map(|e| {
             str_at(&e.payload, "submission_ref").map(|s| (e.event_id.clone(), s.to_string()))
         });
         // Run identity (the finished row), definition (manifest ref)
@@ -755,9 +755,9 @@ fn ex01(
     // (2) real action/model relation — model.call.* ↔ tool_call_id →
     //     action.effect.intended
     {
-        let req = all(&evs, "model.call.requested");
-        let done = all(&evs, "model.call.completed");
-        let intended = all(&evs, "action.effect.intended");
+        let req = all(evs, "model.call.requested");
+        let done = all(evs, "model.call.completed");
+        let intended = all(evs, "action.effect.intended");
         let mut joined = false;
         'outer: for mc in &done {
             let mc_id = str_at(&mc.payload, "model_call_id").unwrap_or("");
@@ -803,10 +803,10 @@ fn ex01(
     }
     // (3) effect intended + permission/rule
     {
-        let it = first(&evs, "action.effect.intended");
+        let it = first(evs, "action.effect.intended");
         let decided = it.and_then(|i| {
             let eid = str_at(&i.payload, "effect_id")?;
-            all(&evs, "security.permission.decided")
+            all(evs, "security.permission.decided")
                 .into_iter()
                 .find(|d| str_at(&d.payload, "effect_id") == Some(eid))
         });
@@ -841,7 +841,7 @@ fn ex01(
     // (4) the full authorized→prepared→committed→observed sequence for
     //     one effect, in seq order, with the observed bytes
     {
-        let it = first(&evs, "action.effect.intended");
+        let it = first(evs, "action.effect.intended");
         let eid = it.and_then(|i| str_at(&i.payload, "effect_id").map(str::to_string));
         let chain: Vec<u64> = eid
             .as_ref()
@@ -901,16 +901,16 @@ fn ex01(
             "verification.completion.decided",
         ]
         .iter()
-        .any(|c| first(&evs, c).is_some());
-        checks.push(if finish.is_some() && oracle {
+        .any(|c| first(evs, c).is_some());
+        checks.push(if let (Some(f), true) = (finish, oracle) {
             pass(
                 "excerpt:lifecycle_vs_oracle",
                 Json::obj([
-                    ("finished_event", Json::str(&finish.unwrap().event_id)),
+                    ("finished_event", Json::str(&f.event_id)),
                     (
                         "gate_event",
                         Json::str(
-                            &first(&evs, "verification.gate.evaluated")
+                            first(evs, "verification.gate.evaluated")
                                 .map(|e| e.event_id.clone())
                                 .unwrap_or_default(),
                         ),
@@ -928,7 +928,7 @@ fn ex01(
     //     (fully proven by the replay leg's prefix/suffix checks below;
     //     here the excerpts' context.assembled anchors resolve)
     {
-        let ctx = all(&evs, "context.assembled");
+        let ctx = all(evs, "context.assembled");
         checks.push(if !ctx.is_empty() {
             pass(
                 "excerpt:context_replay",
@@ -1735,7 +1735,7 @@ fn ex02(
                     seam: "store",
                     detail: format!("{e:?}"),
                 })?
-                .seq as u64,
+                .seq,
         );
         manifests.insert(
             s.run_id.clone(),
@@ -2532,10 +2532,7 @@ fn ex03(
                 ("wrong_output", Json::str("C — task fail")),
                 (
                     "oracle_unavailable",
-                    Json::str(format!(
-                        "{}",
-                        crashed.err().map(|e| e.to_string()).unwrap_or_default()
-                    )),
+                    Json::str(crashed.err().map(|e| e.to_string()).unwrap_or_default()),
                 ),
             ]),
         )

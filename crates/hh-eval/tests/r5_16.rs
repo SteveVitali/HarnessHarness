@@ -199,10 +199,12 @@ fn constant_samples_keep_nonzero_uncertainty() {
 }
 
 // AC-2 — the closed refusal set, one variant per clause.
+type MutationCase = (fn(&mut ContrastDecl), &'static str);
+
 #[test]
 fn refusal_set() {
     let pop = ex02_pop();
-    let cases: Vec<(fn(&mut ContrastDecl), &str)> = vec![
+    let cases: Vec<MutationCase> = vec![
         (|d| d.prior = (3, 3), "unsupported_prior"),
         (|d| d.target = Some("pooled".into()), "pooled"),
         (|d| d.target = Some("hierarchical".into()), "pooled"),

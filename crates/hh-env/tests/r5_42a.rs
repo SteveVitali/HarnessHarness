@@ -552,7 +552,7 @@ fn drive_cell(tag: &str) -> (MediationOutcome, ObserverOutcome) {
     let mut disp = Dispatcher::new(&mut store, &monitor, &run, [7; 32], DetectorSet::default());
     let marker = TrialMarker::new("pf-t1", &effect_id(&run, "mc-1", "tc-1", 0), 0);
     let line = Json::obj([
-        ("digest", Json::str(&marker.digest())),
+        ("digest", Json::str(marker.digest())),
         ("effect_id", Json::str(&marker.effect_id)),
         ("marker_id", Json::str(&marker.marker_id)),
         ("ordinal", Json::Int(marker.ordinal as i64)),
@@ -781,7 +781,7 @@ fn worksheet_facts() -> WorksheetFacts {
         total_micros: q.total_micros,
         unknown_exposure_bounded: true,
         pilot_subjects: None,
-        pilot_floor_met: 2 * 1 * 5 >= 10 * 1, // declared T=1,R=5 floor
+        pilot_floor_met: true, // declared T=1,R=5 floor: 2×5 = 10 ≥ 10
         pilot_state: String::new(),
         quote_only: vec![],
         blocked: vec![],

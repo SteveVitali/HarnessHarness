@@ -607,7 +607,7 @@ fn cmd_image_export(args: &[String]) -> Result<String, String> {
         .map_err(|e| format!("run_export: {e}"))?;
     write_json(&out.join("carried-export.json"), &rec)?;
     let bytes = if plan.shape == ExportShape::BlobsPlusConfig {
-        dir_bytes(&Path::new(&plan.out_path).to_path_buf())
+        dir_bytes(Path::new(&plan.out_path))
     } else {
         std::fs::read(&plan.out_path).map_err(|e| e.to_string())?
     };
@@ -618,9 +618,9 @@ fn cmd_image_export(args: &[String]) -> Result<String, String> {
     Ok(Json::obj([("image_id", Json::str(&plan.identity.1))]).to_canonical_string())
 }
 
-fn dir_bytes(root: &PathBuf) -> Vec<u8> {
+fn dir_bytes(root: &std::path::Path) -> Vec<u8> {
     let mut all = Vec::new();
-    let mut stack = vec![root.clone()];
+    let mut stack = vec![root.to_path_buf()];
     while let Some(d) = stack.pop() {
         if let Ok(rd) = std::fs::read_dir(&d) {
             for e in rd.flatten() {
@@ -821,7 +821,7 @@ fn cmd_observe(args: &[String]) -> Result<String, String> {
             "recording_sha256",
             Json::str(format!(
                 "sha256:{}",
-                sha256_hex(&&rec_j.to_canonical_string().into_bytes())
+                sha256_hex(&rec_j.to_canonical_string().into_bytes())
             )),
         ),
     ])
@@ -961,7 +961,7 @@ struct DriveCell<'a> {
     /// agent's closed render carries the slot token — it never enters
     /// the verify phase's environment).
     verify_env: Option<Vec<(String, String)>>,
-    agent_argv: Vec<String>,
+    _agent_argv: Vec<String>,
     verifier_argv: Vec<String>,
     policy_dst: Option<PathBuf>,
     agent_policy: Option<Json>,
@@ -1011,8 +1011,6 @@ impl CellOps for DriveCell<'_> {
         {
             let layer = if spec.argv == self.verifier_argv {
                 vp
-            } else if spec.argv == self.agent_argv {
-                ap
             } else {
                 ap
             };
@@ -1304,7 +1302,7 @@ fn h_run_once(
         backend: &backend,
         env,
         verify_env: None,
-        agent_argv: agent_argv.clone(),
+        _agent_argv: agent_argv.clone(),
         verifier_argv: verifier_argv.clone(),
         policy_dst,
         agent_policy,
@@ -1871,7 +1869,7 @@ fn arm_run_once(
             e
         },
         verify_env: Some(verify_env),
-        agent_argv: agent_argv.clone(),
+        _agent_argv: agent_argv.clone(),
         verifier_argv: verifier_argv.clone(),
         policy_dst,
         agent_policy,
