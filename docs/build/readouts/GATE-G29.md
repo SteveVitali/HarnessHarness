@@ -100,3 +100,51 @@ Signed by: the operator. Recorded by <harness/model>, which does not sign.
 -->
 
 > **Signature (Reading 1, 2026-11-16)** — verbatim "continue" (operator, interactive) in response to the GATE-G29 (G-L1) presentation (agent-drafted block sha256 `b2212ee4974c`). Disposition: **operator's own ruling — route to a re-proof PROV gate**. `full` is not presentable (no `hh-l1-conformance/1` exists — the legs were withheld, never failed) and `fallback` closes the frozen-list line for this pass; "continue" is terse continuation language mapped to the only reading that keeps the frozen-list line — and `full` — reachable (the operator's fifth consecutive continuation answer, same mapping as "continue" → `continuation{frozen-list-gate}` at the post-smoke5 decision; the readout named this third answer expressly: "not a pre-registered disposition here and would be recorded as the operator's own ruling if given"). The ruling dispatches a re-proof PROV gate insert — the Wc10-shaped re-proof window on the verified machinery (runner tip `b3f72ab7`, `model_port` band `49152`), returning through its own PROV readout under REQ-XH-004; a re-proof → `task_lists.state: frozen` → the withheld L1 corpus legs makes `full` reachable before the Q-X62 trigger instant (2026-11-24T21:42:46Z). GATE-G29 records neither `full` nor `fallback`; `task_lists.state` stays `blocked` verbatim pending the re-proof's own records.
+
+---
+
+## Return presentation — 2026-11-18 (Ws1 landed; Reading 2, agent-drafted)
+
+<!-- agent-drafted:begin -->
+
+The Reading-1 ruling ("route to a re-proof PROV gate") dispatched the chain
+Wc10 → Wcs1 → Ws1. It is now discharged on evidence:
+
+- **Re-proof:** Wcs1 minted `task_lists.state: frozen` honestly — 17/17 slots
+  covered, 42 decided cells, `archive_verified` (run `docs/build/runs/R6.45p.md`).
+- **Withheld legs:** Ws1 ran W2's PP0 (9 cells: 7 pass, 2 `agent_timeout`),
+  the L1 corpus (28 recordings, 22 `exited{0}` + 6 `agent_timeout`,
+  0 denied hosts, 0 withheld rows), and L1.0/L1.1/L1.2 on gate-A over the
+  frozen H-set `sha256:c451ed97…` (run `docs/build/runs/R6.45q.md`).
+
+**The L1 evidence state has changed.** `hh-l1-conformance/1` now **exists**,
+bound to the exact frozen H and the gate-A partition — `result: fail`,
+`parity: none`. The strict-replay endpoint measured a real structural
+divergence: H's assembled first-turn request differs from O's recorded
+mini-swe-agent prompt in `messages[0].content` (`hh_submit` tool framing,
+1,944 B vs O's 6,152 B bash-tool prompt); 40 durable `hh-l1-diff/1` records
+were minted; `s:1` uniform; `prefix:1: 8`. L1.0's 16/16 `exited{0}` proves
+the replay plumbing serves the recorded sequence verbatim — the fail is a
+genuine measurement, not a machinery void. The record self-labels "L1
+precondition gate — not parity evidence."
+
+**Dispositions on the record now.** `full` remains **not presentable** — its
+arm requires a *pass* for the exact H, and the record is a fail. `fallback`
+**is presentable on evidence**: its recorded arm holds verbatim — "L1 did
+not pass on either gate partition" (gate-A executed and recorded `fail`;
+gate-B never ran and needs no fabrication). Fallback records FP-E held in
+hosted-only form, P3-L2/P4-FP `withheld{l1_not_passed}` to a later pass,
+W4 the three hosted arms — per the pre-registered text.
+
+**Cost honesty.** Ws1's compute estimate exceeds its PROV ceiling
+(5,250,954 µ$ vs 4,136,280 µ$, ~127%) — the mid-corpus VM shutdown and
+surgical wal-fold recovery stretched wall clock to ~24 h. Recorded, not
+hidden; the FP-S envelope's aggregate is a reading for the operator.
+
+**Dispositions — your verbatim answer (the agent signs nothing).**
+`full` · `fallback` — per the pre-registered pair. Under `full`: the frozen
+H digest + the conformance pass id (still does not exist — `full` is not
+presentable). Under `fallback`: GATE-G28's `triggered{W1′}` record + the
+Q-X62 trigger instant + "L1 did not pass on either gate partition" verbatim
+— now backed by an executed gate-A `hh-l1-conformance/1` `result: fail`.
+<!-- agent-drafted:end -->
