@@ -55,6 +55,15 @@ def main():
                 if isinstance(m, dict) and isinstance(m.get("cost_micros"), (int, float)):
                     s += int(m["cost_micros"])
             total = s or None
+        # /api/usage returns hourly `buckets[].usage_usd` (dollars) —
+        # fold them to micros so settle_lib can compare against the
+        # window's tracked micro_units.
+        if total is None and isinstance(body.get("buckets"), list):
+            s = 0.0
+            for b in body["buckets"]:
+                if isinstance(b, dict) and isinstance(b.get("usage_usd"), (int, float)):
+                    s += float(b["usage_usd"])
+            total = int(round(s * 1_000_000)) if s else None
     rec = {"read_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
            "endpoint": endpoint, "query": query, "read_ms": ms,
            "status": status, "body": body}
