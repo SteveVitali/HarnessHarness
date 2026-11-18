@@ -3670,7 +3670,10 @@ impl<S: ControlStrategy> Driver<S> {
             )));
         }
         let expected: &[&str] = match &out.outcome {
-            SettledOutcome::Observed { .. } => &["action.effect.observed"],
+            // A determinable `probed` verdict is the observed outcome's
+            // durable settle for an `unknown → probe` effect — no second
+            // `observed` mints (ADR-0100 I-4).
+            SettledOutcome::Observed { .. } => &["action.effect.observed", "action.effect.probed"],
             SettledOutcome::Refused => &["action.effect.refused", "action.tool.rejected"],
             SettledOutcome::Unknown { .. } => &["action.effect.unknown"],
             SettledOutcome::Abandoned => &["action.effect.abandoned"],

@@ -225,6 +225,62 @@ fn ac2_obs_replay_overrun_refuses_typed() {
     assert!(format!("{e}").contains("observation_overrun"));
 }
 
+#[test]
+fn ac2b_obs_replay_exception_info_reports_tool_error_timeout() {
+    // Ws1r — O's `exception_info` channel (the `returncode: -1` timeout
+    // triple) must reach the terminal report: the model-view render
+    // emits `exception_info` only from a `ToolError{Timeout}` status
+    // with the verbatim detail in `detail_ref`. A raw carrying it
+    // surfaced `Ok` before the repair — the replayed request then
+    // diverged at the tool message.
+    let mut x = ObsReplayExecutor::new(vec![RawObservation {
+        output: "attempt 1 failed\n".to_string(),
+        returncode: -1,
+        exception_info: Some(Json::str(
+            "An error occurred while executing the command: Command 'sleep 90' \
+             timed out after 30 seconds",
+        )),
+    }]);
+    let req = exec_request();
+    let mut sink = |_: hharness_env::executor::ExecutorSignal| {};
+    let report = hharness_env::executor::ToolExecutor::execute(&mut x, &req, &mut sink).unwrap();
+    match &report.status {
+        hharness_env::executor::TerminalStatus::ToolError { class } => {
+            assert_eq!(class.as_str(), "timeout");
+        }
+        other => panic!("exception_info must report ToolError{{timeout}}, got {other:?}"),
+    }
+    assert_eq!(
+        report.detail_ref.as_deref(),
+        Some(
+            "An error occurred while executing the command: Command 'sleep 90' \
+             timed out after 30 seconds"
+        )
+    );
+    assert_eq!(report.exit_status, Some(-1));
+    // The class is declared — an undeclared class is a protocol_error.
+    assert!(hharness_env::executor::ToolExecutor::declaration(&x)
+        .error_classes
+        .contains("timeout"));
+    // The double declares probe support: the recorded `returncode: -1`
+    // raw is the settled evidence a live probe would discover — the
+    // killed command's mutation observably did not complete, so the
+    // `unknown → probed{not_applied}` settle delivers the recorded
+    // report instead of parking the effect `unknown` forever.
+    assert_eq!(
+        hharness_env::executor::ToolExecutor::declaration(&x).probe_support,
+        hharness_env::executor::ProbeSupport::Check
+    );
+    assert_eq!(
+        hharness_env::executor::ToolExecutor::probe(&x, "ef-1", 1).unwrap(),
+        hharness_env::executor::ProbeVerdict::NotApplied
+    );
+    // And a raw without the member stays the legacy `Ok`.
+    let mut x2 = ObsReplayExecutor::new(vec![raw("ok", 0)]);
+    let report2 = hharness_env::executor::ToolExecutor::execute(&mut x2, &req, &mut sink).unwrap();
+    assert_eq!(report2.status, hharness_env::executor::TerminalStatus::Ok);
+}
+
 fn exec_request() -> hharness_env::executor::ExecutionRequest {
     hharness_env::executor::ExecutionRequest {
         exec_defaults: None,

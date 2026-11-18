@@ -33,6 +33,7 @@ use crate::executor::{
     DedupSupport, ExecutionRequest, ExecutorDeclaration, ExecutorSignal, InterruptSupport,
     ProbeSupport, ProbeVerdict, TerminalReport, TerminalStatus, ToolExecutor,
 };
+use crate::observe::ErrorClass;
 
 /// The raw observation — O's `(output, returncode, exception_info)`
 /// per executed action (design/36 §1.2).
@@ -93,9 +94,9 @@ fn replay_decl() -> ExecutorDeclaration {
         executor_id: "l1.observation_replay/1".to_string(),
         isolation_support: IsolationClass::None,
         dedup_support: DedupSupport::None,
-        probe_support: ProbeSupport::None,
+        probe_support: ProbeSupport::Check,
         interrupt: InterruptSupport::Unsupported,
-        error_classes: ["executor_error".to_string()]
+        error_classes: ["executor_error".to_string(), "timeout".to_string()]
             .into_iter()
             .collect::<BTreeSet<_>>(),
         streams: true,
@@ -149,13 +150,33 @@ fn execute_replay(
         },
     });
     let original_size = raw.output.len() as u64;
+    // `exception_info` marks the recorded exception channel (E1 A.4's
+    // `returncode: -1` timeout): the report carries the tool-reported
+    // `timeout` class with the verbatim detail in `detail_ref` so the
+    // model-view render emits O's `exception_info` spelling; a raw
+    // without it stays the legacy `Ok`.
+    let (status, detail_ref) = match &raw.exception_info {
+        Some(j) => {
+            let detail = match j {
+                Json::Str(s) => s.clone(),
+                other => other.to_canonical_string(),
+            };
+            (
+                TerminalStatus::ToolError {
+                    class: ErrorClass::Timeout,
+                },
+                Some(detail),
+            )
+        }
+        None => (TerminalStatus::Ok, None),
+    };
     *last = Some(raw.clone());
     Ok(TerminalReport {
-        status: TerminalStatus::Ok,
+        status,
         exit_status: Some(raw.returncode),
         outcome_hint: "applied".to_string(),
         retryable_hint: None,
-        detail_ref: None,
+        detail_ref,
         truncated: false,
         omitted_bytes: 0,
         original_size,
@@ -176,7 +197,19 @@ impl ToolExecutor for ObsReplayExecutor {
     }
 
     fn probe(&self, _effect_id: &str, _attempt_no: u64) -> Result<ProbeVerdict, EnvError> {
-        Ok(ProbeVerdict::Undeterminable)
+        // The recorded triple is the settled evidence a live probe
+        // would have to discover: `exception_info`/`returncode: -1`
+        // is the recorded kill — the command's intended mutation
+        // observably did not complete (`not_applied`). A raw without
+        // that channel never reaches `unknown` (it settles
+        // `observed` at report), so the honest fallback is
+        // `undeterminable`.
+        Ok(match &self.last {
+            Some(raw) if raw.exception_info.is_some() || raw.returncode == -1 => {
+                ProbeVerdict::NotApplied
+            }
+            _ => ProbeVerdict::Undeterminable,
+        })
     }
 }
 

@@ -992,6 +992,37 @@ fn call(svc: &mut EmbedService, method: &str, params: Json) -> Result<Json, Embe
     Ok(r.get("result").cloned().unwrap_or(Json::Null))
 }
 
+/// `exec_arm_decl` — the `open_session.exec` declaration's surface
+/// list. The pack's own `ws1:bash` is the exec surface its calls
+/// resolve to — an un-armed pack leaves `exec_caps` empty: the uname
+/// probe mints `probe_unbacked` and the first request's `{{system}}`
+/// fill refuses `template_slot_unfilled` before any model dispatch.
+/// An explicit `--exec-surfaces` overrides verbatim; no pack and no
+/// flag stays `None` (byte-identical legacy).
+fn exec_arm_decl(surfaces_csv: &str, bash_surface_id: &Option<String>) -> Option<Json> {
+    let surfaces: Vec<Json> = if surfaces_csv.is_empty() {
+        if bash_surface_id.is_some() {
+            vec![Json::str("ws1:bash")]
+        } else {
+            vec![]
+        }
+    } else {
+        surfaces_csv
+            .split(',')
+            .filter(|s| !s.is_empty())
+            .map(Json::str)
+            .collect()
+    };
+    if surfaces.is_empty() {
+        None
+    } else {
+        Some(Json::obj([
+            ("env", Json::str("session")),
+            ("surfaces", Json::Arr(surfaces)),
+        ]))
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let store_root = PathBuf::from(req_arg(&args, "--store-root"));
@@ -1177,21 +1208,7 @@ fn main() {
     let spec = Json::Obj(spec_members.into_iter().collect());
     // `exec` rides `open_session`'s params (not `spec`) — R6.38's arm
     // declaration for the definition's named ToolCapability surfaces.
-    let exec_decl: Option<Json> = {
-        let surfaces: Vec<Json> = surfaces_csv
-            .split(',')
-            .filter(|s| !s.is_empty())
-            .map(Json::str)
-            .collect();
-        if surfaces.is_empty() {
-            None
-        } else {
-            Some(Json::obj([
-                ("env", Json::str("session")),
-                ("surfaces", Json::Arr(surfaces)),
-            ]))
-        }
-    };
+    let exec_decl = exec_arm_decl(&surfaces_csv, &bash_surface_id);
 
     let mut svc = match EmbedService::open(ServiceConfig {
         store_root: store_root.clone(),
@@ -1406,4 +1423,34 @@ fn main() {
         ])
         .to_canonical_string()
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn exec_arm_decl_pack_defaults_to_bash_surface() {
+        let decl = exec_arm_decl("", &Some("sha256:abc".to_string()))
+            .expect("pack present arms its own bash surface");
+        assert_eq!(
+            decl.to_canonical_string(),
+            "{\"env\":\"session\",\"surfaces\":[\"ws1:bash\"]}"
+        );
+    }
+
+    #[test]
+    fn exec_arm_decl_explicit_csv_overrides() {
+        let decl = exec_arm_decl("s1,s2", &Some("sha256:abc".to_string()))
+            .expect("explicit surfaces arm verbatim");
+        assert_eq!(
+            decl.to_canonical_string(),
+            "{\"env\":\"session\",\"surfaces\":[\"s1\",\"s2\"]}"
+        );
+    }
+
+    #[test]
+    fn exec_arm_decl_no_pack_no_flag_stays_unarmed() {
+        assert!(exec_arm_decl("", &None).is_none());
+    }
 }

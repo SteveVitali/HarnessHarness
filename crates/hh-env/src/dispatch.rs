@@ -55,8 +55,8 @@ use crate::driver::EnvDriver;
 use crate::errors::EnvError;
 use crate::events::{self, EventMinter, ScopeChain};
 use crate::executor::{
-    ExecutionRequest, ExecutorDeclaration, ExecutorSignal, ProbeVerdict, TerminalReport,
-    TerminalStatus, ToolExecutor,
+    ExecutionRequest, ExecutorDeclaration, ExecutorSignal, ProbeSupport, ProbeVerdict,
+    TerminalReport, TerminalStatus, ToolExecutor,
 };
 use crate::observe::{
     apply_hint, retryable, EffectOutcome, ErrorClass, ErrorOrigin, Observation, ObservedStatus,
@@ -720,6 +720,19 @@ impl<'a> Dispatcher<'a> {
                 .iter()
                 .rev()
                 .find(|e| e.class == "action.tool.rejected")
+                .map(|e| e.event_id.clone()),
+            DispatchOutcome::Observed(_) => events
+                .iter()
+                .rev()
+                .find(|e| {
+                    (e.class == "action.effect.observed"
+                        || (e.class == "action.effect.probed"
+                            && matches!(
+                                e.payload.get("verdict").and_then(Json::as_str),
+                                Some("applied") | Some("not_applied")
+                            )))
+                        && e.scope.effect_id.as_deref() == Some(intended)
+                })
                 .map(|e| e.event_id.clone()),
             _ => events
                 .iter()
@@ -2723,9 +2736,18 @@ impl<'a> Dispatcher<'a> {
         let (class, origin) = classify_report(&report, input.capability, executor.declaration());
         let kernel_retryable = retryable(&class, origin, &risk);
         let retryable_final = apply_hint(kernel_retryable, report.retryable_hint);
-        let outcome = match outcome_for(&report, &diff, origin, &risk) {
-            OutcomeMap::Observed(o) => o,
+        let (outcome, settled_via_probe) = match outcome_for(&report, &diff, origin, &risk) {
+            OutcomeMap::Observed(o) => (o, false),
             OutcomeMap::Unknown { cause } => {
+                // `unknown → probe` (AC-R-2.5.5-9): `unknown` is durable
+                // before the probe runs — `probed`'s phase gate admits only
+                // `unknown`. A probe-supported executor's determinable
+                // verdict settles the fold there (`probed` is the terminal,
+                // ADR-0100 I-4 forbids a second `observed`), and the
+                // recorded report still reaches the model through
+                // `context.observation.recorded`. `undeterminable` — or no
+                // probe support — leaves `unknown` (probe, never
+                // redispatch).
                 let unknown = self.minter_ev().mint_effect(
                     "action.effect.unknown",
                     events::unknown_payload(attempt_no, lease.generation, &cause),
@@ -2733,9 +2755,21 @@ impl<'a> Dispatcher<'a> {
                     &input.chain,
                 )?;
                 self.store.append(&self.run_id, lease, vec![unknown])?;
-                self.emit_unattributed(&unattributed, lease)?;
-                self.minter.expire(&effect_id, attempt_no);
-                return Ok(DispatchOutcome::Unknown { cause });
+                let verdict = match executor.declaration().probe_support {
+                    ProbeSupport::Check => {
+                        self.probe(&*executor, lease, &effect_id, attempt_no, &input.chain)?
+                    }
+                    _ => ProbeVerdict::Undeterminable,
+                };
+                match verdict {
+                    ProbeVerdict::Applied => (EffectOutcome::Applied, true),
+                    ProbeVerdict::NotApplied => (EffectOutcome::NotApplied, true),
+                    ProbeVerdict::Undeterminable => {
+                        self.emit_unattributed(&unattributed, lease)?;
+                        self.minter.expire(&effect_id, attempt_no);
+                        return Ok(DispatchOutcome::Unknown { cause });
+                    }
+                }
             }
         };
         let status = match &report.status {
@@ -2865,12 +2899,26 @@ impl<'a> Dispatcher<'a> {
         );
         let postcondition_results: Vec<String> =
             verdicts.iter().map(|v| v.verdict_id.clone()).collect();
-        let observed = self.minter_ev().mint_effect(
-            "action.effect.observed",
-            events::observed_payload(attempt_no, lease.generation, &obs, &postcondition_results),
-            &effect_id,
-            &input.chain,
-        )?;
+        // A `probed{applied|not_applied}` settle already closed the
+        // effect scope (its determinable verdict is the terminal) —
+        // minting a second `observed` would be lifecycle-illegal
+        // (ADR-0100 I-4). The observation still delivers through
+        // `context.observation.recorded` + `completed` below.
+        let observed = if settled_via_probe {
+            None
+        } else {
+            Some(self.minter_ev().mint_effect(
+                "action.effect.observed",
+                events::observed_payload(
+                    attempt_no,
+                    lease.generation,
+                    &obs,
+                    &postcondition_results,
+                ),
+                &effect_id,
+                &input.chain,
+            )?)
+        };
         // `completed` closes the `tool_call` scope — it must not carry
         // `effect_id` (`observed` closes that scope earlier in this batch).
         // The `harness_overhead.execution_ms` M-point rides the executed
@@ -2939,7 +2987,7 @@ impl<'a> Dispatcher<'a> {
         // armed renderer mints the same class for a contract-less
         // capability — `admission`/`label` stay absent-not-null and
         // `model_view` carries the durable rendering ref.
-        let mut batch = vec![observed];
+        let mut batch = observed.into_iter().collect::<Vec<_>>();
         let recorded_payload = if let Some(f) = &leaf_failure {
             Some(events::observation_refused_payload(
                 &effect_id,

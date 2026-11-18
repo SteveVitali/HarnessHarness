@@ -439,6 +439,11 @@ def main():
     ap.add_argument("--authorization-file", required=True)
     ap.add_argument("--canon-id", required=True)
     ap.add_argument("--instruction-dir", default=None)
+    ap.add_argument("--mswea-pack", default=None,
+                    help="dir with system_template.tmpl + "
+                         "instance_template.tmpl — injected into every "
+                         "hh_l1_drive invocation (the repaired profile "
+                         "layer the authored HIR's placeholder pin lacks)")
     ap.add_argument("--coverage", default=None,
                     help="fold coverage JSON (corpus leg output)")
     ap.add_argument("--census-covered", type=int, default=0)
@@ -545,8 +550,15 @@ def main():
                     instr_p = os.path.join(a.instruction_dir, fn)
         # ── raws for L1.1's obs replay ───────────────────────────
         raws_p = os.path.join(a.run_root, f"{sid}-raws.json")
-        rc, so, se = run([a.w1_bin, "l1-raws", "--recording", rec_p,
-                          "--out", raws_p]) if rec_p else (1, "", "no rec")
+        # staged faithful raws (rebuilt from the durable captured
+        # bodies — `l1-raws` on the crash-recovered recording replayed
+        # its lossy capture) are used as-is; otherwise extract
+        if os.path.exists(raws_p):
+            rc, so, se = 0, "", "staged"
+        else:
+            rc, so, se = run([a.w1_bin, "l1-raws", "--recording", rec_p,
+                              "--out", raws_p]) if rec_p else \
+                (1, "", "no rec")
         if rc != 0:
             row["l1_1"] = {"status": "machinery{raws_extract}",
                            "detail": se[:200]}
@@ -670,20 +682,30 @@ def main():
                 for name in cred_envs:
                     if token:
                         env[name] = token
+                # the cell's own containment statement — mswea drives
+                # admit arbitrary unscoped bash (the surface's `command`
+                # arg is scope_unknown; `/` is the anchored prefix that
+                # covers any scoped path too). No pack ⇒ legacy bare
+                # record (no armed exec surface anyway).
+                conn = {"class": "local_host"}
+                if a.mswea_pack:
+                    conn["exec_allow"] = ["/"]
+                env_rec = {"kind": "connection_info",
+                           "connection_info": conn}
                 cmd = [a.l1_drive_bin,
                        "--store-root", os.path.join(drive_dir, "store"),
                        "--workspace-root", os.path.join(drive_dir, "ws"),
                        "--holder", "hh-ws1-l1",
                        "--definition", hir_bound,
-                       "--environment", json.dumps(
-                           {"kind": "connection_info",
-                            "connection_info": {"class": "local_host"}}),
+                       "--environment", json.dumps(env_rec),
                        "--instruction", instr_p or "/dev/null",
                        "--endpoint", f"http://{listen}/v1",
                        "--model", recorded_model(recording),
                        "--mode", mode,
                        "--max-submits", "4",
                        "--out", drive_dir]
+                if a.mswea_pack:
+                    cmd += ["--mswea-pack", a.mswea_pack]
                 if mode == "obs_replay" and os.path.exists(raws_p):
                     cmd += ["--obs", raws_p]
                 rc, so, se = run(cmd, env=env, timeout=7200)
