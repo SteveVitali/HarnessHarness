@@ -148,3 +148,5 @@ presentable). Under `fallback`: GATE-G28's `triggered{W1′}` record + the
 Q-X62 trigger instant + "L1 did not pass on either gate partition" verbatim
 — now backed by an executed gate-A `hh-l1-conformance/1` `result: fail`.
 <!-- agent-drafted:end -->
+
+> **Signature (Reading 2, 2026-11-18)** — verbatim "my disposition is to diagnose and fix any failures and to iterate until success" (operator, interactive) in response to the GATE-G29 return presentation. Disposition: **operator's own ruling — diagnose-and-iterate**: the `hh-l1-conformance/1` `result: fail` at gate-A is to be diagnosed and repaired through iterated legs until the strict-replay fold records `pass`, at which point `full` becomes presentable on evidence. Neither `full` nor `fallback` is recorded today; `task_lists.state` stays `frozen` verbatim (Ws1 discharged the withholding; the L1 question is now a divergence-repair problem, not an evidence-absence). Any live re-drive of the legs remains behind its own authorization; the diagnosis and replay-mode iteration is $0-model work. GATE DECISIONS row appended.
