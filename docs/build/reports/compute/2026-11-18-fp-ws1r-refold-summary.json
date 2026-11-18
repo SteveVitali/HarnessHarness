@@ -1,0 +1,140 @@
+{
+ "fold": {
+  "detail": "",
+  "status": "exited{0}"
+ },
+ "fold_dir": "/tmp/ws1r-rerun/l1-out/fold",
+ "gate_a": 8,
+ "legs": [
+  {
+   "l10_a": {
+    "status": "reused{durable}"
+   },
+   "l10_b": {
+    "status": "reused{durable}"
+   },
+   "l1_1": {
+    "status": "reused{durable}"
+   },
+   "l1_2": {
+    "status": "reused{durable}"
+   },
+   "task": "cobol-modernization",
+   "trajectory": "ws1-corpus-01"
+  },
+  {
+   "l10_a": {
+    "status": "reused{durable}"
+   },
+   "l10_b": {
+    "status": "reused{durable}"
+   },
+   "l1_1": {
+    "status": "reused{durable}"
+   },
+   "l1_2": {
+    "status": "reused{durable}"
+   },
+   "task": "cobol-modernization",
+   "trajectory": "ws1-corpus-02"
+  },
+  {
+   "l10_a": {
+    "status": "reused{durable}"
+   },
+   "l10_b": {
+    "status": "reused{durable}"
+   },
+   "l1_1": {
+    "status": "reused{durable}"
+   },
+   "l1_2": {
+    "status": "reused{durable}"
+   },
+   "task": "cobol-modernization",
+   "trajectory": "ws1-corpus-03"
+  },
+  {
+   "l10_a": {
+    "status": "reused{durable}"
+   },
+   "l10_b": {
+    "status": "reused{durable}"
+   },
+   "l1_1": {
+    "status": "reused{durable}"
+   },
+   "l1_2": {
+    "status": "reused{durable}"
+   },
+   "task": "cobol-modernization",
+   "trajectory": "ws1-corpus-04"
+  },
+  {
+   "l10_a": {
+    "status": "reused{durable}"
+   },
+   "l10_b": {
+    "status": "reused{durable}"
+   },
+   "l1_1": {
+    "status": "reused{durable}"
+   },
+   "l1_2": {
+    "status": "reused{durable}"
+   },
+   "task": "sqlite-with-gcov",
+   "trajectory": "ws1-corpus-25"
+  },
+  {
+   "l10_a": {
+    "status": "reused{durable}"
+   },
+   "l10_b": {
+    "status": "reused{durable}"
+   },
+   "l1_1": {
+    "status": "reused{durable}"
+   },
+   "l1_2": {
+    "status": "reused{durable}"
+   },
+   "task": "sqlite-with-gcov",
+   "trajectory": "ws1-corpus-26"
+  },
+  {
+   "l10_a": {
+    "status": "reused{durable}"
+   },
+   "l10_b": {
+    "status": "reused{durable}"
+   },
+   "l1_1": {
+    "status": "reused{durable}"
+   },
+   "l1_2": {
+    "status": "reused{durable}"
+   },
+   "task": "sqlite-with-gcov",
+   "trajectory": "ws1-corpus-27"
+  },
+  {
+   "l10_a": {
+    "status": "reused{durable}"
+   },
+   "l10_b": {
+    "status": "reused{durable}"
+   },
+   "l1_1": {
+    "status": "reused{durable}"
+   },
+   "l1_2": {
+    "status": "reused{durable}"
+   },
+   "task": "sqlite-with-gcov",
+   "trajectory": "ws1-corpus-28"
+  }
+ ],
+ "run_at": "2026-11-18T21:57:10Z",
+ "schema": "hh-ws1-l1-summary/1"
+}

@@ -9,7 +9,7 @@
 
 use std::path::PathBuf;
 
-use hharness_gateway::recording::Recording;
+use hharness_gateway::recording::{RecordedCall, RecordedReleased, Recording};
 use hharness_runner::json_ext::JsonExt;
 use hharness_runner::l1_corpus::{
     bm_fixtures, census_entries, check_corpus, corpus_manifest, BM_BRANCHES, CORPUS_SCHEMA,
@@ -814,6 +814,100 @@ fn ac7_l1_record_refuses_as_parity_evidence() {
     let e = refuse_parity_input(&conf).unwrap_err();
     assert_eq!(e.rule, "l1_not_parity");
     assert!(refuse_parity_input(&Json::obj([("schema", Json::str("x"))])).is_ok());
+}
+
+// ── ADR-0450 — recording-relative fold semantics ───────────────────
+
+/// A single-call recording whose released response proposes `command`.
+fn one_call_recording(command: &str) -> Recording {
+    let resp = format!(
+        concat!(
+            "{{\"choices\":[{{\"message\":{{\"role\":\"assistant\",",
+            "\"tool_calls\":[{{\"id\":\"call_1\",\"function\":{{\"name\":\"bash\",",
+            "\"arguments\":\"{{\\\"command\\\":\\\"{}\\\"}}\"}}}}]}}}}]}}"
+        ),
+        command.replace('\\', "\\\\").replace('"', "\\\"")
+    );
+    Recording {
+        slot_id: "s".into(),
+        provenance: "synthetic".into(),
+        calls: vec![RecordedCall {
+            k: 0,
+            downstream_method: "POST".into(),
+            downstream_path: "/v1/chat/completions".into(),
+            downstream_body: b"{\"messages\":[]}".to_vec(),
+            upstream_request: Some(b"{\"messages\":[]}".to_vec()),
+            upstream_response: None,
+            failure: None,
+            released: Some(RecordedReleased {
+                status: 200,
+                headers: Default::default(),
+                body: resp.into_bytes(),
+            }),
+            disposition: "forwarded".into(),
+            latency_ms: 0,
+        }],
+    }
+}
+
+#[test]
+fn adr450_terminal_echo_reconstructed_typed() {
+    use hharness_runner::l1_obs::terminal_echo_observation;
+    // marker-terminal corpus — the convention intercepts the echo
+    // before any request could carry its result; the queue gains the
+    // deterministic output (ADR-0450 item 3).
+    let rec = one_call_recording(&format!("echo {SUBMIT_MARKER}"));
+    let t = terminal_echo_observation(&rec, &[]).unwrap();
+    assert_eq!(t.output, format!("{SUBMIT_MARKER}\n"));
+    assert_eq!(t.returncode, 0);
+    assert!(t.exception_info.is_none());
+    // already served — no double append.
+    let have = vec![t.clone()];
+    assert!(terminal_echo_observation(&rec, &have).is_none());
+    // a non-echo terminal call reconstructs nothing.
+    let rec = one_call_recording("cat answer.txt");
+    assert!(terminal_echo_observation(&rec, &[]).is_none());
+    // a shell-compound echo is never reconstructed.
+    let rec = one_call_recording(&format!("echo {SUBMIT_MARKER} | tee x"));
+    assert!(terminal_echo_observation(&rec, &[]).is_none());
+}
+
+#[test]
+fn adr450_corpus_boundary_tail_ungated() {
+    let canon = canon();
+    // ADR-0450 item 4 — the boundary reference gates recorded-call
+    // traversal only: `stable = |o_rec|`, `total = ∞` → tail levels
+    // emit ungated; a recorded-position diff still gates.
+    let mut o = base_drive();
+    o.termination = "exception{corpus_boundary}".into();
+    o.submission = None;
+    let mut h = base_drive();
+    h.requests.push(hharness_runner::l1_drive::CapturedRequest {
+        turn: 3,
+        method: "POST".into(),
+        path: "/v1".into(),
+        content_type: Some("application/json".into()),
+        body: b"{}".to_vec(),
+        upstream_body: b"{}".to_vec(),
+    });
+    h.termination = "exception{model_error}".into();
+    h.submission = None;
+    h.extra_request = true;
+    let v = compare_drives(canon.as_ref(), "", &o, &h, 2, usize::MAX);
+    assert_eq!(gated_count(&v), 0, "boundary tail never gates: {v:?}");
+    assert!(v.iter().any(|d| d.level == "request_count" && !d.gated));
+    assert!(v.iter().any(|d| d.level == "termination" && !d.gated));
+    assert!(v.iter().any(|d| d.level == "extra_request" && !d.gated));
+    // ...while a recorded-position request diff still gates.
+    let mut h = base_drive();
+    h.requests[0].upstream_body = Json::obj([("model", Json::str("OTHER"))])
+        .to_canonical_string()
+        .into_bytes();
+    h.termination = "exception{model_error}".into();
+    h.submission = None;
+    let v = compare_drives(canon.as_ref(), "", &o, &h, 2, usize::MAX);
+    assert!(v.iter().any(|d| d.gated && d.level == "request"));
+    assert!(v.iter().any(|d| !d.gated && d.level == "termination"));
 }
 
 /// §7.4's L1 conformance legs — L1.0/L1.1/L1.2 over gate-A against the

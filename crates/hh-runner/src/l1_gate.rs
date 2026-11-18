@@ -527,6 +527,10 @@ pub fn conformance_record(
                         "divergences",
                         Json::Int(s.l1_1.divergences.iter().filter(|d| d.gated).count() as i64),
                     ),
+                    (
+                        "reported",
+                        Json::Int(s.l1_1.divergences.iter().filter(|d| !d.gated).count() as i64),
+                    ),
                 ]),
             ),
             (

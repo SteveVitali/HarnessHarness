@@ -334,3 +334,82 @@ pub fn raws_from_recording(
     }
     Ok(best)
 }
+
+/// `echo_literal(cmd)` — `echo <bare literal>` → the literal; `None`
+/// for anything else (pipes, redirection, quoting, option flags and
+/// expansion all change `echo`'s output and are never reconstructed).
+fn echo_literal(cmd: &str) -> Option<String> {
+    let rest = cmd.trim().strip_prefix("echo ")?;
+    if rest.is_empty()
+        || rest.starts_with('-')
+        || rest.chars().any(|c| {
+            matches!(
+                c,
+                '|' | '>' | '<' | ';' | '&' | '$' | '`' | '"' | '\'' | '\\'
+            )
+        })
+    {
+        return None;
+    }
+    Some(rest.to_string())
+}
+
+/// `terminal_echo_observation(rec)` — ADR-0450 item 3: when the
+/// recording's **final** call proposes `echo <literal>` and the corpus
+/// records no observation for it — the submit-marker convention
+/// intercepts the command, so no later request carries its tool result
+/// — the deterministic echo output `<literal>\n` at `returncode 0` is
+/// the honest replay raw. The recorded evidence is the command's
+/// *proposal*; `echo`'s output is defined by the command itself. The
+/// caller marks the appended entry `reconstructed: "echo_literal"`.
+/// `None` for a corpus whose terminal call carries no bare echo, or
+/// whose raws already end on that literal's output line.
+pub fn terminal_echo_observation(
+    rec: &hharness_gateway::recording::Recording,
+    raws: &[RawObservation],
+) -> Option<RawObservation> {
+    let body = rec.calls.last().and_then(|c| {
+        c.released
+            .as_ref()
+            .map(|r| &r.body)
+            .or(c.upstream_response.as_ref().map(|r| &r.body))
+    })?;
+    let doc = parse(&String::from_utf8_lossy(body)).ok()?;
+    let calls = doc
+        .get("choices")
+        .and_then(JsonExt::as_arr)
+        .and_then(|a| a.first())
+        .and_then(|ch| ch.get("message"))
+        .and_then(|m| m.get("tool_calls"))
+        .and_then(JsonExt::as_arr)?;
+    for tc in calls {
+        let Some(args) = tc
+            .get("function")
+            .and_then(|f| f.get("arguments"))
+            .and_then(|a| {
+                a.as_str()
+                    .map(str::to_string)
+                    .or_else(|| a.as_obj().map(|_| a.to_canonical_string()))
+            })
+        else {
+            continue;
+        };
+        let Some(cmd) = parse(&args)
+            .ok()
+            .and_then(|d| d.get("command").and_then(Json::as_str).map(str::to_string))
+        else {
+            continue;
+        };
+        if let Some(lit) = echo_literal(&cmd) {
+            let output = format!("{lit}\n");
+            if raws.last().map(|r| r.output.as_str()) != Some(output.as_str()) {
+                return Some(RawObservation {
+                    output,
+                    returncode: 0,
+                    exception_info: None,
+                });
+            }
+        }
+    }
+    None
+}

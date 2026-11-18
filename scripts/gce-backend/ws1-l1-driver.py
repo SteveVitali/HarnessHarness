@@ -82,8 +82,9 @@ def slot_receipts(store_root, slot_id):
     Receipts are durable wal refs, not standalone .json files — walk
     `runs/*/events.wal`, resolve each model.call terminal event's
     `response_ref` against the blob pool, and keep receipts bound to
-    this slot."""
-    rows = []
+    this slot. A re-driven leg leaves earlier attempt runs beside the
+    current one — bind to the latest attempt's WAL (newest mtime), the
+    session that served the drive being folded."""
     runs_d = os.path.join(store_root, "runs")
     wals = []
     if os.path.isdir(runs_d):
@@ -91,6 +92,9 @@ def slot_receipts(store_root, slot_id):
             for fn in fns:
                 if fn == "events.wal":
                     wals.append(os.path.join(dp, fn))
+    wals.sort(key=lambda w: os.path.getmtime(w))
+    wals = wals[-1:]
+    rows = []
     for wal in wals:
         try:
             with open(wal) as f:
@@ -157,10 +161,13 @@ def drive_from_receipts(store_root, slot_id, turn0=1):
     return reqs, verdicts
 
 def endpoint_first(verdicts):
-    """The strict/lenient endpoint's first divergence as [turn,path]."""
+    """The strict/lenient endpoint's first divergence as [turn,path].
+    `exact`/`canonical_equal` are the match verdicts the proxy mints —
+    everything else is a refusal or divergence."""
     for i, v in enumerate(verdicts):
         verdict = v.get("verdict")
-        if verdict and verdict not in ("match", "matched", "ok", "pass"):
+        if verdict and verdict not in ("match", "matched", "ok", "pass",
+                                       "exact", "canonical_equal"):
             return [i + 1, v.get("first_diff_path") or verdict]
     return None
 
@@ -173,13 +180,141 @@ def extra_request(verdicts, recorded_len):
             return True
     return False
 
+SUBMIT_MARKER = "COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT"
+
+def response_commands(resp_body):
+    """tool_call commands in a recorded response body {utf8: json}."""
+    out = []
+    raw = (resp_body or {}).get("utf8")
+    if not raw:
+        return out
+    try:
+        doc = json.loads(raw)
+    except Exception:
+        return out
+    for ch in doc.get("choices") or []:
+        msg = ch.get("message") or {}
+        for tc in msg.get("tool_calls") or []:
+            fn = tc.get("function") or {}
+            args = fn.get("arguments")
+            if isinstance(args, str):
+                try:
+                    args = json.loads(args)
+                except Exception:
+                    args = {}
+            out.append({"command": (args or {}).get("command") or "",
+                        "tool_call_id": tc.get("id") or ""})
+    return out
+
+def echo_literal(cmd):
+    """`echo <bare literal>` → the literal (ADR-0450); None otherwise."""
+    c = (cmd or "").strip()
+    if not c.startswith("echo "):
+        return None
+    rest = c[5:]
+    if not rest or rest.startswith("-") or \
+            any(ch in rest for ch in '|><;&$`"\'\\'):
+        return None
+    return rest
+
+def terminal_submission(recording):
+    """True when the recording's last call proposes the declared
+    submit-marker echo (ADR-0450 — the marker is the terminal)."""
+    calls = recording.get("calls") or []
+    if not calls:
+        return False
+    resp = (calls[-1].get("released") or {}).get("body") or \
+        (calls[-1].get("upstream_response") or {}).get("body")
+    return any(echo_literal(a["command"]) == SUBMIT_MARKER
+               for a in response_commands(resp))
+
+def terminal_echo_raw(recording, raws):
+    """ADR-0450 item 3 — the deterministic `echo` output the corpus
+    never recorded (the marker convention intercepts it), typed
+    `reconstructed`. None when absent or already served."""
+    calls = recording.get("calls") or []
+    if not calls:
+        return None
+    resp = (calls[-1].get("released") or {}).get("body") or \
+        (calls[-1].get("upstream_response") or {}).get("body")
+    for a in response_commands(resp):
+        lit = echo_literal(a["command"])
+        if lit is None:
+            continue
+        want = lit + "\n"
+        if raws and (raws[-1] or {}).get("output") == want:
+            return None
+        return {"returncode": 0, "output": want,
+                "exception_info": None,
+                "reconstructed": "echo_literal"}
+    return None
+
+def channel_submission(payload):
+    """The channel-typed submission member (ADR-0450 item 2): the
+    `marker` sentinel for marker-convention submissions (the minted
+    `submission_ref` is an opaque id — deliberately not compared), the
+    payload string itself for content submissions."""
+    if payload is None:
+        return None
+    if isinstance(payload, str) and payload:
+        return payload
+    return "marker"
+
+def o_rec_drive(recording):
+    """The recording-derived L1.1 reference drive (ADR-0450): the
+    corpus the strict proxy enforced — the requests O actually sent,
+    and the recorded terminal class (`submitted` on a marker tail,
+    `corpus_boundary` on a crash-truncated recording)."""
+    reqs = []
+    for i, c in enumerate(recording.get("calls") or []):
+        dn = c.get("downstream") or {}
+        upr = c.get("upstream_request") or {}
+        upb = (upr.get("body") or dn.get("body") or {})
+        reqs.append({
+            "turn": i + 1,
+            "method": dn.get("method") or "",
+            "path": dn.get("path") or "",
+            # request content_type is not retained by the recording —
+            # the corpus-uniform receipt value is adopted (ADR-0450).
+            "content_type": "application/json",
+            "body_b64": base64.b64encode(
+                ((dn.get("body") or {}).get("utf8") or "").encode()
+            ).decode(),
+            "upstream_body_b64": base64.b64encode(
+                (upb.get("utf8") or "").encode()
+            ).decode(),
+        })
+    submitted = terminal_submission(recording)
+    return {
+        "requests": reqs,
+        # the per-turn action channel is uninstrumented on both sides
+        # today — request-level byte equality carries command fidelity.
+        "parsed_actions": [],
+        "executed_actions": [],
+        "termination": "submitted" if submitted else
+                       "exception{corpus_boundary}",
+        "submission": channel_submission("" if submitted else None),
+        "extra_request": False,
+        "refusal": None,
+    }
+
 def o_drive(store_root, slot_id, traj, recorded_len):
     reqs, verdicts = drive_from_receipts(store_root, slot_id)
     acts = []
     for step in (traj.get("steps") or traj.get("actions") or []):
         cmd = step.get("command") or step.get("action") or ""
         acts.append([{"command": cmd, "tool_call_id": ""}])
-    submitted = traj.get("submitted") or traj.get("submission")
+    # mini-swe-agent's trajectory nests the terminal under `info` —
+    # `exit_status: Submitted` + the (possibly empty) `submission`.
+    info = traj.get("info") or {}
+    submitted = traj.get("submitted")
+    if submitted is None:
+        submitted = traj.get("submission")
+    if submitted is None:
+        submitted = info.get("submission")
+    exit_status = traj.get("exit_status") or info.get("exit_status") or ""
+    if submitted is None and str(exit_status).lower() == "submitted":
+        submitted = ""
     term = "submitted" if submitted is not None else \
         ("exception{%s}" % (traj.get("termination") or "unspecified"))
     return {
@@ -187,7 +322,7 @@ def o_drive(store_root, slot_id, traj, recorded_len):
         "parsed_actions": acts,
         "executed_actions": acts,
         "termination": term,
-        "submission": submitted,
+        "submission": channel_submission(submitted),
         "extra_request": extra_request(verdicts, recorded_len),
         "refusal": None,
     }
@@ -196,6 +331,7 @@ def h_drive(store_root, slot_id, events, recorded_len):
     reqs, verdicts = drive_from_receipts(store_root, slot_id)
     parsed, executed = [], []
     term, submission, refusal = "exception{unfinished}", None, None
+    stop_reason = None
     for ev in events:
         cls = ev.get("class") or ""
         pl = ev.get("payload") or {}
@@ -207,11 +343,20 @@ def h_drive(store_root, slot_id, events, recorded_len):
             executed.append([{"command": c.get("command") or "",
                               "tool_call_id": c.get("tool_call_id") or ""}
                              for c in (pl.get("calls") or [])])
-        elif "finish" in cls or "terminal" in cls or "submit" in cls:
+        elif cls == "control.decision" and pl.get("submission_ref"):
+            # a recorded `submission_ref` on the decision is the
+            # terminal submission (ADR-0450 — channel-typed).
             term = "submitted"
-            submission = pl.get("submission") or pl.get("output")
+            submission = "marker"
+        elif cls in ("lifecycle.turn.finished",
+                     "lifecycle.run.finished"):
+            stop_reason = pl.get("stop_reason") or {}
         elif "refus" in cls or "error" in cls:
             refusal = {"rule": cls, "detail": json.dumps(pl)[:200]}
+    if term != "submitted" and stop_reason:
+        ec = stop_reason.get("error_class") or {}
+        fam = ec.get("family") or stop_reason.get("kind") or "unspecified"
+        term = "exception{%s}" % fam
     return {
         "requests": reqs,
         "parsed_actions": parsed,
@@ -562,6 +707,20 @@ def main():
         if rc != 0:
             row["l1_1"] = {"status": "machinery{raws_extract}",
                            "detail": se[:200]}
+        else:
+            # ADR-0450 item 3 — the terminal `echo` the marker
+            # convention intercepts leaves no recorded observation;
+            # the queue gains the deterministic output, typed
+            # `reconstructed` (covers staged raws too).
+            try:
+                raws = read_json(raws_p) or []
+                tr = terminal_echo_raw(recording, raws)
+                if tr is not None:
+                    raws.append(tr)
+                    with open(raws_p, "w") as f:
+                        json.dump(raws, f)
+            except Exception:
+                pass
         # ── L1.0: two O drives ───────────────────────────────────
         o_docs = []
         for run_tag in ("a", "b"):
@@ -739,6 +898,9 @@ def main():
         seqs.append({
             "seq_id": sid,
             "o_a": o_docs[0], "o_b": o_docs[1],
+            # ADR-0450 — the recording-derived L1.1 reference; o_a/o_b
+            # stay the L1.0 prefix inputs and l1_2's comparator.
+            "o_rec": o_rec_drive(recording),
             "h1": h_docs.get("l1_1"), "h2": h_docs.get("l1_2"),
             "endpoint_first_1": ep_firsts.get("l1_1"),
             "endpoint_first_2": ep_firsts.get("l1_2"),

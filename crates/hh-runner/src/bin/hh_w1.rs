@@ -2461,18 +2461,36 @@ fn cmd_l1_fold(args: &[String]) -> Result<String, String> {
         let drive_b = l1_drive_from_json(&seq.get("o_b").cloned().unwrap_or(Json::Null))?;
         let h1 = l1_drive_from_json(&seq.get("h1").cloned().unwrap_or(Json::Null))?;
         let h2 = l1_drive_from_json(&seq.get("h2").cloned().unwrap_or(Json::Null))?;
+        // ADR-0450 — `o_rec` is the recording-derived reference the
+        // strict replay leg is measured against; absent (pre-amendment
+        // specs) the legacy `o_a` live-capture comparator stands.
+        let drive_rec_j = seq.get("o_rec").cloned().unwrap_or(Json::Null);
+        let drive_rec = if matches!(drive_rec_j, Json::Null) {
+            None
+        } else {
+            Some(l1_drive_from_json(&drive_rec_j)?)
+        };
+        let ref1 = drive_rec.as_ref().unwrap_or(&drive_a);
         let c = canon()?;
         let s = hharness_runner::l1_gate::stable_prefix(c.as_ref(), &surface, &drive_a, &drive_b);
         let total = drive_a.requests.len().max(drive_b.requests.len());
-        // L1.1 — whole-trajectory gate (usize::MAX), strict endpoint
-        // first-divergence folded as a gated request-level divergence.
+        // L1.1 — whole-trajectory gate (usize::MAX) on a
+        // marker-terminated reference; a `corpus_boundary` reference
+        // (crash-truncated recording) gates recorded-call traversal
+        // only — trajectory tail levels emit ungated (ADR-0450 item 4).
+        let boundary = ref1.termination == "exception{corpus_boundary}";
+        let (stable1, total1) = if boundary {
+            (ref1.requests.len(), usize::MAX)
+        } else {
+            (usize::MAX, ref1.requests.len())
+        };
         let mut div1 = hharness_runner::l1_gate::compare_drives(
             c.as_ref(),
             &surface,
-            &drive_a,
+            ref1,
             &h1,
-            usize::MAX,
-            total,
+            stable1,
+            total1,
         );
         let ep1 = seq
             .get("endpoint_first_1")
@@ -2493,7 +2511,9 @@ fn cmd_l1_fold(args: &[String]) -> Result<String, String> {
                     turn: Some(*t),
                     path: pth.clone(),
                     detail: "strict endpoint refusal".to_string(),
-                    gated: true,
+                    // a post-corpus refusal on a boundary seq is the
+                    // expected boundary artifact, not a gated failure.
+                    gated: *t <= stable1,
                 });
             }
         }
@@ -2533,7 +2553,7 @@ fn cmd_l1_fold(args: &[String]) -> Result<String, String> {
         };
         // diff records — one durable `hh-l1-diff/1` per gated divergence.
         let cmp = canon()?;
-        for (leg, outcome, hd) in [("l1_1", &l1_1, &h1), ("l1_2", &l1_2, &h2)] {
+        for (leg, outcome, od, hd) in [("l1_1", &l1_1, ref1, &h1), ("l1_2", &l1_2, &drive_a, &h2)] {
             for d in outcome.divergences.iter().filter(|d| d.gated) {
                 let cv = |dr: &hharness_runner::l1_drive::L1Drive| -> String {
                     d.turn
@@ -2549,7 +2569,7 @@ fn cmd_l1_fold(args: &[String]) -> Result<String, String> {
                     &canon_id,
                     &o_id,
                     &h_id,
-                    &cv(&drive_a),
+                    &cv(od),
                     &cv(hd),
                     &recorded_at,
                 ));
@@ -2596,19 +2616,27 @@ fn cmd_l1_raws(args: &[String]) -> Result<String, String> {
     let rec = Recording::parse(&rec_j).map_err(|e| format!("recording: {e}"))?;
     let raws = hharness_runner::l1_obs::raws_from_recording(&rec)
         .map_err(|e| format!("raws: {}", e.detail))?;
-    let arr: Vec<Json> = raws
-        .iter()
-        .map(|r| {
-            Json::obj([
-                ("output", Json::str(&r.output)),
-                ("returncode", Json::Int(r.returncode)),
-                (
-                    "exception_info",
-                    r.exception_info.clone().unwrap_or(Json::Null),
-                ),
-            ])
-        })
-        .collect();
+    let emit = |r: &hharness_runner::l1_obs::RawObservation, reconstructed: bool| {
+        let mut pairs: Vec<(&'static str, Json)> = vec![
+            ("output", Json::str(&r.output)),
+            ("returncode", Json::Int(r.returncode)),
+            (
+                "exception_info",
+                r.exception_info.clone().unwrap_or(Json::Null),
+            ),
+        ];
+        if reconstructed {
+            pairs.push(("reconstructed", Json::str("echo_literal")));
+        }
+        Json::obj(pairs)
+    };
+    let mut arr: Vec<Json> = raws.iter().map(|r| emit(r, false)).collect();
+    // ADR-0450 item 3 — the terminal `echo` the submit-marker
+    // convention intercepts before any observation is recorded; the
+    // queue gains the deterministic output, typed `reconstructed`.
+    if let Some(t) = hharness_runner::l1_obs::terminal_echo_observation(&rec, &raws) {
+        arr.push(emit(&t, true));
+    }
     write_json(&out, &Json::Arr(arr.clone()))?;
     Ok(format!("raws: {}", arr.len()))
 }
