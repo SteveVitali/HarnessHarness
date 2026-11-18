@@ -1354,8 +1354,10 @@ pub fn arm_cost_report(metered_micros: i64, capped: bool) -> Json {
 
 // ── D_max over R6.14's ceilings (REQ-XH-126(b)) ─────────────────────
 
-/// One completed window's contribution to the Σ ≤ $20 sum — its
-/// billed figure where a reconcile read exists, else its ceiling.
+/// One window's contribution to the Σ ≤ $20 sum — billed where a
+/// reconcile read exists, `cost_lib` for a completed-but-unreconciled
+/// window (the 2026-11-16 A2 amendment), and the ceiling only for an
+/// authorized-but-unrun window.
 #[derive(Debug, Clone, PartialEq)]
 pub struct WindowSum {
     /// The window id.
@@ -1364,12 +1366,27 @@ pub struct WindowSum {
     pub ceiling_micros: i64,
     /// The reconciled billed figure, when one exists.
     pub billed_micros: Option<i64>,
+    /// The harvested `cost_lib` figure for a completed-but-unreconciled
+    /// window (the 2026-11-16 A2 amendment).
+    pub cost_lib_micros: Option<i64>,
+    /// `false` = authorized-but-unrun — the ceiling is the figure.
+    /// A completed window (`true`) uses billed where reconciled, else
+    /// `cost_lib`; it never falls back to its ceiling merely because
+    /// billing is absent (A2).
+    pub done: bool,
 }
 
 impl WindowSum {
-    /// The effective figure in the sum.
+    /// The effective figure in the sum: authorized-but-unrun windows
+    /// count their ceiling; completed windows count billed when
+    /// reconciled, else the harvested `cost_lib` figure (A2).
     pub fn effective_micros(&self) -> i64 {
-        self.billed_micros.unwrap_or(self.ceiling_micros)
+        if !self.done {
+            return self.ceiling_micros;
+        }
+        self.billed_micros
+            .or(self.cost_lib_micros)
+            .unwrap_or(self.ceiling_micros)
     }
 }
 

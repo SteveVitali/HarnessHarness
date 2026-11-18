@@ -53,6 +53,7 @@ pub mod fp_select;
 pub mod hosted_metrics;
 pub mod interventions;
 pub mod judge;
+pub mod l2_wire;
 pub mod loss;
 pub mod mechanism;
 pub mod opacity;
