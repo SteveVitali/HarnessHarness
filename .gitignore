@@ -18,3 +18,8 @@ __pycache__/
 *.pyc
 
 .env
+
+# fp-ws1 run-root tar is 1.6 GB — the committed MANIFEST.sha256 already
+# checksums every member; the blob itself does not enter history (prior
+# harvest tarballs were ~300 KB and committed by precedent).
+docs/build/reports/compute/harvest/fp-ws1/run-root.tar.gz
