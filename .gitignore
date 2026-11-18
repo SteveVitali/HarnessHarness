@@ -23,3 +23,6 @@ __pycache__/
 # checksums every member; the blob itself does not enter history (prior
 # harvest tarballs were ~300 KB and committed by precedent).
 docs/build/reports/compute/harvest/fp-ws1/run-root.tar.gz
+# fp-ws1r run-root tar is 444 MB — same rule: MANIFEST.sha256 (committed)
+# checksums every member; the tar stays in the retained stage.
+docs/build/reports/compute/harvest/fp-ws1r/run-root.tar.gz
