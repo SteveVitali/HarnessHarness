@@ -82,3 +82,13 @@ GATE DECISIONS row: 2026-11-19 | GATE-G28o (PROV-Ws1r)
 Operator confirmation of agent-drafted text (verbatim, 2026-11-19): "ok, proceed as you suggest" — covers sha256:46ef84ec6d5641
 verbatim_sha256 stamped onto fp-ws1r.json covers the directive sentence ("ok, proceed as you suggest") — sha256:46ef84ec6d56…
 Signed by: the operator. Recorded by devin-cli/swe-2-high, which does not sign.
+
+## Correction 2026-11-18T20:10Z (append-only — the signed record above is unchanged)
+
+DF-R6.23-1's citation predicate (REQ-XH-102): each paid window's gate readout cites the
+previous window's `archive_verified` index. This readout omitted the citation; the standing
+evidence it should have carried: prior window **Ws1** — `archive_verified`,
+verify receipt `docs/build/reports/archive/2026-11-18-fp-ws1-verify.json`, index
+`docs/build/reports/archive/hh-receipt-index-ws1.json` (which itself cites Wcs1's terminal
+dataset revision `f0c0eab6368f7ce7e0b659308a2f844c85483b82`). Recorded as a dated note;
+the omission is disclosed, not silently repaired.
