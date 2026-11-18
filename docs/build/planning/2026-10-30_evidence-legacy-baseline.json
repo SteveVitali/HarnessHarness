@@ -95,7 +95,7 @@
     "file": "docs/build/BUILD_INDEX.md",
     "obligation": "",
     "evidence": "",
-    "message": "BUILD_INDEX.md: 2 row(s) do not have the header's column count \u2014 an unescaped '|' in a cell? (BM-INDEX-01) (first: line 56 (12/11))"
+    "message": "BUILD_INDEX.md: 2 row(s) do not have the header's column count — an unescaped '|' in a cell? (BM-INDEX-01) (first: line 56 (12/11))"
    },
    "current": {
     "check": "index",
@@ -103,7 +103,7 @@
     "file": "docs/build/BUILD_INDEX.md",
     "obligation": "",
     "evidence": "",
-    "message": "BUILD_INDEX.md: 2 row(s) do not have the header's column count \u2014 an unescaped '|' in a cell? (BM-INDEX-01) (first: line 56 (12/11))"
+    "message": "BUILD_INDEX.md: 2 row(s) do not have the header's column count — an unescaped '|' in a cell? (BM-INDEX-01) (first: line 56 (12/11))"
    }
   },
   {
@@ -163,8 +163,8 @@
  ],
  "gate_g1_completion": {
   "file": "docs/build/readouts/GATE-G1.md",
-  "heading": "2026-09-15 \u2014 Reading 2",
-  "disposition": "PASSED \u2014 accept ADR-0226",
+  "heading": "2026-09-15 — Reading 2",
+  "disposition": "PASSED — accept ADR-0226",
   "sha256": "e286311bbaa98966cb0e1eb2ecc88e32a8edf954292f4265ad22968ea0a4e762"
  },
  "policy": "Only the nextTicket pointer and moved historical-region line offsets changed as expected. New or unknown warnings/violations are not waived; active round must never dispatch legacy GATE-G1.",
@@ -172,15 +172,15 @@
   {
    "id": "legacy-reqcov-46",
    "date": "2026-11-07",
-   "recorded_by": "R6.1 (GUARD-X, REQ-XH-002 AC-3) \u2014 append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
+   "recorded_by": "R6.1 (GUARD-X, REQ-XH-002 AC-3) — append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
    "kind": "bounded-family-classification",
-   "emission": "version-dependent \u2014 never required. The observed emission count depends on the stock validator version: the planning-time observation (LEDGER OPEN FINDING 2026-11-07, stock validator ~/agent-skills e981ec5 on main 185c16c7) reported 46 legacy `reqcov` warnings on manifest rows 083\u2013164f (round-1 tickets citing footnoted `R-2.x\u00b9` ids), while GATE-G20's readout item 6 recorded ZERO reqcov emissions at presentation and R6.1 re-verified 0 on this environment (0 violations / 8 warnings, all standing baseline classes). A vanished family member is therefore NOT a missing-historical-diagnostic; an emitted one within the recorded bound is explained; a 47th or out-of-family warning still fails unexplained-diagnostic.",
+   "emission": "version-dependent — never required. The observed emission count depends on the stock validator version: the planning-time observation (LEDGER OPEN FINDING 2026-11-07, stock validator ~/agent-skills e981ec5 on main 185c16c7) reported 46 legacy `reqcov` warnings on manifest rows 083–164f (round-1 tickets citing footnoted `R-2.x¹` ids), while GATE-G20's readout item 6 recorded ZERO reqcov emissions at presentation and R6.1 re-verified 0 on this environment (0 violations / 8 warnings, all standing baseline classes). A vanished family member is therefore NOT a missing-historical-diagnostic; an emitted one within the recorded bound is explained; a 47th or out-of-family warning still fails unexplained-diagnostic.",
    "provenance": {
-    "finding": "docs/build/LEDGER.md OPEN FINDINGS \u2014 2026-11-07 Round-6 insertion guard-environment note (owned by R6.1)",
-    "gate": "docs/build/readouts/GATE-G20.md item 6 \u2014 'the disclosed warnings list's sha256 is therefore n/a{empty_at_presentation}'",
+    "finding": "docs/build/LEDGER.md OPEN FINDINGS — 2026-11-07 Round-6 insertion guard-environment note (owned by R6.1)",
+    "gate": "docs/build/readouts/GATE-G20.md item 6 — 'the disclosed warnings list's sha256 is therefore n/a{empty_at_presentation}'",
     "warning_list_sha256": "n/a{empty_at_presentation}",
-    "handoff": "docs/experiments-decomposition-prompt.md \u00a74 \u2014 'Pre-existing (not caused by this program): \u2026 46 `unexplained-diagnostic` legacy `reqcov` warnings absent from its reviewed baseline; record as an OPEN FINDING for the guard-extension row, never silently re-baselined.'",
-    "r61_observation": "2026-11-07 verbatim on this environment (main 35dbe0f1, AGENT_SKILLS_ROOT=$HOME/agent-skills e981ec5): `check-build-memory.sh .` \u2192 0 violations / 8 warnings, zero reqcov lines; a literal reproduction of the validator's reqcov leg (grep -oE 'R-2\\.[0-9]+\\.[0-9]+[a-z]?' per ticket vs spec ids) yields 0 candidate warnings; same result on the experiments worktree. Corroborating enumeration: 12 ticket files in manifest rows 083\u2013164f cite footnoted `R-2.x\u207f` ids (33 distinct ids)."
+    "handoff": "docs/experiments-decomposition-prompt.md §4 — 'Pre-existing (not caused by this program): … 46 `unexplained-diagnostic` legacy `reqcov` warnings absent from its reviewed baseline; record as an OPEN FINDING for the guard-extension row, never silently re-baselined.'",
+    "r61_observation": "2026-11-07 verbatim on this environment (main 35dbe0f1, AGENT_SKILLS_ROOT=$HOME/agent-skills e981ec5): `check-build-memory.sh .` → 0 violations / 8 warnings, zero reqcov lines; a literal reproduction of the validator's reqcov leg (grep -oE 'R-2\\.[0-9]+\\.[0-9]+[a-z]?' per ticket vs spec ids) yields 0 candidate warnings; same result on the experiments worktree. Corroborating enumeration: 12 ticket files in manifest rows 083–164f cite footnoted `R-2.xⁿ` ids (33 distinct ids)."
    },
    "family": {
     "check": "reqcov",
@@ -192,13 +192,13 @@
   {
    "id": "w1-manifest-size-1",
    "date": "2026-11-10",
-   "recorded_by": "coordinator R6.32b closeout \u2014 append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
+   "recorded_by": "coordinator R6.32b closeout — append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
    "kind": "bounded-family-classification",
-   "emission": "deterministic \u2014 the manifest's size is fixed by its 32,636 hashed members; a further size warning on this file is unexplained",
+   "emission": "deterministic — the manifest's size is fixed by its 32,636 hashed members; a further size warning on this file is unexplained",
    "provenance": {
-    "finding": "docs/build/runs/R6.32b.md correction notes \u2014 the W1 re-run's real 32,636-member harvest manifest is inherently >5 MB (every member hashed); the LEDGER's older-region PHASE LOG prose predates the 2 KiB rule",
-    "gate": "docs/build/readouts/GATE-G33.md \u2014 PROV-W1 re-presentation (the re-run this record layer belongs to)",
-    "handoff": "coordinator CI-closeout on R6.32b (#340) \u2014 the stock checker now reaches these warnings (the retained 17 GB tar moved out of the tree to ~/hh-retained/fp-w1-run-root.tar.gz; the checker's 300 s timeout against it is resolved)"
+    "finding": "docs/build/runs/R6.32b.md correction notes — the W1 re-run's real 32,636-member harvest manifest is inherently >5 MB (every member hashed); the LEDGER's older-region PHASE LOG prose predates the 2 KiB rule",
+    "gate": "docs/build/readouts/GATE-G33.md — PROV-W1 re-presentation (the re-run this record layer belongs to)",
+    "handoff": "coordinator CI-closeout on R6.32b (#340) — the stock checker now reaches these warnings (the retained 17 GB tar moved out of the tree to ~/hh-retained/fp-w1-run-root.tar.gz; the checker's 300 s timeout against it is resolved)"
    },
    "family": {
     "check": "size",
@@ -210,13 +210,13 @@
   {
    "id": "ledger-phase-log-legacy-budget-1",
    "date": "2026-11-10",
-   "recorded_by": "coordinator R6.32b closeout \u2014 append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
+   "recorded_by": "coordinator R6.32b closeout — append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
    "kind": "bounded-family-classification",
-   "emission": "deterministic aggregate \u2014 one warning covering the 144 older-region PHASE LOG entries that predate the 2 KiB rule; each new oversized entry is a separate, unexplained warning",
+   "emission": "deterministic aggregate — one warning covering the 144 older-region PHASE LOG entries that predate the 2 KiB rule; each new oversized entry is a separate, unexplained warning",
    "provenance": {
-    "finding": "docs/build/runs/R6.32b.md correction notes \u2014 the W1 re-run's real 32,636-member harvest manifest is inherently >5 MB (every member hashed); the LEDGER's older-region PHASE LOG prose predates the 2 KiB rule",
-    "gate": "docs/build/readouts/GATE-G33.md \u2014 PROV-W1 re-presentation (the re-run this record layer belongs to)",
-    "handoff": "coordinator CI-closeout on R6.32b (#340) \u2014 the stock checker now reaches these warnings (the retained 17 GB tar moved out of the tree to ~/hh-retained/fp-w1-run-root.tar.gz; the checker's 300 s timeout against it is resolved)"
+    "finding": "docs/build/runs/R6.32b.md correction notes — the W1 re-run's real 32,636-member harvest manifest is inherently >5 MB (every member hashed); the LEDGER's older-region PHASE LOG prose predates the 2 KiB rule",
+    "gate": "docs/build/readouts/GATE-G33.md — PROV-W1 re-presentation (the re-run this record layer belongs to)",
+    "handoff": "coordinator CI-closeout on R6.32b (#340) — the stock checker now reaches these warnings (the retained 17 GB tar moved out of the tree to ~/hh-retained/fp-w1-run-root.tar.gz; the checker's 300 s timeout against it is resolved)"
    },
    "family": {
     "check": "ledger-budget",
@@ -228,13 +228,13 @@
   {
    "id": "wc-journald-size-1",
    "date": "2026-11-11",
-   "recorded_by": "R6.45 subagent run \u2014 append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
+   "recorded_by": "R6.45 subagent run — append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
    "kind": "bounded-family-classification",
-   "emission": "deterministic \u2014 the Wc window's journald capture is fixed by its full-window activity (PROV + the two-attempt re-proof + harvest); a further size warning on this file is unexplained",
+   "emission": "deterministic — the Wc window's journald capture is fixed by its full-window activity (PROV + the two-attempt re-proof + harvest); a further size warning on this file is unexplained",
    "provenance": {
-    "finding": "docs/build/runs/R6.45.md \u2014 the Wc harvest's journald.log (8.5 MB) is the VM's real serial/journal capture across the two-attempt re-proof window; evidence records are never truncated to fit a size budget",
-    "gate": "docs/build/readouts/GATE-G28.md \u2014 PROV-Wc (the window this record layer belongs to)",
-    "handoff": "R6.45 \u2014 the run-root.tar.gz is NOT committed (the archive path carries the tar per the \u00a74.10/W3 precedent; git keeps the curated run-root records)"
+    "finding": "docs/build/runs/R6.45.md — the Wc harvest's journald.log (8.5 MB) is the VM's real serial/journal capture across the two-attempt re-proof window; evidence records are never truncated to fit a size budget",
+    "gate": "docs/build/readouts/GATE-G28.md — PROV-Wc (the window this record layer belongs to)",
+    "handoff": "R6.45 — the run-root.tar.gz is NOT committed (the archive path carries the tar per the §4.10/W3 precedent; git keeps the curated run-root records)"
    },
    "family": {
     "check": "size",
@@ -246,13 +246,13 @@
   {
    "id": "wc4-runroot-size-1",
    "date": "2026-11-12",
-   "recorded_by": "R6.45d subagent run \u2014 append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
+   "recorded_by": "R6.45d subagent run — append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
    "kind": "bounded-family-classification",
-   "emission": "deterministic \u2014 the Wc4 window's run-root capture is fixed by the completed re-proof's full evidence (38 surfaces' trials + jobs + both prove packets/registers \u2014 the first complete window harvest); a further size warning on this file is unexplained",
+   "emission": "deterministic — the Wc4 window's run-root capture is fixed by the completed re-proof's full evidence (38 surfaces' trials + jobs + both prove packets/registers — the first complete window harvest); a further size warning on this file is unexplained",
    "provenance": {
-    "finding": "docs/build/runs/R6.45d.md \u2014 the Wc4 harvest's run-root.tar.gz (20.2 MB) carries the COMPLETED re-proof's evidence: all 38 surface-outcomes + per-rep cell reports + staging/tests + both prove-{held,dev} packets/registers (Wc3's tar was 1.7 MB because its window died mid-leg at 28/30 truncated surfaces); evidence records are never truncated to fit a size budget",
-    "gate": "docs/build/readouts/GATE-G28d.md \u2014 PROV-Wc4 (the window this record layer belongs to)",
-    "handoff": "R6.45d \u2014 the tar is the sha256-manifest-covered harvest payload; git keeps it verbatim per the \u00a74.10/W3/wc3 precedent"
+    "finding": "docs/build/runs/R6.45d.md — the Wc4 harvest's run-root.tar.gz (20.2 MB) carries the COMPLETED re-proof's evidence: all 38 surface-outcomes + per-rep cell reports + staging/tests + both prove-{held,dev} packets/registers (Wc3's tar was 1.7 MB because its window died mid-leg at 28/30 truncated surfaces); evidence records are never truncated to fit a size budget",
+    "gate": "docs/build/readouts/GATE-G28d.md — PROV-Wc4 (the window this record layer belongs to)",
+    "handoff": "R6.45d — the tar is the sha256-manifest-covered harvest payload; git keeps it verbatim per the §4.10/W3/wc3 precedent"
    },
    "family": {
     "check": "size",
@@ -264,13 +264,13 @@
   {
    "id": "wc6-runroot-size-1",
    "date": "2026-11-14",
-   "recorded_by": "R6.45f subagent run \u2014 append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
+   "recorded_by": "R6.45f subagent run — append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
    "kind": "bounded-family-classification",
-   "emission": "deterministic \u2014 the Wc6 window's run-root capture is fixed by the completed re-proof's full evidence (38 surfaces' trials + jobs + both prove packets/registers); a further size warning on this file is unexplained",
+   "emission": "deterministic — the Wc6 window's run-root capture is fixed by the completed re-proof's full evidence (38 surfaces' trials + jobs + both prove packets/registers); a further size warning on this file is unexplained",
    "provenance": {
-    "finding": "docs/build/runs/R6.45f.md \u2014 the Wc6 harvest's run-root-wc6.tar.gz carries the COMPLETED re-proof's evidence: all 38 surface-outcomes + per-rep cell reports + staging/tests + both prove-{held,dev} packets/registers; evidence records are never truncated to fit a size budget",
-    "gate": "docs/build/readouts/GATE-G28f.md \u2014 PROV-Wc6 (the window this record layer belongs to)",
-    "handoff": "R6.45f \u2014 the tar is the sha256-manifest-covered harvest payload; git keeps it verbatim per the \u00a74.10/W3/wc4 precedent"
+    "finding": "docs/build/runs/R6.45f.md — the Wc6 harvest's run-root-wc6.tar.gz carries the COMPLETED re-proof's evidence: all 38 surface-outcomes + per-rep cell reports + staging/tests + both prove-{held,dev} packets/registers; evidence records are never truncated to fit a size budget",
+    "gate": "docs/build/readouts/GATE-G28f.md — PROV-Wc6 (the window this record layer belongs to)",
+    "handoff": "R6.45f — the tar is the sha256-manifest-covered harvest payload; git keeps it verbatim per the §4.10/W3/wc4 precedent"
    },
    "family": {
     "check": "size",
@@ -282,19 +282,55 @@
   {
    "id": "wc7-runroot-size-1",
    "date": "2026-11-15",
-   "recorded_by": "R6.45g subagent run \u2014 append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
+   "recorded_by": "R6.45g subagent run — append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
    "kind": "bounded-family-classification",
-   "emission": "deterministic \u2014 the Wc7 window's run-root capture is fixed by the completed re-proof's full evidence (38 surfaces' trials + jobs + both prove packets/registers); a further size warning on this file is unexplained",
+   "emission": "deterministic — the Wc7 window's run-root capture is fixed by the completed re-proof's full evidence (38 surfaces' trials + jobs + both prove packets/registers); a further size warning on this file is unexplained",
    "provenance": {
-    "finding": "docs/build/runs/R6.45g.md \u2014 the Wc7 harvest's run-root-wc7.tar.gz carries the COMPLETED re-proof's evidence: all 38 surface-outcomes + per-rep cell reports + staging/tests + both prove-{held,dev} packets/registers (mediator-store internals excluded \u2014 events.wal/blobs are archive internals, never the git-committed record set); evidence records are never truncated to fit a size budget",
-    "gate": "docs/build/readouts/GATE-G28g.md \u2014 PROV-Wc7 (the window this record layer belongs to)",
-    "handoff": "R6.45g \u2014 the tar is the sha256-manifest-covered harvest payload; git keeps it verbatim per the \u00a74.10/W3/wc4/wc6 precedent"
+    "finding": "docs/build/runs/R6.45g.md — the Wc7 harvest's run-root-wc7.tar.gz carries the COMPLETED re-proof's evidence: all 38 surface-outcomes + per-rep cell reports + staging/tests + both prove-{held,dev} packets/registers (mediator-store internals excluded — events.wal/blobs are archive internals, never the git-committed record set); evidence records are never truncated to fit a size budget",
+    "gate": "docs/build/readouts/GATE-G28g.md — PROV-Wc7 (the window this record layer belongs to)",
+    "handoff": "R6.45g — the tar is the sha256-manifest-covered harvest payload; git keeps it verbatim per the §4.10/W3/wc4/wc6 precedent"
    },
    "family": {
     "check": "size",
     "file_pattern": "^docs/build/reports/compute/harvest/fp-wc7/run-root-wc7\\.tar\\.gz$",
     "message_pattern": "exceeds 5 MB",
     "max_emitted": 1
+   }
+  },
+  {
+   "id": "legacy-reqcov-early-30",
+   "date": "2026-11-18",
+   "recorded_by": "coordinator GATE-G29 Reading-3 closeout (devin-cli/swe-2-high) — append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
+   "kind": "bounded-family-classification",
+   "emission": "version-dependent — never required. The stock validator on this environment emits the same legacy `reqcov` family on EARLIER manifest rows 032–081 (round-1 tickets citing footnoted `R-2.x¹`/`R-2.x²` ids) — outside `legacy-reqcov-46`'s file_pattern (rows 083–164f). 30 emissions observed 2026-11-18 (stock validator ~/agent-skills, checker-json captured at GATE-G29 closeout). A further reqcov emission is unexplained.",
+   "provenance": {
+    "finding": "the same legacy footnote-citation class as legacy-reqcov-46 — round-1 ticket contracts cite `R-2.x` footnote markers the spec does not resolve as requirement ids; pre-existing content, not new debt",
+    "gate": "docs/build/readouts/GATE-G29.md — Reading 3 closeout dispatch preparation",
+    "handoff": "stock checker-json captured 2026-11-18T~18:00Z"
+   },
+   "family": {
+    "check": "reqcov",
+    "file_pattern": "^docs/tickets/0(0[0-9]|[1-7][0-9]|8[0-2])[a-z]*_.+\\.md$",
+    "message_pattern": "^ticket \\S+ cites \\S+ which is not in the spec$",
+    "max_emitted": 30
+   }
+  },
+  {
+   "id": "fp-harvest-size-6",
+   "date": "2026-11-18",
+   "recorded_by": "coordinator GATE-G29 Reading-3 closeout (devin-cli/swe-2-high) — append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
+   "kind": "bounded-family-classification",
+   "emission": "deterministic — each window's run-root/journald capture is fixed by its completed evidence; a further size warning on these paths is unexplained",
+   "provenance": {
+    "finding": "the fp-wc9/fp-wc10/fp-ws1/fp-ws1r harvest artifacts carry the completed windows' full evidence (surface-outcomes, cell reports, packets, serial/journal captures); evidence records are never truncated to fit a size budget — same class as wc4/wc6/wc7-runroot-size-1 and wc-journald-size-1. fp-ws1r's run-root.tar.gz is gitignored (retained off-history at ~/hh-retained/ws1/, MANIFEST.sha256 checksums every member) but present in the working tree the validator scans",
+    "gate": "docs/build/readouts/GATE-G28j.md, GATE-G28l.md, GATE-G28n.md — the windows these record layers belong to",
+    "handoff": "run records docs/build/runs/R6.45m.md, R6.45o.md, R6.45q.md"
+   },
+   "family": {
+    "check": "size",
+    "file_pattern": "^docs/build/reports/compute/harvest/fp-(wc9|wc10|ws1|ws1r)/(run-root[^/]*\\.tar\\.gz|journald\\.log)$",
+    "message_pattern": "exceeds 5 MB",
+    "max_emitted": 6
    }
   }
  ]
