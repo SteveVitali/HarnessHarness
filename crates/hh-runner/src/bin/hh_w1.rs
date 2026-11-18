@@ -39,7 +39,7 @@ use hharness_wire::sha256::sha256_hex;
 
 fn usage() -> ! {
     eprintln!(
-        "usage:\n  hh-w1 freeze --protocol <id> --epoch <n> --family <debian|ubuntu> --out <f> [--verify-extra a,b] [--withheld h=reason,...]\n  hh-w1 task-images --repo <ns> --tasks <csv> --out <f>\n  hh-w1 binary-set --bins <dir> --window <w> --out <dir>\n  hh-w1 image-export --role <bundle|layer_export|binary_set> --name <n> --image <name@sha256:..> --window <w> --out <dir> [--full]\n  hh-w1 image-build --kind <bundle|layer> --containerfile <f> --context <d> --tag <t> --out <dir>\n  hh-w1 observe --task <id> --mini-argv <tpl> --instruction <f> --responses <n> --out <dir>\n  hh-w1 o-run --task <id> --r <n> --cfg <f> --out <f>\n  hh-w1 h-run --task <id> --profile <pub|allow> --r <n> --cfg <f> --out <f>\n  hh-w1 prove --cfg <f> --tasks <csv> --r <n> --observe <mode> --out <dir> [--live-evidence-ref <ref>]\n  hh-w1 fault --cfg <f> --task <id> --out <f>\n  hh-w1 census --manifest <f> --work <dir> --out <f>\n  hh-w1 l1-fold --spec <f> --out <dir>\n  hh-w1 probe-run --cfg <f> --task <id> --out <f>\n  hh-w1 label-packet --packet <f> --ref <record-path>\n  hh-w1 index --artifacts <f> --out <f>\n  hh-w1 render-policy --freeze <f> --phase <setup|agent|verify> --out <f> [--model-port <n>] [--slot-token <t>] [--family <debian|ubuntu>]\n  hh-w1 scan-hosts [--files <a,b,…> | --list <f>]"
+        "usage:\n  hh-w1 freeze --protocol <id> --epoch <n> --family <debian|ubuntu> --out <f> [--verify-extra a,b] [--withheld h=reason,...]\n  hh-w1 task-images --repo <ns> --tasks <csv> --out <f>\n  hh-w1 binary-set --bins <dir> --window <w> --out <dir>\n  hh-w1 image-export --role <bundle|layer_export|binary_set> --name <n> --image <name@sha256:..> --window <w> --out <dir> [--full]\n  hh-w1 image-build --kind <bundle|layer> --containerfile <f> --context <d> --tag <t> --out <dir>\n  hh-w1 observe --task <id> --mini-argv <tpl> --instruction <f> --responses <n> --out <dir>\n  hh-w1 o-run --task <id> --r <n> --cfg <f> --out <f>\n  hh-w1 h-run --task <id> --profile <pub|allow> --r <n> --cfg <f> --out <f>\n  hh-w1 prove --cfg <f> --tasks <csv> --r <n> --observe <mode> --out <dir> [--live-evidence-ref <ref>]\n  hh-w1 fault --cfg <f> --task <id> --out <f>\n  hh-w1 census --manifest <f> --work <dir> --out <f>\n  hh-w1 corpus-manifest --fixtures-dir <dir> --recordings-dir <dir> --census-tasks <csv> --out <f>\n  hh-w1 corpus-check --corpus <f> --tasks <csv> [--out <f>]\n  hh-w1 l1-fold --spec <f> --out <dir>\n  hh-w1 probe-run --cfg <f> --task <id> --out <f>\n  hh-w1 label-packet --packet <f> --ref <record-path>\n  hh-w1 index --artifacts <f> --out <f>\n  hh-w1 render-policy --freeze <f> --phase <setup|agent|verify> --out <f> [--model-port <n>] [--slot-token <t>] [--family <debian|ubuntu>]\n  hh-w1 scan-hosts [--files <a,b,…> | --list <f>]"
     );
     std::process::exit(2)
 }
@@ -2223,6 +2223,115 @@ fn cmd_census(args: &[String]) -> Result<String, String> {
     Ok(out.to_canonical_string())
 }
 
+// ── corpus-manifest / corpus-check ────────────────────────────────────
+// The REQ-XD-107 corpus leg's fold tooling (spec §7.4): the L1 corpus is
+// the 28 RECORD trajectories + the 19 authored BM branch fixtures + a
+// turn-1 census of every manifest task. `corpus-manifest` folds a
+// fixtures dir + a recordings dir into the `hh-l1-corpus/1` manifest —
+// every member enumerated with its content digest so the manifest's own
+// sha256 is the corpus's frozen digest — and `corpus-check` runs the
+// REQ-XD-109/107 coverage refusal (`check_corpus`) the gate reads: every
+// BM1–BM19 branch covered by a declared entry, every manifest task
+// covered by a census entry.
+
+/// Sorted `*.json` members of `dir` as `(stem, bytes)`.
+fn corpus_members(dir: &str) -> Result<Vec<(String, Vec<u8>)>, String> {
+    let mut out = Vec::new();
+    let rd = std::fs::read_dir(dir).map_err(|e| format!("read_dir {dir}: {e}"))?;
+    for e in rd {
+        let e = e.map_err(|e| format!("read_dir entry: {e}"))?;
+        let p = e.path();
+        if p.extension().and_then(|s| s.to_str()) != Some("json") {
+            continue;
+        }
+        let stem = p
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default()
+            .trim_end_matches(".json")
+            .trim_end_matches(".recording")
+            .to_string();
+        let bytes = std::fs::read(&p).map_err(|e| format!("read {}: {e}", p.display()))?;
+        out.push((stem, bytes));
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    Ok(out)
+}
+
+fn cmd_corpus_manifest(args: &[String]) -> Result<String, String> {
+    let fixtures_dir = req(args, "--fixtures-dir");
+    let recordings_dir = req(args, "--recordings-dir");
+    let census: Vec<String> = req(args, "--census-tasks")
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    if census.is_empty() {
+        return Err("--census-tasks must name at least one task".to_string());
+    }
+    // Fixture entries carry their declared branch coverage verbatim
+    // from the authored generator; a fixtures-dir member whose stem
+    // names no generator id refuses — the manifest never declares
+    // coverage it cannot attribute.
+    let fixtures = hharness_runner::l1_corpus::bm_fixtures();
+    let declared: BTreeMap<&str, &[&str]> = fixtures.iter().map(|f| (f.id, f.branches)).collect();
+    let mut entries: Vec<(String, &'static [&'static str], &'static str, String)> = Vec::new();
+    for (stem, bytes) in corpus_members(&fixtures_dir)? {
+        let branches = declared
+            .get(stem.as_str())
+            .ok_or_else(|| format!("fixture {stem} names no authored BM fixture"))?;
+        entries.push((stem, branches, "synthetic", sha256_hex(&bytes)));
+    }
+    for (stem, bytes) in corpus_members(&recordings_dir)? {
+        entries.push((stem, &[], "record", sha256_hex(&bytes)));
+    }
+    let mut doc = hharness_runner::l1_corpus::corpus_manifest(
+        entries
+            .iter()
+            .map(|(i, b, _, _)| (i.as_str(), *b))
+            .collect(),
+        census,
+    );
+    // Fold each member's provenance + content digest into its entry —
+    // the manifest digest then binds every corpus byte.
+    if let Json::Obj(map) = &mut doc {
+        if let Some(Json::Arr(es)) = map.get_mut("entries") {
+            for (i, e) in es.iter_mut().enumerate() {
+                if let Json::Obj(m) = e {
+                    m.insert("provenance".to_string(), Json::str(entries[i].2));
+                    m.insert(
+                        "digest".to_string(),
+                        Json::str(format!("sha256:{}", entries[i].3)),
+                    );
+                }
+            }
+        }
+    }
+    let out = PathBuf::from(req(args, "--out"));
+    write_json(&out, &doc)?;
+    let digest = sha256_hex(doc.to_canonical_string().as_bytes());
+    let mut side = out.clone();
+    side.set_extension("sha256");
+    std::fs::write(&side, format!("{digest}  {}\n", out.display()))
+        .map_err(|e| format!("write {}: {e}", side.display()))?;
+    Ok(format!("sha256:{digest}"))
+}
+
+fn cmd_corpus_check(args: &[String]) -> Result<String, String> {
+    let corpus = read_json(&req(args, "--corpus"))?;
+    let tasks: Vec<String> = req(args, "--tasks")
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    let map = hharness_runner::l1_corpus::check_corpus(&corpus, &tasks)
+        .map_err(|e| format!("{}: {}", e.rule, e.detail))?;
+    if let Some(out) = arg(args, "--out") {
+        write_json(Path::new(&out), &map)?;
+    }
+    Ok(map.to_canonical_string())
+}
+
 fn cmd_label_packet(args: &[String]) -> Result<String, String> {
     let pf = req(args, "--packet");
     let refr = req(args, "--ref");
@@ -2658,6 +2767,8 @@ fn main() {
         "prove" => cmd_prove(rest),
         "fault" => cmd_fault(rest),
         "census" => cmd_census(rest),
+        "corpus-manifest" => cmd_corpus_manifest(rest),
+        "corpus-check" => cmd_corpus_check(rest),
         "l1-fold" => cmd_l1_fold(rest),
         "l1-raws" => cmd_l1_raws(rest),
         "probe-run" => cmd_probe_run(rest),

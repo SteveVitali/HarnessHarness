@@ -150,3 +150,73 @@ Q-X62 trigger instant + "L1 did not pass on either gate partition" verbatim
 <!-- agent-drafted:end -->
 
 > **Signature (Reading 2, 2026-11-18)** — verbatim "my disposition is to diagnose and fix any failures and to iterate until success" (operator, interactive) in response to the GATE-G29 return presentation. Disposition: **operator's own ruling — diagnose-and-iterate**: the `hh-l1-conformance/1` `result: fail` at gate-A is to be diagnosed and repaired through iterated legs until the strict-replay fold records `pass`, at which point `full` becomes presentable on evidence. Neither `full` nor `fallback` is recorded today; `task_lists.state` stays `frozen` verbatim (Ws1 discharged the withholding; the L1 question is now a divergence-repair problem, not an evidence-absence). Any live re-drive of the legs remains behind its own authorization; the diagnosis and replay-mode iteration is $0-model work. GATE DECISIONS row appended.
+
+---
+
+## Return presentation — 2026-11-18 (gate-A conformance `pass`; Reading 3, agent-drafted)
+
+<!-- agent-drafted:begin -->
+
+The Reading-2 ruling ("diagnose and fix any failures and to iterate until
+success" — iterated legs until the strict-replay fold records `pass`, at
+which point `full` becomes presentable on evidence) is discharged:
+
+- **`hh-l1-conformance/1` now records `result: pass` for the exact frozen
+  H** — `docs/build/reports/compute/2026-11-18-fp-ws1-l1-conformance.json`.
+  `pass_id: l1-pass:sha256:80bfafee35ac9dd669d80f786ee54deca9948049bcd8559dd7a6dee8d06dd8ef`
+  bound to `h_identity.digest sha256:c451ed97d0206821bedd6e2255e5f6bba4736646d7170601b4085492e711a8b9`
+  (the W3 freeze) and `corpus_digest sha256:072de1f3…` (the `hh-l1-corpus/1`
+  manifest — `docs/build/reports/compute/2026-11-18-fp-ws1-l1-corpus.json`
+  + `.sha256` — enumerating all 47 members: 28 RECORD trajectories + 19
+  authored BM fixtures + 7 census tasks, each content-digested).
+- **Coverage table complete** — `coverage.branches` maps BM1–BM19 →
+  bm01–bm19 (`docs/build/reports/compute/2026-11-18-fp-ws1-l1-coverage.json`,
+  the committed `check_corpus` verdict — "a missing branch makes the gate
+  refuse" does not fire). **Census complete** — `census_tasks: 7`; W1's
+  executed `hh-turn1-census/1` covered all 89 manifest tasks at $0.
+- **Rule table frozen** — `canon_version: hh-l1-canon/1` (the C01–C07
+  allowlist, versioned).
+- **Legs** — L1.0 stable prefix `prefix:1` ×8; L1.1 `pass` ×8 (596/596
+  recorded calls byte-identical under strict replay; corpus-02/26 carry 4
+  ungated `corpus_boundary` tail diagnostics each per ADR-0450 — declared,
+  never hidden); L1.2 `pass` ×8, `divergences: 0`. `hh-l1-diff/1` records:
+  0 gated (none required — no divergent trajectory).
+- **Amended contract** — the fold semantics are ADR-0450 (recording-relative
+  `o_rec`, channel-typed submission, typed terminal-echo reconstruction,
+  corpus-boundary gating); the corpus-manifest construction and
+  `corpus_digest` semantics are ADR-0451. The superseded records — the
+  original `result: fail` fold and the first re-fold with vacuous
+  coverage/digest members — stand as durable history, not rewritten.
+- **Masking** — no first-pass outcome field is cited; the L1 result is
+  machinery evidence only (REQ-XH-121).
+- **Provenance honesty** — the l1_1 legs were re-driven locally on the
+  repaired machinery (runner tip incl. the probe-settle/turn-close and
+  extraction fixes; replay-mode, $0) against the identical frozen H-set
+  and retained corpus; the durable leg stores and receipts are the
+  self-verifying evidence (retained `hh-retained/ws1/ws1r-refold/`).
+
+**The spend question is discharged on the contract, not by a new window.**
+The G-L1 conformance is replay-mode evidence by design (§7.4: L1.0 O
+self-replay, L1.1 response+observation replay, L1.2 live-exec/replayed
+model); the metered artifact in the L1 path is the RECORD corpus, already
+executed and settled as `pending` reads (provider $4.07/24 h vs tracked
+$3.51, +$0.56 attribution diff, zero post-05:00Z usage). No metered live
+L1 legs exist in the contract — `full` requires no further spend.
+
+**DEFERRALS rule 4 (named, not decided)** — `bash scripts/deferrals-open.sh`
+returns two OPEN rows, carried verbatim: **DF-R6.23-1** (REQ-XH-102
+gate-citation predicate — each paid window's readout cites the previous
+window's `archive_verified` index; Wcs1's index verified, earlier windows'
+uploads still pending — arguably W3/Wc-scoped) and **DF-R6.45l-1**
+(transitive verify-host derivation — Wc-adjacent). Whether either is
+in-scope for this gate is the operator's call.
+
+**Dispositions — your verbatim answer (the agent signs nothing).**
+`full` — L1 passed for the exact H, frozen by digest here (`sha256:c451ed97…`,
+pass id above); the HH-native arms may run in W4 (REQ-XD-102); R6.46 quotes
+five arms. `fallback` — GATE-G28's `triggered{W1′}` record + the Q-X62
+trigger instant + "L1 did not pass on either gate partition" — no longer
+holds on evidence (gate-A passed). A third answer is the operator's own
+ruling, recorded verbatim.
+
+<!-- agent-drafted:end -->

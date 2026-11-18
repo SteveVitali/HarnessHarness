@@ -131,3 +131,98 @@ fn ac_label_packet_refuses_absent_evidence() {
     ]);
     assert!(!o.status.success(), "absent evidence record refuses");
 }
+
+#[test]
+fn ac_corpus_manifest_and_check() {
+    let d = dir("corpus");
+    let fx = d.join("fixtures");
+    let recs = d.join("recordings");
+    std::fs::create_dir_all(&fx).unwrap();
+    std::fs::create_dir_all(&recs).unwrap();
+    // The 19 committed branch fixtures are the corpus's declared
+    // coverage; copy them verbatim so the manifest digests the
+    // committed bytes.
+    let committed = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/r6_28");
+    for n in 1..=19 {
+        let name = format!("bm{n:02}.json");
+        std::fs::copy(committed.join(&name), fx.join(&name)).unwrap();
+    }
+    std::fs::write(recs.join("ws1-corpus-01.recording.json"), "{\"x\":1}").unwrap();
+    let manifest = d.join("corpus.json");
+    let o = w1(&[
+        "corpus-manifest",
+        "--fixtures-dir",
+        fx.to_str().unwrap(),
+        "--recordings-dir",
+        recs.to_str().unwrap(),
+        "--census-tasks",
+        "t1,t2",
+        "--out",
+        manifest.to_str().unwrap(),
+    ]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let stdout = String::from_utf8_lossy(&o.stdout);
+    assert!(
+        stdout.starts_with("sha256:"),
+        "stdout carries the corpus digest"
+    );
+    let doc = hharness_wire::json::parse(&std::fs::read_to_string(&manifest).unwrap()).unwrap();
+    assert_eq!(
+        doc.get("schema").and_then(|v| v.as_str()),
+        Some("hh-l1-corpus/1")
+    );
+    let entries = doc.get("entries").and_then(|c| JsonExt::as_arr(c)).unwrap();
+    assert_eq!(entries.len(), 20);
+    for e in entries {
+        assert!(e
+            .get("digest")
+            .and_then(|v| v.as_str())
+            .is_some_and(|s| s.starts_with("sha256:")));
+        assert!(e.get("provenance").and_then(|v| v.as_str()).is_some());
+    }
+    // The sidecar binds the canonical manifest bytes.
+    let side = std::fs::read_to_string(d.join("corpus.sha256")).unwrap();
+    let digest = hharness_wire::sha256::sha256_hex(std::fs::read(&manifest).unwrap().as_slice());
+    assert!(
+        side.starts_with(&digest),
+        "sidecar digest binds the manifest bytes"
+    );
+    // corpus-check emits the complete BM map + census coverage.
+    let cov_out = d.join("coverage.json");
+    let o = w1(&[
+        "corpus-check",
+        "--corpus",
+        manifest.to_str().unwrap(),
+        "--tasks",
+        "t1,t2",
+        "--out",
+        cov_out.to_str().unwrap(),
+    ]);
+    assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+    let cov = hharness_wire::json::parse(&std::fs::read_to_string(&cov_out).unwrap()).unwrap();
+    let obj = cov.as_obj().unwrap();
+    assert_eq!(obj.len(), 19, "all BM branches covered");
+    // A missing census task refuses.
+    let o = w1(&[
+        "corpus-check",
+        "--corpus",
+        manifest.to_str().unwrap(),
+        "--tasks",
+        "t1,t3",
+    ]);
+    assert!(!o.status.success(), "missing census task refuses");
+    // An unnameable fixture member refuses.
+    std::fs::write(fx.join("bmXX.json"), "{}").unwrap();
+    let o = w1(&[
+        "corpus-manifest",
+        "--fixtures-dir",
+        fx.to_str().unwrap(),
+        "--recordings-dir",
+        recs.to_str().unwrap(),
+        "--census-tasks",
+        "t1",
+        "--out",
+        manifest.to_str().unwrap(),
+    ]);
+    assert!(!o.status.success(), "unknown fixture stem refuses");
+}
