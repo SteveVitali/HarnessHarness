@@ -1,0 +1,97 @@
+{
+ "authorization": {
+  "ceiling_micros": 2212120,
+  "gate": "PROV-Ws1r",
+  "model_line": "none",
+  "quote_id": "pq-83d07b6cdfc6a9bb",
+  "readout_path": "docs/build/readouts/GATE-G28o.md",
+  "verbatim_sha256": "46ef84ec6d5641d95469a44b83aa8f0c68c6b7f0708a8e1639495df2729f784a"
+ },
+ "boot_disk": {
+  "size_gib": 120,
+  "type": "pd-balanced"
+ },
+ "concurrency": {
+  "memory_gib_available": 26,
+  "memory_per_trial_gib": 6,
+  "model_in_flight_limit": 1,
+  "model_wait_fraction": 0.5,
+  "vcpu_budget": 8
+ },
+ "dead_man": {
+  "action": "STOP",
+  "in_guest_timer_minutes": 375,
+  "max_run_duration_hours": 6
+ },
+ "disk_floor_gib": 20,
+ "h_r_hours": 4,
+ "image": {
+  "name": "debian-12-bookworm-v20261117",
+  "project": "debian-cloud"
+ },
+ "images": [],
+ "labels": {
+  "hh-phase": "fp",
+  "hh-ticket": "r6-45q",
+  "hh-window": "ws1r",
+  "ttl": "window"
+ },
+ "last_model_call_utc": null,
+ "machine_type": "e2-standard-8",
+ "mode": "full",
+ "model_line": "none",
+ "network": {
+  "external_ipv4": "ephemeral",
+  "ingress": [
+   {
+    "port": 22,
+    "proto": "tcp",
+    "source": "35.235.240.0/20"
+   }
+  ],
+  "nat": false
+ },
+ "packages": {
+  "compose_frontend": {
+   "name": "podman-compose",
+   "version": "1.0.3-3"
+  },
+  "conmon": "2.1.6+ds1-1",
+  "crun": "1.8.1-1+deb12u1",
+  "netavark": "1.4.0-3",
+  "podman": "4.3.1+ds1-8+deb12u1+b3"
+ },
+ "phase": "fp",
+ "phase_close": false,
+ "project_id": "hh-fp-a1b2c3",
+ "provisioning_model": "STANDARD",
+ "proxy_on_vm": true,
+ "quote_inputs": {
+  "admission_cutoff_hours": 0.3,
+  "egress_gib_estimate": 1,
+  "load_hours": 0.5,
+  "overhead_hours": 2.0,
+  "per_trial_bound_seconds": 900,
+  "per_trial_planning_seconds": 300,
+  "retry_trials": 1,
+  "surfaces": 1,
+  "trials": 8
+ },
+ "rate_table": {
+  "path": "docs/build/reports/live/pricing.json",
+  "sha256": "045e0b8612e901505b9dbd66cbb460286ba763f8b6a169bef7721eb6251033e2"
+ },
+ "region": "us-central1",
+ "restart": {
+  "preauthorized_hours": 1
+ },
+ "runner": {
+  "build": "source",
+  "commit": "a70efad70d00e4729c98b45c2b17fdcf528fe019"
+ },
+ "schema": "hh-compute-decl/1",
+ "service_account": "none",
+ "ticket": "R6.45q",
+ "window": "ws1r",
+ "zone": "us-central1-a"
+}
