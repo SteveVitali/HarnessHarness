@@ -188,7 +188,10 @@ def start_replay(a, slot_id, recording, strict):
     sentinel path, session_out, listen)."""
     leg_dir = os.path.join(a.run_root, slot_id)
     os.makedirs(leg_dir, exist_ok=True)
-    decl = {"recordings": [recording], "canonicalizer": a.canon_id,
+    rec_decl = dict(recording)
+    rec_decl["slot_id"] = slot_id   # bind the leg's slot to this
+                                    # trajectory's recorded sequence
+    decl = {"recordings": [rec_decl], "canonicalizer": a.canon_id,
             "strict": strict, "keying": "sequence"}
     decl_p = os.path.join(leg_dir, "replay-decl.json")
     with open(decl_p, "w") as f:
@@ -272,7 +275,20 @@ def main():
             p = os.path.join(a.h_set_dir, m.get("path") or m.get("name"))
             if os.path.exists(p):
                 hir_doc = p
-    # fall back: any .json under the set that parses as a HIR doc
+    # fall back: the binary-set's bare `hir` member (canonical name,
+    # no extension), then any .json under the set that parses as a
+    # HIR doc
+    if hir_doc is None:
+        p = os.path.join(a.h_set_dir, "hir")
+        if os.path.isfile(p):
+            try:
+                d = read_json(p)
+                if isinstance(d, dict) and \
+                        ("assembly" in d or
+                         (d.get("schema") or "").startswith("hh-hir")):
+                    hir_doc = p
+            except Exception:
+                pass
     if hir_doc is None:
         for dp, _, fns in os.walk(a.h_set_dir):
             for fn in fns:

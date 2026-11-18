@@ -34,6 +34,10 @@ def main():
     ap.add_argument("--cfg", required=True)
     ap.add_argument("--tasks", required=True, help="comma-separated, 7 dev tasks")
     ap.add_argument("--traj-per-task", type=int, default=4)
+    ap.add_argument("--slots", default="",
+                    help="explicit resume plan sid=task@traj,... — "
+                         "overrides the --tasks x --traj-per-task grid "
+                         "(drives exactly those slot ids)")
     ap.add_argument("--layers-file", required=True)
     ap.add_argument("--admission", required=True)
     ap.add_argument("--proxy-session", required=True)
@@ -50,54 +54,77 @@ def main():
     tasks = [t.strip() for t in a.tasks.split(",") if t.strip()]
     os.makedirs(a.out_dir, exist_ok=True)
 
+    # `--slots sid=task@traj,...` drives an explicit plan (resume);
+    # otherwise the full tasks x traj-per-task grid.
+    if a.slots:
+        plan = []
+        for ent in a.slots.split(","):
+            sid, tt = ent.split("=", 1)
+            task, tr = tt.split("@", 1)
+            plan.append((sid.strip(), task.strip(), int(tr)))
+    else:
+        plan = [(f"ws1-corpus-{(i * a.traj_per_task + t) + 1:02d}",
+                 task, t)
+                for i, task in enumerate(tasks)
+                for t in range(a.traj_per_task)]
+
     results = []
-    n = 0
-    for task in tasks:
+    for sid, task, t in plan:
         image = layers.get(task)
-        for t in range(a.traj_per_task):
-            n += 1
-            sid = f"ws1-corpus-{n:02d}"
-            grant = grants.get(sid) or {}
-            token = grant.get("slot_token")
-            slot_dir = os.path.join(a.run_root, "corpus", sid)
-            os.makedirs(slot_dir, exist_ok=True)
-            row = {"slot_id": sid, "task": task, "trajectory": t,
-                   "image": image}
-            if not token or not image:
-                row["result"] = "withheld{corpus_infra:grant_or_layer_absent}"
-                eprint(f"{sid}: no grant/image — withheld")
-                results.append(row)
-                continue
-            tok_file = os.path.join(slot_dir, "slot-token")
-            with open(tok_file, "w") as f:
-                f.write(token)
-            os.chmod(tok_file, 0o600)
-            cmd = [
-                a.w1_bin, "arm-run",
-                "--cfg", a.cfg,
-                "--task", task,
-                "--image", image,
-                "--admission", a.admission,
-                "--slot-id", sid,
-                "--slot-token-file", tok_file,
-                "--model-upstream", str(a.model_upstream),
-                "--slot-slice-micros", str(a.slot_slice_micros),
-                "--out", slot_dir,
-            ]
-            eprint(f"{sid}: {task} traj {t}")
-            p = subprocess.run(cmd, capture_output=True, text=True)
-            with open(os.path.join(slot_dir, "arm-run.log"), "w") as f:
-                f.write(p.stdout + "\n--- stderr ---\n" + p.stderr)
-            row["arm_run_rc"] = p.returncode
-            row["result"] = ("recorded" if p.returncode == 0
-                             else "withheld{corpus_infra:arm_run_rc}")
+        grant = grants.get(sid) or {}
+        token = grant.get("slot_token")
+        slot_dir = os.path.join(a.run_root, "corpus", sid)
+        os.makedirs(slot_dir, exist_ok=True)
+        row = {"slot_id": sid, "task": task, "trajectory": t,
+               "image": image}
+        if not token or not image:
+            row["result"] = "withheld{corpus_infra:grant_or_layer_absent}"
+            eprint(f"{sid}: no grant/image — withheld")
             results.append(row)
-            eprint(f"{sid}: rc={p.returncode}")
-    # recordings fold — the record-mode proxy writes each sealed
-    # hh.model_proxy.recording/1 under its store; fold them out.
+            continue
+        tok_file = os.path.join(slot_dir, "slot-token")
+        with open(tok_file, "w") as f:
+            f.write(token)
+        os.chmod(tok_file, 0o600)
+        cmd = [
+            a.w1_bin, "arm-run",
+            "--cfg", a.cfg,
+            "--task", task,
+            "--image", image,
+            "--admission", a.admission,
+            "--slot-id", sid,
+            "--slot-token-file", tok_file,
+            "--model-upstream", str(a.model_upstream),
+            "--slot-slice-micros", str(a.slot_slice_micros),
+            "--out", slot_dir,
+        ]
+        eprint(f"{sid}: {task} traj {t}")
+        p = subprocess.run(cmd, capture_output=True, text=True)
+        with open(os.path.join(slot_dir, "arm-run.log"), "w") as f:
+            f.write(p.stdout + "\n--- stderr ---\n" + p.stderr)
+        row["arm_run_rc"] = p.returncode
+        row["result"] = ("recorded" if p.returncode == 0
+                         else "withheld{corpus_infra:arm_run_rc}")
+        results.append(row)
+        eprint(f"{sid}: rc={p.returncode}")
+    # recordings fold — the session shim's `seal_recording` replies
+    # carry each sealed hh.model_proxy.recording/1 doc in the `.end`
+    # marker; the wal-fold tool (ws1-wal-recordings.py) recovers the
+    # same docs for slots whose proxy died before close. Fold both.
     store = sess.get("store_root") or ""
     recs = []
-    for dp, _, fns in os.walk(store):
+    end_p = a.proxy_session + ".end"
+    if os.path.exists(end_p):
+        sealed = (read_json(end_p).get("sealed") or {})
+        for sid, rep in sealed.items():
+            d = (rep.get("recording") if isinstance(rep, dict)
+                 else None) or {}
+            if d.get("schema") == "hh.model_proxy.recording/1":
+                fn = f"{sid}.recording.json"
+                with open(os.path.join(a.out_dir, fn), "w") as f:
+                    json.dump(d, f, indent=1, sort_keys=True)
+                recs.append({"file": fn, "slot_id": sid})
+    for dp, _, fns in os.walk(a.out_dir):
         for fn in fns:
             if "recording" in fn and fn.endswith(".json"):
                 p = os.path.join(dp, fn)
@@ -105,11 +132,9 @@ def main():
                     d = read_json(p)
                 except Exception:
                     continue
-                if d.get("schema") == "hh.model_proxy.recording/1":
-                    dst = os.path.join(a.out_dir, os.path.basename(p))
-                    with open(dst, "w") as f:
-                        json.dump(d, f, indent=1, sort_keys=True)
-                    recs.append({"file": os.path.basename(p),
+                if d.get("schema") == "hh.model_proxy.recording/1" and \
+                        not any(r["file"] == fn for r in recs):
+                    recs.append({"file": fn,
                                  "slot_id": d.get("slot_id")})
     manifest = {"schema": "hh-ws1-corpus-manifest/1",
                 "trajectories": len(results),
