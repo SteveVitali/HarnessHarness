@@ -2301,6 +2301,7 @@ fn l1_b64_decode(s: &str) -> Result<Vec<u8>, String> {
             b'0'..=b'9' => Ok(c - b'0' + 52),
             b'+' => Ok(62),
             b'/' => Ok(63),
+            b'=' => Ok(0),
             _ => Err(format!("b64 char {c}")),
         }
     }

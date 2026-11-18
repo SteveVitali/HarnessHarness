@@ -227,6 +227,32 @@ fn main() {
         }
     };
 
+    // The boundary refuses every op `NotInitialized` until `hello`
+    // completes the negotiation (§7.4 §2.3) — the drive is a client
+    // like any other and must handshake before `open_session`.
+    match call(
+        &mut svc,
+        "hello",
+        Json::obj([
+            ("contract_major", Json::Int(1)),
+            (
+                "client",
+                Json::obj([
+                    ("name", Json::str("hh-l1-drive")),
+                    ("version", Json::str(env!("CARGO_PKG_VERSION"))),
+                    ("kind", Json::str("lab")),
+                ]),
+            ),
+            ("capabilities", Json::Obj(Default::default())),
+        ]),
+    ) {
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!("hello: {e:?}");
+            std::process::exit(1)
+        }
+    }
+
     let opened = match call(
         &mut svc,
         "open_session",

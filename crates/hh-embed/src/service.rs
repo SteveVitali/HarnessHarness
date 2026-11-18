@@ -501,6 +501,15 @@ impl EmbedService {
             ),
             (
                 hharness_registry::suites::control_strategy_class(),
+                // The Stage-1 default loop — `variant_for` has always
+                // answered `hh/react-minimal` (`REACT_MINIMAL_VARIANT`);
+                // the seed never published the name, so a sealed slot
+                // binding it could not resolve (R6.45q L1 drives).
+                "react-minimal",
+                BTreeMap::new(),
+            ),
+            (
+                hharness_registry::suites::control_strategy_class(),
                 // R2.6: the `queue_next_turn` declaration — the same
                 // `ReactSteerable` interpreter (`variant_for`), a
                 // different steer-mode declaration (the durable wakeup

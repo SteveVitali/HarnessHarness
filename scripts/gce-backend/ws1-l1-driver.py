@@ -32,7 +32,7 @@ usage:
     --lane-file lane.json --authorization-file auth.json \
     --canon-id hh-l1-canon/<v> --out-dir DIR --run-root DIR
 """
-import argparse, base64, json, os, subprocess, sys, time
+import argparse, base64, hashlib, json, os, subprocess, sys, time
 
 def eprint(*a): print(*a, file=sys.stderr, flush=True)
 
@@ -51,8 +51,13 @@ def blob_bytes(store_root, ref):
     if not ref:
         return None
     cand = []
-    if ref.startswith("blob:"):
+    if ":" in ref:
+        # `blob:sha256:<hex>` or bare `sha256:<hex>` — the blob pool
+        # files are named by the bare digest
         hexd = ref.rsplit(":", 1)[-1]
+        direct = os.path.join(store_root, "blobs", hexd)
+        if os.path.exists(direct):
+            cand.append(direct)
         for dp, _, fns in os.walk(store_root):
             for fn in fns:
                 if hexd in fn:
@@ -73,22 +78,52 @@ def blob_bytes(store_root, ref):
     return None
 
 def slot_receipts(store_root, slot_id):
-    """The slot's hh.model_io/1 receipts, ordered by slot_call_seq."""
+    """The slot's hh.model_io/1 receipts, ordered by slot_call_seq.
+    Receipts are durable wal refs, not standalone .json files — walk
+    `runs/*/events.wal`, resolve each model.call terminal event's
+    `response_ref` against the blob pool, and keep receipts bound to
+    this slot."""
     rows = []
-    for dp, _, fns in os.walk(store_root):
-        for fn in fns:
-            if not fn.endswith(".json"):
-                continue
-            try:
-                d = read_json(os.path.join(dp, fn))
-            except Exception:
-                continue
-            px = d.get("proxy") or {}
-            if d.get("schema") != "hh.model_io/1" or not px:
-                continue
-            if px.get("slot_id") != slot_id:
-                continue
-            rows.append((px.get("slot_call_seq") or 0, d))
+    runs_d = os.path.join(store_root, "runs")
+    wals = []
+    if os.path.isdir(runs_d):
+        for dp, _, fns in os.walk(runs_d):
+            for fn in fns:
+                if fn == "events.wal":
+                    wals.append(os.path.join(dp, fn))
+    for wal in wals:
+        try:
+            with open(wal) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        ev = json.loads(line)
+                    except Exception:
+                        continue
+                    ev = ev.get("v") or ev   # wal wraps: {"k":"e","v":{…}}
+                    cls = ev.get("class") or ""
+                    if "model.call" not in cls:
+                        continue
+                    ref = (ev.get("payload") or {}).get("response_ref")
+                    if not ref:
+                        continue
+                    raw = blob_bytes(store_root, ref)
+                    if not raw:
+                        continue
+                    try:
+                        d = json.loads(raw)
+                    except Exception:
+                        continue
+                    px = d.get("proxy") or {}
+                    if d.get("schema") != "hh.model_io/1" or not px:
+                        continue
+                    if px.get("slot_id") != slot_id:
+                        continue
+                    rows.append((px.get("slot_call_seq") or 0, d))
+        except OSError:
+            continue
     rows.sort(key=lambda t: t[0])
     return [d for _, d in rows]
 
@@ -102,6 +137,10 @@ def drive_from_receipts(store_root, slot_id, turn0=1):
         up = px.get("upstream") or {}
         body = blob_bytes(store_root, dn.get("body_ref"))
         ubody = blob_bytes(store_root, up.get("request_body_ref"))
+        if ubody is None:
+            # refused/undispatched calls carry no upstream capture —
+            # in replay the forwarded body is the downstream body
+            ubody = body
         ct = None
         for k, v in (dn.get("headers_kept") or {}).items():
             if k.lower() == "content-type":
@@ -200,17 +239,29 @@ def start_replay(a, slot_id, recording, strict):
     sentinel = os.path.join(leg_dir, "done")
     listen = f"127.0.0.1:{a.base_port}"
     a.base_port += 1
+    # stale session/sentinel files from a prior drive of this leg
+    # would satisfy the readiness poll before the new proxy binds
+    for stale in (sess_out, sentinel):
+        try:
+            os.unlink(stale)
+        except OSError:
+            pass
+    shim_log = os.path.join(leg_dir, "shim-stderr.txt")
     cmd = [a.session_shim, "--proxy-bin", a.proxy_bin,
            "--store-root", os.path.join(leg_dir, "store"),
-           "--run-id", slot_id, "--listen", listen,
+           # unique run-id per leg attempt — a prior attempt's dead
+           # writer lease would block `resume` on the same run dir
+           "--run-id", f"{slot_id}-a{int(time.time() % 100000)}",
+           "--listen", listen,
            "--lane-file", a.lane_file,
            "--authorization-file", a.authorization_file,
            "--slots", f"{slot_id}:0:high",
            "--mode", "replay", "--replay-file", decl_p,
            "--session-out", sess_out, "--sentinel", sentinel,
            "--poll-seconds", "2"]
-    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL)
+    with open(shim_log, "w") as lf:
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
+                                stderr=lf)
     # wait for the session doc (grants live) — bounded; a fresh
     # store init can take a minute+
     for _ in range(900):
@@ -219,6 +270,18 @@ def start_replay(a, slot_id, recording, strict):
         if proc.poll() is not None:
             raise RuntimeError(f"replay session {slot_id} exited")
         time.sleep(0.2)
+    # and until the listener actually accepts — the doc lands before
+    # the bind on some builds
+    import socket
+    port = int(listen.rsplit(":", 1)[-1])
+    for _ in range(300):
+        if proc.poll() is not None:
+            raise RuntimeError(f"replay session {slot_id} exited")
+        try:
+            with socket.create_connection(("127.0.0.1", port), 0.5):
+                break
+        except OSError:
+            time.sleep(0.2)
     return proc, sentinel, sess_out, listen
 
 def close_replay(proc, sentinel):
@@ -233,6 +296,129 @@ def close_replay(proc, sentinel):
 
 def recorded_len(rec):
     return len(rec.get("calls") or [])
+
+def recorded_model(rec):
+    """The model id the recorded downstream bodies carried — the
+    drive's provider_model_id binds it (replay keys on sequence; the
+    name is identity evidence, not a lookup)."""
+    for c in rec.get("calls") or []:
+        body = ((c.get("downstream") or {}).get("body") or {})
+        raw = body.get("utf8")
+        if raw:
+            try:
+                m = (json.loads(raw).get("model") or "").strip()
+                if m:
+                    return m
+            except Exception:
+                pass
+    return "hh-replay"
+
+# The window-authored HIR's slot refs are placeholders the first live
+# open surfaces: `version_id:"latest"` (a pinned id that can never
+# resolve — the selector spelling is `version_selector`), the
+# `hh/react_minimal` underscore typo (`variant_for` binds the impl as
+# `hh/react-minimal`), and `hh/openai-chat`, a name never published —
+# the registered model_port variant is `hh/gateway_http` (the lane
+# decodes dialect/endpoint from the slot's params). The bound doc also
+# fills the endpoint/provider_model_id/credential_ref members the lane
+# decode requires (`env:` indirection — values resolve at arm from the
+# drive's exported env, never literals). Every substitution is
+# recorded in `_bound.json` next to the derived doc; the frozen `hir`
+# member itself is never touched.
+_VARIANT_RENAMES = {"hh/react_minimal": "hh/react-minimal",
+                    "hh/openai-chat": "hh/gateway_http"}
+_MODEL_PORT_PARAMS = {
+    "endpoint": "env:HH_L1_ENDPOINT",
+    "provider_model_id": "env:HH_L1_MODEL",
+    "credential_ref": "env:OPENAI_API_KEY",
+}
+
+def _bind_slot_variants(slots, subs):
+    for name, binding in (slots or {}).items():
+        arms = []
+        if isinstance(binding, dict):
+            arms = [binding["one"]] if "one" in binding else \
+                (binding.get("many") or [])
+        for arm in arms:
+            var = arm.get("variant")
+            if not isinstance(var, dict):
+                continue
+            if var.get("version_id") == "latest":
+                del var["version_id"]
+                var["version_selector"] = "latest"
+                subs.append(f"{name}: version_id:latest -> "
+                            f"version_selector:latest")
+            vid = var.get("variant_id")
+            if vid in _VARIANT_RENAMES:
+                var["variant_id"] = _VARIANT_RENAMES[vid]
+                subs.append(f"{name}: {vid} -> {var['variant_id']}")
+            if name == "model_port":
+                params = arm.setdefault("params", {})
+                for k, v in _MODEL_PORT_PARAMS.items():
+                    if k not in params:
+                        params[k] = v
+                        subs.append(f"model_port.params.{k} = {v}")
+                tr = params.get("transcript_render")
+                if isinstance(tr, dict):
+                    for tk, tv in list(tr.items()):
+                        if tv == "keep":
+                            tr[tk] = "verbatim"
+                            subs.append("model_port.params."
+                                        "transcript_render.%s: keep "
+                                        "-> verbatim" % tk)
+                        elif isinstance(tv, dict):
+                            for tk2, tv2 in list(tv.items()):
+                                if tv2 == "keep":
+                                    tv[tk2] = "verbatim"
+                                    subs.append("model_port.params."
+                                                "transcript_render.%s."
+                                                "%s: keep -> verbatim"
+                                                % (tk, tk2))
+                    # window-authored member typos → admitted
+                    # spellings (gateway_model::transcript_render):
+                    # on_format_error/omit_assistant →
+                    # format_error_turn/omit; text_only_turns →
+                    # text_only_turn; tool_args → tool_arguments.
+                    if "on_format_error" in tr:
+                        v = tr.pop("on_format_error")
+                        nv = "omit" if v == "omit_assistant" else v
+                        tr["format_error_turn"] = nv
+                        subs.append("model_port.params."
+                                    "transcript_render.on_format_error:"
+                                    "%s -> format_error_turn:%s"
+                                    % (v, nv))
+                    if "text_only_turns" in tr:
+                        tr["text_only_turn"] = \
+                            tr.pop("text_only_turns")
+                        subs.append("model_port.params."
+                                    "transcript_render."
+                                    "text_only_turns -> "
+                                    "text_only_turn")
+                    if "tool_args" in tr:
+                        tr["tool_arguments"] = tr.pop("tool_args")
+                        subs.append("model_port.params."
+                                    "transcript_render.tool_args -> "
+                                    "tool_arguments")
+
+def bind_hir(src_p, dst_p):
+    """Derive the session-openable doc from the frozen `hir` member —
+    the recorded substitutions above applied member-wise. Returns the
+    substitution list (also written to `<dst>.bound.json`)."""
+    doc = read_json(src_p)
+    subs = []
+    _bind_slot_variants((doc.get("assembly") or {}).get("slots"), subs)
+    for n in doc.get("nodes") or []:
+        nat = ((n.get("semantic") or {}).get("body") or {})
+        _bind_slot_variants((nat.get("native") or {}).get("slots"), subs)
+    with open(dst_p, "w") as f:
+        json.dump(doc, f)
+    with open(dst_p + ".bound.json", "w") as f:
+        json.dump({"schema": "hh-ws1-hir-bind/1",
+                   "source": src_p,
+                   "source_sha256": hashlib.sha256(
+                       open(src_p, "rb").read()).hexdigest(),
+                   "substitutions": subs}, f, indent=1, sort_keys=True)
+    return subs
 
 def main():
     ap = argparse.ArgumentParser()
@@ -256,6 +442,9 @@ def main():
     ap.add_argument("--coverage", default=None,
                     help="fold coverage JSON (corpus leg output)")
     ap.add_argument("--census-covered", type=int, default=0)
+    ap.add_argument("--legs", default="l10_a,l10_b,l1_1,l1_2",
+                    help="comma subset of legs to drive; skipped legs "
+                         "fold their durable prior-drive stores")
     ap.add_argument("--base-port", type=int, default=44100)
     ap.add_argument("--out-dir", required=True)
     ap.add_argument("--run-root", required=True)
@@ -304,6 +493,18 @@ def main():
         "participant_ref": h_set.get("participant_ref") or "H",
         "version": h_set.get("version") or "frozen",
         "digest": h_set.get("set_digest") or ""}
+    # The frozen `hir` member carries window-authored placeholder
+    # refs — derive the bound doc once (recorded substitutions; the
+    # frozen member is never written) and drive every H leg off it.
+    hir_bound = None
+    if hir_doc is not None:
+        hir_bound = os.path.join(a.run_root, "hir-bound.json")
+        try:
+            subs = bind_hir(hir_doc, hir_bound)
+            eprint("hir-bind: %d substitutions -> %s" % (len(subs), hir_bound))
+        except Exception as e:
+            eprint("hir-bind failed: %s" % e)
+            hir_bound = None
     o_identity = {"participant_ref": "mini-swe-agent",
                   "version": "original", "digest": ""}
     corpus_digest = ""
@@ -311,6 +512,7 @@ def main():
     if os.path.exists(cov_path):
         corpus_digest = (read_json(cov_path).get("corpus_digest") or "")
     coverage = read_json(a.coverage) if a.coverage else None
+    leg_set = set(l.strip() for l in a.legs.split(",") if l.strip())
     seqs = []
     legs = []
     for ent in gate_a:
@@ -352,6 +554,22 @@ def main():
         o_docs = []
         for run_tag in ("a", "b"):
             slot = f"l10-{sid}-{run_tag}"
+            leg_key = f"l10_{run_tag}"
+            if leg_key not in leg_set:
+                # fold the prior drive's durable store — the leg was
+                # already exercised; re-reading it keeps the fold
+                # complete without re-driving
+                cell_dir = os.path.join(a.run_root, f"{slot}-cell")
+                traj = {}
+                for dp, _, fns in os.walk(cell_dir):
+                    for fn in fns:
+                        if fn.endswith(".traj.json") or \
+                                fn.endswith("trajectory.json"):
+                            traj = read_json(os.path.join(dp, fn))
+                store = os.path.join(a.run_root, slot, "store")
+                o_docs.append(o_drive(store, slot, traj, n_calls))
+                row[leg_key] = {"status": "reused{durable}"}
+                continue
             try:
                 proc, sentinel, sess_out, listen = start_replay(
                     a, slot, recording, strict=False)
@@ -404,7 +622,16 @@ def main():
         for leg, mode, strict in (("l1_1", "obs_replay", True),
                                   ("l1_2", "live", False)):
             slot = f"{leg.replace('_', '')}-{sid}"
-            if hir_doc is None:
+            if leg not in leg_set:
+                store = os.path.join(a.run_root, slot, "store")
+                drive_dir = os.path.join(a.run_root, f"{slot}-drive")
+                ev_p = os.path.join(drive_dir, "events.json")
+                events = read_json(ev_p) if os.path.exists(ev_p) else []
+                h_docs[leg], ep_firsts[leg] = h_drive(
+                    store, slot, events, n_calls)
+                row[leg] = {"status": "reused{durable}"}
+                continue
+            if hir_bound is None:
                 h_docs[leg] = {"requests": [], "parsed_actions": [],
                                "executed_actions": [],
                                "termination": "exception{no_hir}",
@@ -419,6 +646,11 @@ def main():
                 grants = read_json(sess_out).get("grants") or {}
                 token = (grants.get(slot) or {}).get("slot_token")
                 drive_dir = os.path.join(a.run_root, f"{slot}-drive")
+                # a re-drive re-registers the (possibly rebound)
+                # definition — a retained drive store would refuse
+                # the conflicting version body
+                import shutil
+                shutil.rmtree(drive_dir, ignore_errors=True)
                 env = dict(os.environ)
                 env["HH_LOCAL_BASE_URL"] = f"http://{listen}/v1"
                 env["HH_LOCAL_MODEL"] = ""
@@ -426,10 +658,10 @@ def main():
                 # credential_ref env binding — never argv
                 cred_envs = set(["OPENAI_API_KEY"])
                 try:
-                    hd = read_json(hir_doc)
-                    params = ((hd.get("slots") or {})
-                              .get("model_port") or {}).get("params") \
-                        or {}
+                    hd = read_json(hir_bound)
+                    params = (((hd.get("assembly") or {}).get("slots") or {})
+                              .get("model_port") or {}).get("one", {}) \
+                        .get("params") or {}
                     ref = params.get("credential_ref") or ""
                     if ref.startswith("env:"):
                         cred_envs.add(ref[4:])
@@ -442,18 +674,26 @@ def main():
                        "--store-root", os.path.join(drive_dir, "store"),
                        "--workspace-root", os.path.join(drive_dir, "ws"),
                        "--holder", "hh-ws1-l1",
-                       "--definition", hir_doc,
+                       "--definition", hir_bound,
                        "--environment", json.dumps(
-                           {"kind": "connection_info"}),
+                           {"kind": "connection_info",
+                            "connection_info": {"class": "local_host"}}),
                        "--instruction", instr_p or "/dev/null",
                        "--endpoint", f"http://{listen}/v1",
-                       "--model", "",
+                       "--model", recorded_model(recording),
                        "--mode", mode,
                        "--max-submits", "4",
                        "--out", drive_dir]
                 if mode == "obs_replay" and os.path.exists(raws_p):
                     cmd += ["--obs", raws_p]
                 rc, so, se = run(cmd, env=env, timeout=7200)
+                os.makedirs(drive_dir, exist_ok=True)
+                for name, data in (("drive-stdout.txt", so),
+                                   ("drive-stderr.txt", se)):
+                    if data:
+                        with open(os.path.join(drive_dir, name),
+                                  "w") as f:
+                            f.write(data)
                 events = []
                 ev_p = os.path.join(drive_dir, "events.json")
                 if os.path.exists(ev_p):
@@ -463,7 +703,8 @@ def main():
                 h_docs[leg], ep_firsts[leg] = h_drive(
                     store, slot, events, n_calls)
                 row[leg] = {"status": "exited{%d}" % rc if rc == 0
-                            else "machinery{l1_drive:rc=%d}" % rc}
+                            else "machinery{l1_drive:rc=%d}" % rc,
+                            "detail": (se or "")[:200]}
             except Exception as e:
                 h_docs[leg] = {"requests": [], "parsed_actions": [],
                                "executed_actions": [],
