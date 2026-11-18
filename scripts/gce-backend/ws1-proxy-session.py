@@ -70,6 +70,19 @@ def main():
         cfg["replay"] = json.load(open(a.replay_file))
 
     env = dict(os.environ)
+    # the key must never ride argv (sudo logs COMMAND= to the journal —
+    # the Ws1 closeout found OLLAMA_API_KEY in journald via
+    # `/usr/bin/env KEY=… python3 …`). When the launch env lacks it,
+    # read the protected secret file delivered by deliver-secret.
+    if not env.get("OLLAMA_API_KEY"):
+        for cand in ("/run/hh/secrets/OLLAMA_API_KEY",
+                     "/var/lib/hh/ws1/ollama-key"):
+            try:
+                env["OLLAMA_API_KEY"] = open(cand).read().strip()
+                if env["OLLAMA_API_KEY"]:
+                    break
+            except OSError:
+                continue
     proc = subprocess.Popen([a.proxy_bin], stdin=subprocess.PIPE,
                             stdout=subprocess.PIPE, env=env)
     try:
