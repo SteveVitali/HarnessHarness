@@ -80,8 +80,18 @@ records `reports/round6/ci-{stack,410,413,420}-doc6.1-2026-11-19.json`:
 #407–#412 pass; #414–#419 FAIL on the diagnosed `check-ci-gating`
 docs/build-literal leg (cargo-deny+gitleaks green on all); out-of-band #410
 pass @`11a6524`, #413 pass @`ae72242`, **#420 (I-3 repair) FAIL** on the
-same leg family — the repair is in-flight, red recorded honestly. DOC6.1's
-own PR is created after this record; its boundary read lands below.
+same leg family — the repair is in-flight, red recorded honestly.
+
+**Own-PR boundary read:** PR #421 created (head `d04877e5`);
+`ci-boundary.sh --pr 421 --stack --no-wait` at `read_at`
+2026-11-19T07:18:47Z (record `reports/round6/ci-pr421-doc6.1-2026-11-19.json`):
+**FAIL on `build · test · fmt · drift` (ubuntu-latest, run 44478574009;
+macos pending at read)** — failed step `CI scripts self-test`
+(`test-check-ci-gating`), the identical inherited leg: un-allowlisted
+`docs/build/**` literal reads in `crates/hh-runner/src/bin/fp_e_emit.rs`
+and `fp_results.rs` only. This docs-only delta adds no source reads;
+the red is the I-3 span, not DOC6.1's. cargo-deny + gitleaks were
+pending at read time on #421; they pass on every stacked PR.
 
 ## Dispatch guard (BM-DOCS-01)
 

@@ -55,7 +55,15 @@ clean · agent-docs 0 issues · claims lexicon green. Live legs:
 `reports/round6/`): #407–#412 pass; #414–#419 FAIL on the diagnosed
 check-ci-gating literal leg (the I-3 repair, #420, rides its own PR and
 is itself still red on that leg — recorded, not greened). #410, #413
-pass out-of-band. This PR's own CI read lands at its boundary.
+pass out-of-band.
+
+This PR's boundary read (`read_at` 2026-11-19T07:18:47Z,
+`ci-pr421-doc6.1-2026-11-19.json`): **FAIL on the ubuntu
+`build · test · fmt · drift` leg (run 44478574009)** — the failed step
+is `test-check-ci-gating`, the identical inherited violation set
+(`fp_e_emit.rs` / `fp_results.rs` `docs/build/**` literal reads).
+This docs-only delta adds no source reads; the red is the I-3 span,
+never re-labeled green.
 
 *Docs-only delta. Nothing here promotes a withheld outcome, merges a PR,
 or discharges an operator act. `mergePolicy: OPERATOR` (XO-04).*
