@@ -34,6 +34,7 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
+use hharness_env::egress_allowlist::MODEL_RELAY_PORT_MIN;
 use hharness_ledger::store::Store;
 use hharness_wire::json::Json;
 
@@ -737,12 +738,10 @@ impl Supervision {
         let mut proxy = ProxyCtl::spawn(proxy_bin, &Json::obj(cfg), &decl.proxy.child_env)?;
         proxy.store_root = PathBuf::from(&decl.proxy.store_root);
         proxy.run_id = decl.proxy.run_id.clone();
-        let model_port = proxy
-            .listen
-            .rsplit(':')
-            .next()
-            .and_then(|p| p.parse::<u16>().ok())
-            .ok_or_else(|| err("proxy listen has no port"))?;
+        // The cell loopback relay reaches the host proxy through model.sock
+        // (ADR-0433; design/33 §1.1). Its port is independent of the host's
+        // listener: an OS-assigned host port may be in the registered band.
+        let model_port = MODEL_RELAY_PORT_MIN;
         let mediator = decl
             .mediator
             .as_ref()
