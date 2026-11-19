@@ -1,0 +1,18 @@
+{
+  "balance_delta_usd": 0.0,
+  "balance_observed": "n/a{scope_end} \u2014 no provider reads; nothing to reconcile",
+  "basis": "GATE-G30 recorded PASSED \u2014 re-scope{end-first-pass-early} (docs/build/readouts/GATE-G30.md, operator verbatim 2026-11-19T01:54Z): the FP-E quote admits zero executable work and W4 is skipped. No metered call was made and no settlement clock runs; the typed outcome is n/a{scope_end}, never a fabricated settle.",
+  "boundary_flags": [],
+  "clock_honest": "the REQ-XC-127 settlement clock never starts \u2014 it runs from a window's last model call, and W4 made none",
+  "compute_estimate_usd": 0.0,
+  "metered_model_calls": 0,
+  "model_line": "none",
+  "phase": "fp",
+  "reads": [],
+  "recorded_at": "2026-11-19T02:04:14Z",
+  "schema": "hh-settlement/1",
+  "status": "n/a{scope_end}",
+  "ticket": "R6.47",
+  "usage_observed": "n/a{scope_end} \u2014 no metered calls in an unrun window",
+  "window": "w4"
+}
