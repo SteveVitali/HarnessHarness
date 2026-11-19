@@ -61,6 +61,11 @@ install`, `uvx`, curl and env lines — the list cannot drift
 bash scripts/egress-conformance/extract.sh          # regen derived/
 bash scripts/egress-conformance/check-derived.sh    # drift guard
 bash scripts/egress-conformance/scan-verify.sh      # the D16 scan check
+bash scripts/egress-conformance/runtime-verify.sh <derivation.json> [freeze.json]
+                                                    # the R6.51 runtime-evidence
+                                                    # check: a committed
+                                                    # hh-verify-host-derivation/1
+                                                    # candidate set ⊆ freeze verify
 bash scripts/egress-conformance/run.sh --subject HEAD --out out/
 bash scripts/egress-conformance/run.sh --subject <pre-fix-sha> --shapes s1 --out out-red/
 ```
