@@ -13,7 +13,7 @@
 - **Sequence:** 309r of 325 · **Phase:** Round 6 · **Kind:** gate
 - **Block:** Wc10 · **Alias:** GATE PROV-Wc10
 - **base_branch:** current checkout
-- **Depends on:** R6.45n, GATE-G29 (recorded ruling)
+- **Depends on:** R6.45n
 - **Readout:** `docs/build/readouts/GATE-G28l.md` (owed — presented to the operator; not pre-answered)
 
 > **Milestone gate — NOT an `implement-spec` input.** The chain STOPS here until the operator
@@ -78,3 +78,13 @@ operator answers when presented; nothing is pre-answered.
 - The window's execution — R6.45o's body (fleshed after this gate).
 - The follow-on L1 corpus legs — they admit only on a frozen list and run under their own PROV
   (a W3′-shaped window), gated separately under REQ-XH-004.
+
+> Dated note 2026-11-19 (DF-CAP6.1-4 / CAP6.2 cell-normalization record): the `Depends on` header
+> read `R6.45n, GATE-G29 (recorded ruling)` — the parenthetical annotation made the cell
+> unresolvable to the chain parser (guard diagnostic `[dependency]`), and GATE-G29's manifest row
+> also sits after this insert (a `[forward-dependency]`). The dependency itself is real and
+> discharged: GATE-G29's ruling (route to a re-proof PROV gate, operator verbatim 2026-11-16) and
+> its Reading-3 `full` disposition (2026-11-18) are recorded decisions — the original cell text is
+> preserved verbatim inside this note. Normalized 2026-11-19 to the chain-resolvable
+> `Depends on: R6.45n`; the narrative dependency on GATE-G29's recorded ruling stands here, not in
+> the parser-facing cell.

@@ -1,0 +1,47 @@
+id,verdict,owed_legs,routing,disposition_2026_11_19
+REQ-XA-126,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XC-314,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XC-316,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XC-325,PARTIAL,runner-check execution->CAP6.2,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XD-013,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XD-052,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XD-110,PARTIAL,later-pass execution->CAP6.2,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XD-119,PARTIAL,later-pass execution->CAP6.2,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XD-124,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XD-204,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XD-205,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XD-206,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XD-207,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XD-208,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XD-209,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XD-210,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XD-211,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XD-212,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XD-213,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XD-214,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XD-215,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XD-216,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XD-217,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XD-218,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XD-219,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XD-221,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XD-225,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XE-002,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XE-010,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XE-011,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XE-012,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XE-013,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XE-127,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XE-128,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XE-129,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XE-130,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XE-131,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XE-132,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XH-015,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XH-021,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XH-029,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XH-033,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XH-106,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XH-110,PARTIAL,,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XH-111,PARTIAL,later-pass execution->CAP6.2,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
+REQ-XH-115,PARTIAL,later-pass execution->CAP6.2,CAP6.2,routed — see LATER_PASS_ROUTING.md or carried obligation row
