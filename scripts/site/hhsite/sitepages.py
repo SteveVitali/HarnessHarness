@@ -1056,6 +1056,9 @@ def leaderboard_page(sd, pkts, commit):
     declared fixture packet (the seal keeps real outcomes out)."""
     claims = json.loads(sd["claims.json"])["body"]
     t = json.loads(sd["tfp.json"])["body"]
+    if t.get("withheld"):
+        return _fp_withheld_page(sd, pkts, commit,
+                                 "Phase 2 — first pass", "phase-2/fp/")
     fam = t["family"]
     fam_ref = fam["reference"]["text"]
     harnesses = json.loads(
@@ -1121,6 +1124,10 @@ def frontier_page(sd, pkts, commit):
     Pareto membership captioned descriptive."""
     claims = json.loads(sd["claims.json"])["body"]
     t = json.loads(sd["tfp.json"])["body"]
+    if t.get("withheld"):
+        return _fp_withheld_page(
+            sd, pkts, commit, "Phase 2 — first-pass frontier",
+            "phase-2/fp/frontier/")
     harnesses = json.loads(
         (Path(__file__).resolve().parent.parent / "config"
          / "harnesses.json").read_text())
@@ -1217,6 +1224,9 @@ def noise_page(sd, pkts, commit):
     R=⟨k⟩' below k = 2 (the reserved string, verbatim)."""
     claims = json.loads(sd["claims.json"])["body"]
     t = json.loads(sd["tfp.json"])["body"]
+    if t.get("withheld"):
+        return _fp_withheld_page(sd, pkts, commit, "Phase 2 — noise",
+                                 "phase-2/fp/noise/")
     harnesses = json.loads(
         (Path(__file__).resolve().parent.parent / "config"
          / "harnesses.json").read_text())
@@ -1553,6 +1563,10 @@ def fp_tasks_page(sd, pkts, commit):
     encodings, discordance/repair/pennant marks, links to trial pages."""
     claims = json.loads(sd["claims.json"])["body"]
     t = json.loads(sd["tfp.json"])["body"]
+    if t.get("withheld"):
+        return _fp_withheld_page(
+            sd, pkts, commit, "Phase 2 — per-task grid",
+            "phase-2/fp/tasks/")
     harnesses = json.loads(
         (Path(__file__).resolve().parent.parent / "config"
          / "harnesses.json").read_text())
@@ -1745,6 +1759,8 @@ def fp_trial_index(sd, pkts, commit):
     cell, each linking its static page."""
     claims = json.loads(sd["claims.json"])["body"]
     t = json.loads(sd["trials-fp.json"])["body"]
+    if t.get("packet_disposition"):
+        return _fp_trials_withheld_page(sd, pkts, commit)
     items = "".join(
         '<li class="prose"><a href="%s/">%s</a> — %s · %s · %d '
         'attempt(s)</li>'
@@ -1757,6 +1773,387 @@ def fp_trial_index(sd, pkts, commit):
             _canary_note(), '<ul>%s</ul>' % items]
     return pages.shell("Phase 2 — trial index", "phase-2/fp/trial/",
                        "".join(body), labels, "phase-2", noindex=True,
+                       calib=_calib(pkts["_digest"], len(pkts["inputs"]),
+                                    commit))
+
+
+# ── /phase-3/ and /phase-4/ — the first-pass parity + configuration ───
+# pages (R6.49). Everything rendered is a verbatim packet member (the
+# projections carry per-member provenance); a packet typed marker is a
+# typed refusal/unavailable cell, never a fabricated value. Withheld
+# outcomes carry the same structure and prominence as computed ones
+# (REQ-XH-020).
+
+FIRST_PASS_LABEL = ("first pass — capability demonstration on 10 "
+                    "held-out TB 2.1 tasks at k = 5; below the declared "
+                    "precision target; not leaderboard-comparable")
+PIPELINE_LABEL = ("pipeline demonstration; confirmatory test "
+                  "pre-stated as near-zero power")
+OFAT_LABEL = ("one-factor-at-a-time: effects are local to the baseline "
+              "configuration; interactions not estimated")
+W_LABEL = ("under a declared W-token context window (a harness "
+           "setting, not the model's 1M limit) — applies to V8/V9 "
+           "compaction levels; the first-pass family holds none")
+CATALOG_WINDOW_LABEL = ("catalog window: the hosted participant's "
+                        "catalog-reported context — catalog identity "
+                        "reported, not fingerprinted")
+
+_MARKER_EXTRA_SKIP = ("absent_state", "reason", "variant", "awaits")
+
+
+def _tree_cell(o):
+    """One projected member → an html cell: a typed marker becomes the
+    absent-state span (plus any members the marker still carries), a
+    value/text object gets data-src provenance, a container recurses."""
+    if isinstance(o, dict):
+        if "absent_state" in o and isinstance(o["absent_state"], str):
+            extra = "".join(
+                ' <span class="micro"><span>%s</span> %s</span>'
+                % (ESC(k), _tree_cell(v)) for k, v in sorted(o.items())
+                if k not in _MARKER_EXTRA_SKIP)
+            return "".join((_pkt_absent(o), extra))
+        if isinstance(o.get("state"), str):
+            return _absent_span(o)
+        if "text" in o or "v" in o:
+            return _span(o)
+        if o.get("derived"):
+            return '<span class="micro">%s</span>' % ESC(
+                json.dumps(o["v"]))
+        return "".join(
+            '<div class="kv"><span>%s</span>%s</div>'
+            % (ESC(k), _tree_cell(v)) for k, v in sorted(o.items()))
+    if isinstance(o, list):
+        return "".join('<div class="kv">%s</div>' % _tree_cell(e)
+                       for e in o)
+    return ESC(str(o))
+
+
+def _tree_table(obj, title=None):
+    """A labelled member → cell table over a projected packet object —
+    every row's cell carries its provenance or its typed marker. A list
+    member renders its items in order (packet order, never resorted)."""
+    if isinstance(obj, list):
+        rows = "".join('<div class="kv">%s</div>' % _tree_cell(e)
+                       for e in obj)
+    else:
+        rows = "".join(
+            '<div class="kv"><span>%s</span>%s</div>'
+            % (ESC(k), _tree_cell(obj[k])) for k in sorted(obj))
+    return ('<div class="subsec">%s%s</div>'
+            % ('<h3>%s</h3>' % ESC(title) if title else "", rows))
+
+
+def _pkt_cite(pkts, want_ids):
+    """The page-label packet citation: schema + sha256 + path for every
+    input the page renders (every label cites what it renders)."""
+    return '<p class="meta">renders ' + " · ".join(
+        '<code>%s</code> %s <code>%s</code>'
+        % (ESC(pkts[i]["schema"]), ESC(pkts[i]["path"]),
+           ESC(pkts[i]["sha256"][:16])) for i in want_ids
+        if i in pkts) + "</p>"
+
+
+def _baseline_block(p):
+    """REQ-XD-126's baseline label, folded by the projection from the
+    L2 verdict: an explicit labelled line, never an absence."""
+    bl = p["baseline_label"]
+    if bl["kind"] == "withheld":
+        cell = _pkt_absent(bl["state"])
+    else:
+        cell = '<span class="micro"><b>%s</b></span>' % ESC(bl["text"])
+    return ('<div class="kv"><span>baseline label</span>%s</div>' % cell)
+
+
+def _verdict_stamp(verdict):
+    if verdict.startswith("withheld{") or verdict.startswith("refused"):
+        return stamp("withheld", verdict)
+    if verdict == "inconclusive":
+        return stamp("inconclusive", "inconclusive")
+    if verdict == "equivalent":
+        return stamp("verified", "equivalent")
+    return stamp("inconclusive", verdict)
+
+
+def _fp_withheld_page(sd, pkts, commit, title, path):
+    """A /phase-2/fp/ page over a frozen withheld packet: the packet's
+    full computed structure, typed markers verbatim — the same shape and
+    prominence a computed packet would get (REQ-XH-020)."""
+    claims = json.loads(sd["claims.json"])["body"]
+    p = json.loads(sd["tfp.json"])["body"]
+
+    fam = p["family"]
+    fam_rows = "".join(
+        '<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'
+        % (_tree_cell(m.get("member")),
+           _tree_cell(m.get("status") or m.get("disposition")),
+           _tree_cell(m.get("raw_p_ppm", m.get("raw_ppm"))),
+           _tree_cell(m.get("adjusted_ppm")))
+        for m in fam.get("members", []))
+    fam_tbl = ('<table class="data"><thead><tr><th>member</th>'
+               '<th>status</th><th>raw p</th><th>adjusted p</th></tr>'
+               '</thead><tbody>%s</tbody></table>' % fam_rows)
+    fam_head = ('<p class="meta">family %s · method %s · α %s · '
+                'reference %s</p>'
+                % (_tree_cell(fam.get("id")),
+                   _tree_cell(fam.get("method")),
+                   _tree_cell(fam.get("alpha_ppm")),
+                   _tree_cell(fam.get("reference"))))
+
+    arm_sections = []
+    for r in p["harnesses"]:
+        arm_sections.append("".join([
+            '<div class="arm-card"><h3>%s</h3><div>%s</div>'
+            % (ESC(r["id"]), _verdict_stamp(r["disposition"]["text"])),
+            _tree_table(r["completion"], "completion"),
+            _tree_table(r["theta"], "θ — finite-manifest rate"),
+            _tree_table(r["delta_vs_ref"], "Δ vs reference"),
+            _tree_table(r["cost"], "cost"),
+            _tree_table(r["counts"], "counts"),
+            _tree_table(r["integrity"], "integrity"),
+            _tree_table(r["pass_at"], "pass@k"),
+            _tree_table(r["flips"], "flips"),
+            _tree_table(r["leader_group"], "observed-leader group"),
+            _tree_table(r["secondary_populations"],
+                        "secondary populations"),
+            "</div>"]))
+
+    plabels = [p["labels"][k]["text"] for k in sorted(p["labels"])]
+    labels = _labels(claims, results=True)
+    labels.extend('<span class="micro">%s</span>' % ESC(x)
+                  for x in [*plabels, FIRST_PASS_LABEL, PIPELINE_LABEL,
+                            OFAT_LABEL, W_LABEL, CATALOG_WINDOW_LABEL])
+
+    body = [
+        '<h1 class="display-2">%s</h1>' % ESC(title),
+        '<p class="meta">claim <code>%s</code> · packet disposition %s · '
+        'metric %s</p>'
+        % (ESC(p["claim"]["text"]), _tree_cell(p["packet_disposition"]),
+           _span(p["metric"])),
+        '<p class="meta">%s</p>' % ESC(p["expected_precision"]["text"]),
+        '<p class="meta">%s</p>' % ESC(p["executed_evidence"]["text"]),
+        _pkt_cite(pkts, ("p2-fp",)),
+        "<h2>Family</h2>", fam_head, fam_tbl,
+        '<h2>Exploratory family</h2>',
+        '<p class="meta">%s · %s</p>'
+        % (_tree_cell(p["exploratory_family"].get("id")),
+           _tree_cell(p["exploratory_family"].get("method"))),
+        "<h2>Arms</h2>", "".join(arm_sections),
+        "<h2>Tranche</h2>", _tree_table(p["tranche"]),
+        "<h2>Packet sources</h2>",
+        "".join('<div class="kv"><span><code>%s</code></span>'
+                '<code>%s</code></div>'
+                % (_span(s["path"]), _span(s["sha256"]))
+                for s in p["sources"]),
+        '<div class="kv"><span>seal/open</span>%s</div>'
+        % _tree_cell(p["seal_open_ref"]),
+    ]
+    if "/tasks/" in path or "/trial/" in path:
+        body.append(_canary_note())
+    return pages.shell(title, path, "".join(body), labels, "phase-2",
+                       calib=_calib(pkts["_digest"], len(pkts["inputs"]),
+                                    commit),
+                       noindex="/trial/" in path)
+
+
+def _fp_trials_withheld_page(sd, pkts, commit):
+    """`/phase-2/fp/trial/` over a withheld packet: no tranche trial
+    executed — the typed withhold and executed-evidence text verbatim."""
+    claims = json.loads(sd["claims.json"])["body"]
+    t = json.loads(sd["trials-fp.json"])["body"]
+    labels = _labels(claims, results=True)
+    labels.append('<span class="micro">%s</span>' % ESC(FIRST_PASS_LABEL))
+    body = [
+        '<h1 class="display-2">Phase 2 — first-pass trials</h1>',
+        '<p class="meta">packet disposition %s</p>'
+        % _tree_cell(t["packet_disposition"]),
+        '<p class="meta">%s</p>' % ESC(t["executed_evidence"]["text"]),
+        _pkt_cite(pkts, ("p2-fp", "p2-index")),
+        _canary_note(),
+    ]
+    return pages.shell("Phase 2 — first-pass trials",
+                       "phase-2/fp/trial/", "".join(body), labels,
+                       "phase-2",
+                       calib=_calib(pkts["_digest"], len(pkts["inputs"]),
+                                    commit),
+                       noindex=True)
+
+
+def phase3_page(sd, pkts, commit):
+    claims = json.loads(sd["claims.json"])["body"]
+    p = json.loads(sd["phase3.json"])["body"]
+    l1, l2, l3 = p["l1"], p["l2"], p["l3"]
+    verdict = p["verdict"]["text"]
+    fixture = bool(p.get("fixture"))
+
+    legs_rows = "".join(
+        '<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>'
+        '<td>%s</td><td>%s</td></tr>'
+        % (ESC(leg["seq_id"]["text"]), _span(leg["s"]),
+           _span(leg["total"]), ESC(leg["l1_1"]["result"]["text"]),
+           _span(leg["l1_1"]["divergences"]),
+           ESC(leg["l1_2"]["result"]["text"]),
+           _span(leg["l1_2"]["divergences"]))
+        for leg in l1["legs"])
+    l1_legs = ('<table class="data"><thead><tr><th>sequence</th><th>s</th>'
+               '<th>total</th><th>l1_1</th><th>div</th><th>l1_2</th>'
+               '<th>div</th></tr></thead><tbody>%s</tbody></table>'
+               % legs_rows)
+
+    labels = _labels(claims, results=True)
+    labels.extend('<span class="micro">%s</span>' % ESC(x)
+                  for x in (FIRST_PASS_LABEL, PIPELINE_LABEL))
+    if fixture:
+        labels.append(pages.fixture_label())
+
+    body = [
+        '<h1 class="display-2">Phase 3 — HIR parity%s</h1>'
+        % (" (fixture)" if fixture else ""),
+        '<p class="meta">claim <code>%s</code> · packet disposition '
+        '%s · ε %s · planned N %s · served N %s</p>'
+        % (ESC(p["claim"]["text"]), _tree_cell(p["packet_disposition"]),
+           _span(p["epsilon_ppm"]), _span(p["planned_n"]),
+           _span(p["served_n"])),
+        '<p class="meta">%s</p>' % ESC(p["expected_precision"]["text"]),
+        _pkt_cite(pkts, ("p3-l1", "p3-l2", "p3-l3")),
+        "<h2>L1 — conformance report</h2>",
+        '<p class="meta">%s</p>' % ESC(l1["label"]["text"]),
+        '<dl class="card">'
+        '<div><dt>result</dt><dd>%s</dd></div>'
+        '<div><dt>pass_id</dt><dd>%s</dd></div>'
+        '<div><dt>corpus digest</dt><dd><code>%s</code></dd></div>'
+        '<div><dt>H identity</dt><dd><code>%s</code> (%s, %s)</dd></div>'
+        '<div><dt>O participant</dt><dd>%s</dd></div>'
+        '<div><dt>parity</dt><dd>%s</dd></div>'
+        '<div><dt>canon</dt><dd>%s</dd></div>'
+        '<div><dt>census tasks</dt><dd>%s</dd></div>'
+        '<div><dt>stable-prefix sequences</dt><dd>%s</dd></div>'
+        '<div><dt>recorded</dt><dd>%s</dd></div>'
+        '</dl>'
+        % (stamp("verified" if l1["result"]["text"] == "pass"
+                 else "failed", l1["result"]["text"]),
+           _span(l1["pass_id"]), _span(l1["corpus_digest"]),
+           _span(l1["h_identity_digest"]),
+           _span(l1["h_identity_participant"]),
+           _span(l1["h_identity_version"]),
+           _span(l1["o_identity_participant"]),
+           _span(l1["parity"]), _span(l1["canon_version"]),
+           _span(l1["census_tasks"]),
+           _span(l1["stable_prefix_sequences"]),
+           _span(l1["recorded_at"])),
+        l1_legs,
+        "<h2>L2 — parity admission + directional KL</h2>",
+        '<p class="meta">%s</p>' % ESC(p["label"]["text"]),
+        '<div class="verdict-row">%s</div>' % _verdict_stamp(verdict),
+        _baseline_block(p),
+        _tree_table(l2["gl1"], "L1 gate carried into the packet"),
+        _tree_table(l2["admission"], "parity admission"),
+        _tree_table(l2["kl_report"], "directional KL report"),
+        _tree_table(l2["conjunction"], "conjunction"),
+        _tree_table(l2["veto_layer"], "veto layer"),
+        _tree_table(l2["typed_unknowns"], "typed unknowns"),
+        _tree_table(l2["dimension_map"], "dimension map"),
+        _tree_table(l2["l2_packet"], "packet back-pointer"),
+        '<div class="kv"><span>seal/open</span>%s</div>'
+        % _tree_cell(l2["seal_open_ref"]),
+        "<h2>L3 — distribution-level report</h2>",
+        '<p class="meta">%s — %s · %s</p>'
+        % (ESC(l3["of"]["text"]), ESC(l3["req"]["text"]),
+           ESC(l3["label"]["text"])),
+        '<p class="meta">pairs %s served of %s planned</p>'
+        % (_span(l3["served_pairs"]), _span(l3["planned_pairs"])),
+        _tree_table(l3["discordant_pairs"], "discordant pairs"),
+        _tree_table(l3["per_arm"], "per-arm distributions"),
+        _tree_table(l3["per_pair"], "per-pair distribution"),
+        "<h2>Packet sources</h2>",
+        "".join('<div class="kv"><span><code>%s</code></span>'
+                '<code>%s</code></div>'
+                % (_span(s["path"]), _span(s["sha256"]))
+                for s in p["sources"]),
+    ]
+    return pages.shell("Phase 3 — HIR parity", "phase-3/",
+                       "".join(body), labels, "phase-3",
+                       calib=_calib(pkts["_digest"], len(pkts["inputs"]),
+                                    commit))
+
+
+def phase4_page(sd, pkts, commit):
+    claims = json.loads(sd["claims.json"])["body"]
+    p = json.loads(sd["phase4.json"])["body"]
+    fixture = bool(p.get("fixture"))
+
+    fam = p["family"]
+    fam_rows = "".join(
+        '<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'
+        % (_tree_cell(m.get("member")),
+           _tree_cell(m.get("status") or m.get("disposition")),
+           _tree_cell(m.get("raw_p_ppm", m.get("raw_ppm"))),
+           _tree_cell(m.get("adjusted_ppm")))
+        for m in fam.get("members", []))
+    fam_tbl = ('<table class="data"><thead><tr><th>member</th>'
+               '<th>status</th><th>raw p</th><th>adjusted p</th></tr>'
+               '</thead><tbody>%s</tbody></table>' % fam_rows)
+    fam_head = ('<p class="meta">family %s · method %s · α %s · '
+                'reference %s</p>'
+                % (_tree_cell(fam.get("id")),
+                   _tree_cell(fam.get("method")),
+                   _tree_cell(fam.get("alpha_ppm")),
+                   _tree_cell(fam.get("reference"))))
+
+    arm_sections = []
+    for r in p["harnesses"]:
+        disp = r["disposition"]["text"]
+        arm_sections.append("".join([
+            '<div class="arm-card"><h3>%s</h3><div>%s</div>'
+            % (ESC(r["id"]), _verdict_stamp(disp)),
+            _tree_table(r["completion"], "completion"),
+            _tree_table(r["theta"], "θ — finite-manifest rate"),
+            _tree_table(r["delta_vs_ref"], "Δ vs reference"),
+            _tree_table(r["cost"], "cost"),
+            _tree_table(r["counts"], "counts"),
+            _tree_table(r["integrity"], "integrity"),
+            _tree_table(r["pass_at"], "pass@k"),
+            _tree_table(r["flips"], "flips"),
+            _tree_table(r["leader_group"], "observed-leader group"),
+            _tree_table(r["secondary_populations"],
+                        "secondary populations"),
+            "</div>"]))
+
+    plabels = [p["labels"][k]["text"] for k in sorted(p["labels"])]
+    labels = _labels(claims, results=True)
+    labels.extend('<span class="micro">%s</span>' % ESC(x)
+                  for x in [*plabels, FIRST_PASS_LABEL, PIPELINE_LABEL,
+                            OFAT_LABEL, W_LABEL, CATALOG_WINDOW_LABEL])
+    if fixture:
+        labels.append(pages.fixture_label())
+
+    body = [
+        '<h1 class="display-2">Phase 4 — configuration experiments%s'
+        '</h1>' % (" (fixture)" if fixture else ""),
+        '<p class="meta">claim <code>%s</code> · packet disposition %s · '
+        'metric %s</p>'
+        % (ESC(p["claim"]["text"]), _tree_cell(p["packet_disposition"]),
+           _span(p["metric"])),
+        '<p class="meta">%s</p>' % ESC(p["expected_precision"]["text"]),
+        '<p class="meta">%s</p>' % ESC(p["executed_evidence"]["text"]),
+        _pkt_cite(pkts, ("p4-fp", "p3-l2")),
+        _baseline_block(p),
+        "<h2>Family</h2>", fam_head, fam_tbl,
+        '<h2>Exploratory family</h2>',
+        '<p class="meta">%s · %s</p>'
+        % (_tree_cell(p["exploratory_family"].get("id")),
+           _tree_cell(p["exploratory_family"].get("method"))),
+        "<h2>Arms</h2>", "".join(arm_sections),
+        "<h2>Tranche</h2>", _tree_table(p["tranche"]),
+        "<h2>Packet sources</h2>",
+        "".join('<div class="kv"><span><code>%s</code></span>'
+                '<code>%s</code></div>'
+                % (_span(s["path"]), _span(s["sha256"]))
+                for s in p["sources"]),
+        '<div class="kv"><span>seal/open</span>%s</div>'
+        % _tree_cell(p["seal_open_ref"]),
+    ]
+    return pages.shell("Phase 4 — configuration experiments", "phase-4/",
+                       "".join(body), labels, "phase-4",
                        calib=_calib(pkts["_digest"], len(pkts["inputs"]),
                                     commit))
 
@@ -1836,6 +2233,13 @@ def build(out_dir, inputs, digest, bodies, profile="internal",
     # receipt index and the trial tree are fixture-labelled too (X-07).
     p2_live = fp_live and {"p2-pilot", "p2-quote",
                          "p2-index"} <= {i.id for i in inputs}
+    # Phase-3/4 share the same shape: internal renders when the inputs
+    # are declared (fixtures at stage (a), frozen records at stage (b));
+    # the public profile stays publication-pending until a record pins
+    # the set (REQ-XF-129).
+    p3_live = (not public) and {"p3-l1", "p3-l2",
+                              "p3-l3"} <= {i.id for i in inputs}
+    p4_live = (not public) and {"p4-fp", "p3-l2"} <= {i.id for i in inputs}
     p1_tasks_live = (not public) or (published
                                    and "phase-1" in published)
 
@@ -1900,6 +2304,8 @@ def build(out_dir, inputs, digest, bodies, profile="internal",
         "phase-2/pilot/": lambda: pilot_page(bodies, pkts, commit),
         "phase-2/quote/": lambda: quote_page(bodies, pkts, commit),
         "phase-1/tasks/": lambda: p1_tasks_page(bodies, pkts, commit),
+        "phase-3/": lambda: phase3_page(bodies, pkts, commit),
+        "phase-4/": lambda: phase4_page(bodies, pkts, commit),
     }
     for path, title, absent, section in pages.URL_MAP:
         if path == "specimen/":
@@ -1922,6 +2328,19 @@ def build(out_dir, inputs, digest, bodies, profile="internal",
                     reason, schema, gate = absent or (
                         "not_yet_available", "hh-comparative-results/1",
                         "FP-RESULTS")
+                    emit(path, _absent_page(claims, title, path, reason,
+                                            schema, gate, section,
+                                            calib()))
+            elif path == "phase-3/" and not p3_live or \
+                    path == "phase-4/" and not p4_live:
+                reason, schema, gate = absent or (
+                    "not_yet_available", "hh-comparative-results/1",
+                    "FP-RESULTS")
+                if public:
+                    emit(path, _pub_absent_page(claims, title, path,
+                                                schema, gate, section,
+                                                calib()))
+                else:
                     emit(path, _absent_page(claims, title, path, reason,
                                             schema, gate, section,
                                             calib()))

@@ -111,13 +111,15 @@ def manifest(inputs, inputs_digest):
             "phase-1": "internal record; not outside-verified",
             "phase-2": "fixture-rendered — internal profile only; "
                        "publication pending",
-            "phase-3": "not_yet_available{publication pending}",
-            "phase-4": "not_yet_available{publication pending}",
+            "phase-3": "fixture-rendered — internal profile only; "
+                       "publication pending",
+            "phase-4": "fixture-rendered — internal profile only; "
+                       "publication pending",
         },
         "site_files": ["changelog.json", "claims.json", "manifest.json",
-                       "method.json", "phase1.json", "pilot.json",
-                       "quote.json", "spend.json", "tfp.json",
-                       "trials-fp.json"],
+                       "method.json", "phase1.json", "phase3.json",
+                       "phase4.json", "pilot.json", "quote.json",
+                       "spend.json", "tfp.json", "trials-fp.json"],
     }
 
 
@@ -603,7 +605,11 @@ def _iv3(inp, unit, kind, level, point_ptr, lo_ptr, hi_ptr, label=None):
     so every rendered numeral carries resolvable provenance."""
     lo_raw, lo_src = field(inp, lo_ptr)
     hi_raw, hi_src = field(inp, hi_ptr)
-    iv = {"kind": kind, "level_ppm": level}
+    iv = {"kind": kind,
+          "level_ppm": (level if level is not None else
+                        {"absent_state": "not_computed",
+                         "reason": "packet interval carries no "
+                                   "level_ppm member"})}
     # Wrapper keys are "low"/"high" — a container must never reuse the
     # value-object member names lo/hi/interval (the intervals leg would
     # read the container itself as an estimate).
@@ -859,6 +865,29 @@ def tfp(inputs):
     i = _by_id(inputs)
     pkt = i["p2-fp"]
 
+    if _is_withheld(pkt):
+        # The first-pass tranche withheld every arm — the page projects
+        # the packet's full computed structure verbatim (REQ-XH-020).
+        return {
+            "withheld": True,
+            "claim": _t(pkt, "/claim"),
+            "executed_evidence": _t(pkt, "/executed_evidence"),
+            "expected_precision": _t(pkt, "/expected_precision"),
+            "exploratory_family": _tree(pkt, "/exploratory_family"),
+            "family": _tree(pkt, "/family"),
+            "fixture": bool(pkt.doc.get("fixture")),
+            "harnesses": _fp_arm_rows(pkt),
+            "labels": {k: _t(pkt, "/labels/%s" % _esc(k))
+                       for k in sorted(pkt.resolve("/labels"))},
+            "metric": _t(pkt, "/metric"),
+            "packet_disposition": _t(pkt, "/packet_disposition"),
+            "seal_open_ref": _t(pkt, "/seal_open_ref"),
+            "sources": [{"path": _t(pkt, "/sources/%d/path" % n),
+                         "sha256": _t(pkt, "/sources/%d/sha256" % n)}
+                        for n in range(len(pkt.resolve("/sources")))],
+            "tranche": _tree(pkt, "/tranche"),
+        }
+
     rows = [_harness_row(pkt, hid)
             for hid in sorted(pkt.resolve("/harnesses"))]
     sortable = [{"id": r["id"], "theta": r["theta"]["point"]["v"]}
@@ -1004,6 +1033,300 @@ def quote(inputs):
     }
 
 
+# ── phase3.json / phase4.json — first-pass parity + configuration ──────
+# (R6.49; F2-h fixtures in stage (a), the frozen R6.48 packets under
+# HUMAN-H16's dispositions + GATE-G30's re-scope in stage (b)).
+# Every value is a verbatim copy with its per-member pointer; a packet
+# typed marker {state,reason,…} stays a typed marker (the packet's own
+# vocabulary — _absent_of, never remapped). The baseline label folds the
+# L2 verdict under REQ-XD-126/REQ-XH-122: withheld → the typed withheld
+# state; inconclusive → "L1-conformant baseline" (never "parity-verified
+# baseline" — no frozen H record exists); equivalent → the REQ-XH-122
+# first-pass label with ε and N verbatim from the packet.
+
+
+def _esc(k):
+    return k.replace("~", "~0").replace("/", "~1")
+
+
+MARKER_STATES = frozenset([
+    "refused", "withheld", "not_checked", "deferred", "not_computed",
+    "not_yet_available", "declined", "unavailable", "infra"])
+
+
+def _is_marker(raw):
+    """A packet typed marker: a dict whose ``state`` member spells one of
+    the typed-marker words. Ordinary members may carry a ``state`` field
+    ("admitted", "computed") — those are data, not markers."""
+    return isinstance(raw, dict) and raw.get("state") in MARKER_STATES
+
+
+def _tree(inp, ptr):
+    """Deep verbatim copy of a packet member: leaves become value/text
+    objects carrying per-member pointers; a typed marker {state,…} stays
+    a typed marker; non-marker members of a marker object are copied as
+    provenance'd text so the packet's full row is carried."""
+    raw, src = field(inp, ptr)
+    if _is_marker(raw):
+        out = _absent_of(raw)
+        for k in sorted(raw):
+            if k != "state" and k not in out:
+                out[k] = _tree(inp, "%s/%s" % (ptr, _esc(k)))
+        return out
+    if isinstance(raw, dict):
+        return {k: _tree(inp, "%s/%s" % (ptr, _esc(k))) for k in raw}
+    if isinstance(raw, list):
+        return [_tree(inp, "%s/%d" % (ptr, n)) for n in range(len(raw))]
+    if isinstance(raw, bool):
+        return value(raw, "flag", src)
+    if isinstance(raw, int):
+        return value(raw, "count", src)
+    if raw is None:
+        return absent("not_computed",
+                      reason="null member in packet: %s" % ptr)
+    return text(str(raw), src)
+
+
+def _tree_or_absent(inp, ptr):
+    """_tree where the member is allowed to be absent: a missing member
+    is a typed 'not_computed' absent, never a Refusal at generate time
+    (a withheld packet may drop a member entirely)."""
+    try:
+        return _tree(inp, ptr)
+    except Refusal:
+        return absent("not_computed",
+                      reason="member absent from packet: %s" % ptr)
+
+
+def _est_member(inp, ptr):
+    """An estimate-shaped packet member {ppm|micros: int, interval:
+    {kind, level_ppm, lo_ppm, hi_ppm}} → the site estimate triple the
+    intervals leg reads; every other member the packet carries is copied
+    alongside verbatim; a typed marker stays typed."""
+    raw, _s = field(inp, ptr)
+    if _is_marker(raw):
+        return _tree(inp, ptr)
+    iv = raw["interval"]
+    vkey = "ppm" if isinstance(raw.get("ppm"), int) else "micros"
+    unit = {"ppm": "ppm", "micros": "micros_usd"}[vkey]
+    out = _iv3(inp, unit, iv["kind"], iv.get("level_ppm"),
+               "%s/%s" % (ptr, vkey) if isinstance(raw.get(vkey), int)
+               else None,
+               "%s/interval/lo_ppm" % ptr, "%s/interval/hi_ppm" % ptr)
+    for k in sorted(raw):
+        if k in ("interval", vkey):
+            continue
+        out[k] = _tree(inp, "%s/%s" % (ptr, _esc(k)))
+    return out
+
+
+def _est_deep(inp, ptr):
+    """Deep verbatim copy where any estimate-shaped member
+    {…, interval:{kind, level_ppm, lo_ppm, hi_ppm}} becomes the site
+    estimate triple — the §9.3 projection of a packet estimate."""
+    raw, _s = field(inp, ptr)
+    if _is_marker(raw):
+        return _tree(inp, ptr)
+    if isinstance(raw, dict):
+        iv = raw.get("interval")
+        if isinstance(iv, dict) and {"kind", "lo_ppm",
+                                     "hi_ppm"} <= set(iv):
+            return _est_member(inp, ptr)
+        return {k: _est_deep(inp, "%s/%s" % (ptr, _esc(k)))
+                for k in raw}
+    return _tree(inp, ptr)
+
+
+def _est_deep_or_absent(inp, ptr):
+    """_est_deep where the member is allowed to be absent entirely."""
+    try:
+        return _est_deep(inp, ptr)
+    except Refusal:
+        return absent("not_computed",
+                      reason="member absent from packet: %s" % ptr)
+
+
+def _baseline_label(l2):
+    """REQ-XD-126/REQ-XH-122: the baseline label is a pure fold of the
+    L2 packet's own verdict — a generated claims-language string (no
+    packet member to cite; page labels carry no data-src)."""
+    verdict, _v_src = field(l2, "/verdict")
+    if verdict == "equivalent":
+        eps = l2.resolve("/epsilon_ppm")
+        n = l2.resolve("/served_n")
+        pct = derive.DERIVATIONS["D-1"]["ppm_to_percent"](eps)
+        return {"kind": "equivalent",
+                "text": "first-pass L2 equivalent at a ±.%02d margin "
+                        "(N = %d; gross-infidelity screen; not "
+                        "parity-verified)" % (int(round(pct)), n)}
+    if verdict == "inconclusive":
+        return {"kind": "inconclusive",
+                "text": "L1-conformant baseline"}
+    return {"kind": "withheld",
+            "state": {"absent_state": "withheld", "reason": verdict}}
+
+
+def phase3(inputs):
+    """phase3.json — the HIR-parity page's three layers verbatim: the L1
+    conformance report, the parity-admission + directional-KL packet
+    (hh-fp-l2/1) and the L3 report (hh-fp-l3/1). No member is recomputed
+    (REQ-XF-143)."""
+    i = _by_id(inputs)
+    l1, l2, l3 = i["p3-l1"], i["p3-l2"], i["p3-l3"]
+
+    legs = []
+    for n, leg in enumerate(l1.resolve("/legs")):
+        b = "/legs/%d" % n
+        legs.append({
+            "seq_id": _t(l1, "%s/seq_id" % b),
+            "s": _v(l1, "%s/s" % b, "count"),
+            "total": _v(l1, "%s/total" % b, "count"),
+            "l1_1": {"divergences": _v(l1, "%s/l1_1/divergences" % b,
+                                       "count"),
+                     "reported": _v(l1, "%s/l1_1/reported" % b, "count"),
+                     "result": _t(l1, "%s/l1_1/result" % b)},
+            "l1_2": {"divergences": _v(l1, "%s/l1_2/divergences" % b,
+                                       "count"),
+                     "reported": _v(l1, "%s/l1_2/reported" % b, "count"),
+                     "result": _t(l1, "%s/l1_2/result" % b)}})
+
+    conj = {}
+    for k in sorted(l2.resolve("/conjunction")):
+        b = "/conjunction/%s" % _esc(k)
+        raw = l2.resolve(b)
+        if isinstance(raw, bool):
+            conj[k] = _flag(l2, b)
+        else:
+            conj[k] = _tree(l2, b)
+
+    return {
+        "baseline_label": _baseline_label(l2),
+        "claim": _t(l2, "/claim"),
+        "epsilon_ppm": _v(l2, "/epsilon_ppm", "ppm"),
+        "expected_precision": _t(l2, "/expected_precision"),
+        "fixture": bool(l2.doc.get("fixture")),
+        "l1": {
+            "canon_version": _t(l1, "/canon_version"),
+            "census_tasks": _v(l1, "/coverage/census_tasks", "count"),
+            "corpus_digest": _t(l1, "/corpus_digest"),
+            "h_identity_digest": _t(l1, "/h_identity/digest"),
+            "h_identity_participant": _t(l1,
+                                         "/h_identity/participant_ref"),
+            "h_identity_version": _t(l1, "/h_identity/version"),
+            "label": _t(l1, "/label"),
+            "legs": legs,
+            "o_identity_participant": _t(l1,
+                                         "/o_identity/participant_ref"),
+            "parity": _t(l1, "/parity"),
+            "pass_id": _t(l1, "/pass_id"),
+            "recorded_at": _t(l1, "/recorded_at"),
+            "result": _t(l1, "/result"),
+            "stable_prefix_sequences": _v(
+                l1, "/stable_prefix/sequences", "count"),
+        },
+        "l2": {
+            "admission": _tree(l2, "/admission"),
+            "conjunction": conj,
+            "dimension_map": _tree(l2, "/dimension_map"),
+            "gl1": _tree(l2, "/gl1"),
+            "kl_report": _tree(l2, "/kl_report"),
+            "l2_packet": _tree(l2, "/l2_packet"),
+            "seal_open_ref": _t(l2, "/seal_open_ref"),
+            "typed_unknowns": _tree(l2, "/typed_unknowns"),
+            "veto_layer": _tree(l2, "/veto_layer"),
+        },
+        "l3": {
+            "discordant_pairs": _tree(l3, "/discordant_pairs"),
+            "label": _t(l3, "/label"),
+            "of": _t(l3, "/of"),
+            "per_arm": _tree(l3, "/per_arm"),
+            "per_pair": _tree(l3, "/per_pair"),
+            "planned_pairs": _v(l3, "/planned_pairs", "count"),
+            "req": _t(l3, "/req"),
+            "served_pairs": _v(l3, "/served_pairs", "count"),
+        },
+        "label": _t(l2, "/label"),
+        "packet_disposition": _t(l2, "/packet_disposition"),
+        "planned_n": _v(l2, "/planned_n", "count"),
+        "served_n": _v(l2, "/served_n", "count"),
+        "sources": [{"path": _t(l2, "/sources/%d/path" % n),
+                     "sha256": _t(l2, "/sources/%d/sha256" % n)}
+                    for n in range(len(l2.resolve("/sources")))],
+        "verdict": _t(l2, "/verdict"),
+    }
+
+
+def _is_withheld(pkt):
+    """A packet whose overall disposition is a typed withhold/refusal
+    renders its full computed structure — never a bare null page
+    (REQ-XH-020)."""
+    d = pkt.doc.get("packet_disposition")
+    return isinstance(d, str) and (
+        d.startswith("withheld{") or d.startswith("refused{"))
+
+
+def _fp_arm_rows(pkt):
+    """The per-arm rows of an hh-comparative-results/1 packet, verbatim —
+    shared by phase4.json and the withheld tfp.json body."""
+    rows = []
+    for hid in sorted(pkt.resolve("/harnesses")):
+        b = "/harnesses/%s" % _esc(hid)
+        lg = _est_deep_or_absent(pkt, "%s/leader_group" % b)
+        if isinstance(lg, dict):
+            # The packet's leader-group label is the packet author's
+            # wording — the spec-fixed site label (REQ-XF-111) is the
+            # page's, never stored (same rule as tfp).
+            lg.pop("label", None)
+            lg.pop("leader_id", None)
+        rows.append({
+            "id": hid,
+            "disposition": _t(pkt, "%s/disposition" % b),
+            "completion": _tree_or_absent(pkt, "%s/completion" % b),
+            "cost": _est_deep_or_absent(pkt, "%s/cost" % b),
+            "cost_with_compute": _est_deep_or_absent(
+                pkt, "%s/cost_with_compute" % b),
+            "counts": _tree_or_absent(pkt, "%s/counts" % b),
+            "delta_vs_ref": _est_deep_or_absent(pkt, "%s/delta_vs_ref" % b),
+            "flips": _est_deep_or_absent(pkt, "%s/flips" % b),
+            "integrity": _tree_or_absent(pkt, "%s/integrity" % b),
+            "leader_group": lg,
+            "pass_at": _tree_or_absent(pkt, "%s/pass_at" % b),
+            "secondary_populations": _tree_or_absent(
+                pkt, "%s/secondary_populations" % b),
+            "theta": _est_deep_or_absent(pkt, "%s/theta" % b),
+        })
+    return rows
+
+
+def phase4(inputs):
+    """phase4.json — the configuration-experiments page: the Holm family,
+    the exploratory family and the per-arm result rows verbatim; the
+    baseline label folds the phase-3 L2 packet's verdict (REQ-XD-222
+    carries REQ-XD-126's label into the phase-4 surface)."""
+    i = _by_id(inputs)
+    pkt, l2 = i["p4-fp"], i["p3-l2"]
+
+    return {
+        "baseline_label": _baseline_label(l2),
+        "claim": _t(pkt, "/claim"),
+        "executed_evidence": _t(pkt, "/executed_evidence"),
+        "expected_precision": _t(pkt, "/expected_precision"),
+        "exploratory_family": _tree(pkt, "/exploratory_family"),
+        "family": _tree(pkt, "/family"),
+        "fixture": bool(pkt.doc.get("fixture")),
+        "harnesses": _fp_arm_rows(pkt),
+        "labels": {k: _t(pkt, "/labels/%s" % _esc(k))
+                   for k in sorted(pkt.resolve("/labels"))},
+        "metric": _t(pkt, "/metric"),
+        "packet_disposition": _t(pkt, "/packet_disposition"),
+        "seal_open_ref": _t(pkt, "/seal_open_ref"),
+        "sources": [{"path": _t(pkt, "/sources/%d/path" % n),
+                     "sha256": _t(pkt, "/sources/%d/sha256" % n)}
+                    for n in range(len(pkt.resolve("/sources")))],
+        "tranche": _tree(pkt, "/tranche"),
+    }
+
+
 # ── trials-fp.json — per-trial summaries + the receipt index (R6.21) ──
 def trials_fp(inputs):
     """Per-(task, arm) trial summaries from the results fixture's
@@ -1021,6 +1344,20 @@ def trials_fp(inputs):
                      if ds.get("revision") else absent(
                          "not_yet_available",
                          reason="withheld{dataset_private}"))}
+
+    if _is_withheld(pkt):
+        # No tranche trial executed — the index renders zero rows and
+        # the packet's own withhold + executed-evidence text verbatim.
+        return {
+            "dataset": dataset,
+            "scans": {
+                "secret_scan_ref": _t(idx, "/scans/secret_scan_ref"),
+                "contamination_scan_ref": _t(
+                    idx, "/scans/contamination_scan_ref")},
+            "packet_disposition": _t(pkt, "/packet_disposition"),
+            "executed_evidence": _t(pkt, "/executed_evidence"),
+            "trials": [],
+        }
 
     files = {}
     for n, a in enumerate(idx.resolve("/attempts")):
@@ -1089,6 +1426,8 @@ FILES = {
     "method.json": (method, ("s4-repairs", "deviations")),
     "claims.json": (claims, ("estimators", "record")),
     "tfp.json": (tfp, ("p2-fp",)),
+    "phase3.json": (phase3, ("p3-l1", "p3-l2", "p3-l3")),
+    "phase4.json": (phase4, ("p4-fp", "p3-l2")),
     "pilot.json": (pilot, ("p2-pilot",)),
     "quote.json": (quote, ("p2-quote",)),
     "trials-fp.json": (trials_fp, ("p2-fp", "p2-index")),

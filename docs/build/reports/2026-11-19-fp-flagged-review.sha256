@@ -1,0 +1,2 @@
+b4637868d5712553a97e72f4ea80e358cb574aa898c3500fe88a13fa7f6e9089  docs/build/reports/2026-11-19-fp-flagged-review.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-19-fp-flagged-review.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)

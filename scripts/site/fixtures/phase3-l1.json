@@ -1,0 +1,75 @@
+{
+  "canon_version": "hh-l1-canon/1",
+  "corpus_digest": "sha256:ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+  "coverage": {
+    "branches": {
+      "BM1": "bm01",
+      "BM2": "bm02"
+    },
+    "census_tasks": 7
+  },
+  "diffs": [],
+  "fixture": true,
+  "fixture_label": "presentation fixture for the phase-3 site page \u2014 never a first-pass result (the seal, X-07)",
+  "h_identity": {
+    "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "participant_ref": "H",
+    "version": "frozen"
+  },
+  "label": "L1 precondition gate \u2014 not parity evidence",
+  "legs": [
+    {
+      "l1_1": {
+        "divergences": 0,
+        "reported": 0,
+        "result": "pass"
+      },
+      "l1_2": {
+        "divergences": 0,
+        "reported": 2,
+        "result": "pass"
+      },
+      "s": 1,
+      "seq_id": "fx-corpus-01",
+      "total": 42
+    },
+    {
+      "l1_1": {
+        "divergences": 0,
+        "reported": 1,
+        "result": "pass"
+      },
+      "l1_2": {
+        "divergences": 0,
+        "reported": 2,
+        "result": "pass"
+      },
+      "s": 1,
+      "seq_id": "fx-corpus-02",
+      "total": 55
+    }
+  ],
+  "o_identity": {
+    "digest": "",
+    "participant_ref": "mini-swe-agent",
+    "version": "original"
+  },
+  "parity": "none",
+  "pass_id": "l1-pass:sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "recorded_at": "2026-11-19T00:00Z (declared; fixture)",
+  "result": "pass",
+  "schema": "hh-l1-conformance/1",
+  "sources": [
+    {
+      "path": "docs/build/reports/2026-11-10-fp-prereg.json",
+      "sha256": "sha256:2e36bf81d3af55491af00608c63bedf3ed035e0193cc0ce4cd0f3b609e450201"
+    }
+  ],
+  "stable_prefix": {
+    "histogram": {
+      "prefix:1": 2
+    },
+    "sequences": 2
+  },
+  "ticket": "R6.49-fixture"
+}

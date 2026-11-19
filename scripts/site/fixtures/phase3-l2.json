@@ -1,0 +1,246 @@
+{
+  "admission": {
+    "display": "admitted \u2014 the conjunction holds at \u03b5=\u00b1.20, N=50",
+    "expected": "50/50 pair members observed",
+    "kind": "parity_admission",
+    "state": "admitted",
+    "version": "parity-admission/1"
+  },
+  "claim": "P3-L2",
+  "conjunction": {
+    "admission": {
+      "result": "admitted",
+      "state": "computed"
+    },
+    "iut_conjunction_equivalent": {
+      "result": false,
+      "state": "computed"
+    },
+    "l1_gate_pass": true,
+    "vetoes_empty": {
+      "result": true,
+      "state": "computed"
+    }
+  },
+  "dimension_map": [
+    {
+      "dimension": "capability",
+      "kind": "binary",
+      "margin": {
+        "kind": "absolute",
+        "margin_ppm": 200000
+      },
+      "status": "required"
+    },
+    {
+      "dimension": "reliability",
+      "kind": "binary",
+      "margin": {
+        "kind": "absolute",
+        "margin_ppm": 200000
+      },
+      "status": "required"
+    },
+    {
+      "dimension": "grounding",
+      "reason": "hosting-set equivalence gate \u2014 not a parity endpoint",
+      "status": "inapplicable"
+    },
+    {
+      "dimension": "efficiency",
+      "reason": "L2 compares binary pair outcomes only",
+      "status": "inapplicable"
+    },
+    {
+      "dimension": "autonomy",
+      "reason": "single-shot pairs carry no autonomy endpoint",
+      "status": "inapplicable"
+    },
+    {
+      "dimension": "security_compliance",
+      "reason": "checked by the veto layer, not the endpoint family",
+      "status": "inapplicable"
+    },
+    {
+      "dimension": "portability_evolvability",
+      "reason": "not an L2 estimand \u2014 first-pass scope",
+      "status": "inapplicable"
+    }
+  ],
+  "epsilon_ppm": 200000,
+  "expected_precision": "inconclusive at N=50, \u03b5=\u00b1.20 \u2014 admissible result",
+  "fixture": true,
+  "fixture_label": "presentation fixture for the phase-3 site page \u2014 never a first-pass result (the seal, X-07)",
+  "gl1": {
+    "corpus_digest": "sha256:072de1f36f3ddc6bd8387bfde992554e7c892b05f2e5d9590c30e221f028cb0d",
+    "h_identity_digest": "sha256:c451ed97d0206821bedd6e2255e5f6bba4736646d7170601b4085492e711a8b9",
+    "pass_id": "l1-pass:sha256:80bfafee35ac9dd669d80f786ee54deca9948049bcd8559dd7a6dee8d06dd8ef",
+    "result": "pass"
+  },
+  "kl_report": {
+    "c_minus": 7,
+    "c_plus": 9,
+    "epsilon_ppm": 200000,
+    "expected_precision": "inconclusive at N=50, \u03b5=\u00b1.20 \u2014 admissible result",
+    "l_delta": -90000,
+    "planned_n": 50,
+    "rule": "L_\u0394 > \u2212\u03b5 \u2227 U_\u0394 < \u03b5",
+    "served_n": 50,
+    "state": "computed",
+    "u_delta": 310000,
+    "verdict": "inconclusive"
+  },
+  "l2_packet": {
+    "dimension_map": [
+      {
+        "dimension": "capability",
+        "kind": "binary",
+        "margin": {
+          "kind": "absolute",
+          "margin_ppm": 0
+        },
+        "status": "required"
+      },
+      {
+        "dimension": "reliability",
+        "kind": "binary",
+        "margin": {
+          "kind": "absolute",
+          "margin_ppm": 0
+        },
+        "status": "required"
+      },
+      {
+        "dimension": "grounding",
+        "reason": "hosting-set equivalence gate \u2014 not a parity endpoint",
+        "status": "inapplicable"
+      },
+      {
+        "dimension": "efficiency",
+        "reason": "L2 compares binary pair outcomes only",
+        "status": "inapplicable"
+      },
+      {
+        "dimension": "autonomy",
+        "reason": "single-shot pairs carry no autonomy endpoint",
+        "status": "inapplicable"
+      },
+      {
+        "dimension": "security_compliance",
+        "reason": "checked by the veto layer, not the endpoint family",
+        "status": "inapplicable"
+      },
+      {
+        "dimension": "portability_evolvability",
+        "reason": "not an L2 estimand \u2014 first-pass scope",
+        "status": "inapplicable"
+      }
+    ],
+    "gl1_pass_id": "l1-pass:sha256:80bfafee35ac9dd669d80f786ee54deca9948049bcd8559dd7a6dee8d06dd8ef",
+    "h_identity_digest": "sha256:c451ed97d0206821bedd6e2255e5f6bba4736646d7170601b4085492e711a8b9",
+    "schema": "hh-fp-l2/1",
+    "unknowns": [
+      {
+        "kind": "served_weights",
+        "note": "provider-served weights are not observed",
+        "status": "unknown"
+      },
+      {
+        "kind": "cache_state",
+        "note": "provider-side cache state is not observed",
+        "status": "unknown"
+      },
+      {
+        "kind": "seeds",
+        "note": "provider sampling seeds are not observed",
+        "status": "unknown"
+      },
+      {
+        "kind": "determinism",
+        "note": "provider decode determinism is not observed",
+        "status": "unknown"
+      },
+      {
+        "kind": "support_gate",
+        "note": "support-gate state is not observed",
+        "status": "unknown"
+      }
+    ]
+  },
+  "label": "first-pass L2 packet \u2014 computed{fixture}; pipeline demonstration; confirmatory test pre-stated as near-zero power",
+  "packet_disposition": "computed{fixture}",
+  "planned_n": 50,
+  "recorded_at": "2026-11-19T00:00Z (declared; the ticket is clock-free)",
+  "schema": "hh-fp-l2/1",
+  "seal_open_ref": "docs/build/reports/2026-11-19-fp-seal-open.json",
+  "served_n": 50,
+  "sources": [
+    {
+      "path": "docs/build/reports/2026-11-19-fp-ws1-trials.json",
+      "sha256": "sha256:6132f93923799090cb4a80856db0d563105ebbf405ed8334cf5fc95d0ec42a05"
+    },
+    {
+      "path": "docs/build/reports/2026-11-19-fp-ws1-pp0-evidence.json",
+      "sha256": "sha256:95f872641d41cc881d007b388a330ebeec54a4c5f1144094471441a0be2c30c5"
+    },
+    {
+      "path": "docs/build/reports/2026-11-19-fp-e.json",
+      "sha256": "sha256:d6fa1dab0538bf759581b9524f5184a6f74a402d73128eac82b904e6482b60da"
+    },
+    {
+      "path": "docs/build/reports/2026-11-19-fp-ws1-measurement.json",
+      "sha256": "sha256:7bce872236b5c3bbd4c4eeeff628dea02b39637a99f765a41562efdbeadbdb73"
+    },
+    {
+      "path": "docs/build/reports/2026-11-19-fp-w4-quote.json",
+      "sha256": "sha256:01c91f68bfddf7a7236a0f4a76e2c60f84c24934219a0da0d11186f8fa46d392"
+    },
+    {
+      "path": "docs/build/reports/compute/2026-11-18-fp-ws1-l1-conformance.json",
+      "sha256": "sha256:bdbb0bc93a66988947e7f1712f9c9c397ba6ebbb9642d568fcf29c594e763218"
+    },
+    {
+      "path": "docs/build/reports/2026-11-10-fp-prereg.json",
+      "sha256": "sha256:2e36bf81d3af55491af00608c63bedf3ed035e0193cc0ce4cd0f3b609e450201"
+    }
+  ],
+  "ticket": "R6.48",
+  "typed_unknowns": [
+    {
+      "kind": "served_weights",
+      "note": "provider-served weights are not observed",
+      "status": "unknown"
+    },
+    {
+      "kind": "cache_state",
+      "note": "provider-side cache state is not observed",
+      "status": "unknown"
+    },
+    {
+      "kind": "seeds",
+      "note": "provider sampling seeds are not observed",
+      "status": "unknown"
+    },
+    {
+      "kind": "determinism",
+      "note": "provider decode determinism is not observed",
+      "status": "unknown"
+    },
+    {
+      "kind": "support_gate",
+      "note": "support-gate state is not observed",
+      "status": "unknown"
+    }
+  ],
+  "verdict": "inconclusive",
+  "veto_layer": {
+    "not_checked": [
+      {
+        "reason": "l2_pairs: no pair-level evidence",
+        "rule": "pair-level veto check",
+        "state": "not_checked"
+      }
+    ],
+    "tripped": []
+  }
+}

@@ -1,0 +1,127 @@
+{
+ "candidates": [
+  {
+   "bytes": 3456,
+   "canary_guid_present": false,
+   "fingerprint_hit_digests": [],
+   "fingerprint_matches": 0,
+   "path": "docs/results/site-data/changelog.json",
+   "sha256": "sha256:436a0f7525d1385beea52aa872191c692069657718b5609116f952cb69e72bba"
+  },
+  {
+   "bytes": 8717,
+   "canary_guid_present": false,
+   "fingerprint_hit_digests": [],
+   "fingerprint_matches": 0,
+   "path": "docs/results/site-data/claims.json",
+   "sha256": "sha256:56ca967a0bcf00601f67dc45b08f762ad3cde26eb1ef96a50cdd1a719e6a8ad2"
+  },
+  {
+   "bytes": 7048,
+   "canary_guid_present": false,
+   "fingerprint_hit_digests": [],
+   "fingerprint_matches": 0,
+   "path": "docs/results/site-data/manifest.json",
+   "sha256": "sha256:74a97a7baefb390d4aaed26773d2308e00912b54c06a6d9ba936950ce16864bd"
+  },
+  {
+   "bytes": 9518,
+   "canary_guid_present": false,
+   "fingerprint_hit_digests": [],
+   "fingerprint_matches": 0,
+   "path": "docs/results/site-data/method.json",
+   "sha256": "sha256:969f521f93b2c85fa4a4cf95f3d647738215422e0d02ab72aa318170ba93b548"
+  },
+  {
+   "bytes": 136284,
+   "canary_guid_present": false,
+   "fingerprint_hit_digests": [],
+   "fingerprint_matches": 0,
+   "path": "docs/results/site-data/phase1.json",
+   "sha256": "sha256:756926553c3f78c7aa464d565233c9401f7c0b37874d3dec9de461d02ad4e167"
+  },
+  {
+   "bytes": 53366,
+   "canary_guid_present": false,
+   "fingerprint_hit_digests": [],
+   "fingerprint_matches": 0,
+   "path": "docs/results/site-data/phase3.json",
+   "sha256": "sha256:db6560c4e537a17641111ea6fc5515d450f75e1420d7c2b66cfb0f5098f5d013"
+  },
+  {
+   "bytes": 34480,
+   "canary_guid_present": false,
+   "fingerprint_hit_digests": [],
+   "fingerprint_matches": 0,
+   "path": "docs/results/site-data/phase4.json",
+   "sha256": "sha256:bc57abc50ced287512be481b71764b3ef96e746d68f591423ce73cbe9809285a"
+  },
+  {
+   "bytes": 26526,
+   "canary_guid_present": false,
+   "fingerprint_hit_digests": [],
+   "fingerprint_matches": 0,
+   "path": "docs/results/site-data/pilot.json",
+   "sha256": "sha256:0f859adda6b451715813c769ad619e14a5cb1d77a5acd5714c1872d6e8dc3139"
+  },
+  {
+   "bytes": 9545,
+   "canary_guid_present": false,
+   "fingerprint_hit_digests": [],
+   "fingerprint_matches": 0,
+   "path": "docs/results/site-data/quote.json",
+   "sha256": "sha256:b8809939f14382403f2de7aac833bbfb4a1a9d0480d4256e86f90ae079e8b73e"
+  },
+  {
+   "bytes": 3908,
+   "canary_guid_present": false,
+   "fingerprint_hit_digests": [],
+   "fingerprint_matches": 0,
+   "path": "docs/results/site-data/spend.json",
+   "sha256": "sha256:74bb300940723d760ae63b63bb7c6dd384364383d480b4d97da53c15c1b8293d"
+  },
+  {
+   "bytes": 47287,
+   "canary_guid_present": false,
+   "fingerprint_hit_digests": [],
+   "fingerprint_matches": 0,
+   "path": "docs/results/site-data/tfp.json",
+   "sha256": "sha256:d32d600a034c2eca1517cd3a54e69fed7c44aa6d6b848944f6a12c547a65878c"
+  },
+  {
+   "bytes": 2235,
+   "canary_guid_present": false,
+   "fingerprint_hit_digests": [],
+   "fingerprint_matches": 0,
+   "path": "docs/results/site-data/trials-fp.json",
+   "sha256": "sha256:3740c452ea58fde7acdbf9574d1583f48df91ab5e93a7e6e939cf8ccbf484e9a"
+  }
+ ],
+ "controls": [
+  {
+   "flagged": true,
+   "kind": "canary_guid",
+   "seed_sha256": "sha256:2c7c9d047919c8e41df91d6f40f34afc8c8d6661d369a0676bcb5edad38b6452"
+  },
+  {
+   "flagged": true,
+   "kind": "fingerprint_excerpt",
+   "seed_sha256": "sha256:9e681185f015bb4f24234f48632045aa3291b11e00e7baf035ffd7c137702246"
+  },
+  {
+   "flagged": false,
+   "kind": "clean",
+   "seed_sha256": "sha256:5f2b8678015c7abf49fb630c0d39b5499cc9a9a5d3073233194272b3bf8c8471"
+  }
+ ],
+ "detector": "offline string scan \u2014 TB canary GUID + answer-scan/1 flagged excerpt digests (R6.27's fingerprint set as recorded in the committed scan)",
+ "fingerprint_count": 42,
+ "flagged_files": [],
+ "note": "candidate sanitized public derivatives only; every flagged file vetoes the dataset flip",
+ "recorded_at": "2026-11-19T00:00Z",
+ "scan_ref": "docs/build/reports/2026-11-19-fp-answer-scan.json",
+ "scan_sha256": "sha256:f836343a99c056a0567fb2027fb4c9f9db0f90f6728765bc2cb75bddf0b13853",
+ "schema": "hh-contamination-scan/1",
+ "ticket": "R6.49",
+ "verdict": "clean"
+}

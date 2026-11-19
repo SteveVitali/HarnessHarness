@@ -1,26 +1,58 @@
 {
   "schema": "hh-claims-lexicon/1",
-  "note": "R6.6 (F2-f) — the one banned-phrase source (CC1; experiments spec §9.4). `check-position.sh` reads `banned` and `record_banned` with byte-identical behaviour (C-25) and fails closed when this file is missing; `check-site.sh` applies all four lists to every visible string of the built site, including SVG text and attributes. Matching is case-insensitive and word-bounded, as in check-position.sh's BANNED scan. Entries are moved verbatim: `banned` is check-position.sh's fifteen; `record_banned` is §2.7's seven; `site_banned` is D1's five, F2's eight and §8.8's five phase-4 additions; `conditional` carries §9.4's four allowed forms. The `site_banned` phrases are ratified as listed in §9.4 (Q-F2-7 recorded).",
+  "note": "R6.6 (F2-f) \u2014 the one banned-phrase source (CC1; experiments spec \u00a79.4). `check-position.sh` reads `banned` and `record_banned` with byte-identical behaviour (C-25) and fails closed when this file is missing; `check-site.sh` applies all four lists to every visible string of the built site, including SVG text and attributes. Matching is case-insensitive and word-bounded, as in check-position.sh's BANNED scan. Entries are moved verbatim: `banned` is check-position.sh's fifteen; `record_banned` is \u00a72.7's seven; `site_banned` is D1's five, F2's eight and \u00a78.8's five phase-4 additions; `conditional` carries \u00a79.4's four allowed forms. The `site_banned` phrases are ratified as listed in \u00a79.4 (Q-F2-7 recorded).",
   "banned": [
-    "proven", "guarantee", "guaranteed", "production-ready",
-    "production ready", "state-of-the-art", "outperform",
-    "significant improvement", "statistically significant",
-    "users demand", "users love", "widely adopted", "market-leading",
-    "best-in-class", "superior"
+    "proven",
+    "guarantee",
+    "guaranteed",
+    "production-ready",
+    "production ready",
+    "state-of-the-art",
+    "outperform",
+    "significant improvement",
+    "statistically significant",
+    "users demand",
+    "users love",
+    "widely adopted",
+    "market-leading",
+    "best-in-class",
+    "superior"
   ],
   "record_banned": [
-    "null-equivalent", "parity verified", "verified for hh",
-    "proof of correctness", "proof-of-correctness",
-    "equivalence verified", "efficacy result shows"
+    "null-equivalent",
+    "parity verified",
+    "verified for hh",
+    "proof of correctness",
+    "proof-of-correctness",
+    "equivalence verified",
+    "efficacy result shows"
   ],
   "site_banned": [
-    "best harness", "winner", "beats", "no difference",
+    "best harness",
+    "winner",
+    "beats",
+    "no difference",
     "same performance",
-    "most accurate", "best value", "ties for first",
-    "statistically tied", "ranked #", "top harness", "clear winner",
-    {"phrase": "leader", "not_preceded_by": "observed-"},
-    "best configuration", "optimal configuration", "optimal setting",
-    "winning configuration", "tuned to"
+    "most accurate",
+    "best value",
+    "ties for first",
+    "statistically tied",
+    "ranked #",
+    "top harness",
+    "clear winner",
+    {
+      "phrase": "leader",
+      "not_preceded_by": "observed-"
+    },
+    "best configuration",
+    "optimal configuration",
+    "optimal setting",
+    "winning configuration",
+    "tuned to",
+    {
+      "phrase": "parity-verified baseline",
+      "reason": "REQ-XD-126/REQ-XH-122: 'parity-verified baseline' is reserved for a frozen H record; a first-pass L2 inconclusive yields only 'L1-conformant baseline' and the equivalent label carries 'not parity-verified'"
+    }
   ],
   "conditional": [
     {
@@ -35,18 +67,80 @@
     },
     {
       "phrase": "improves",
-      "only_inside": "a sentence carrying \"Holm-adjusted p < .05 (family P4-…)\" (§8.8)",
+      "only_inside": "a sentence carrying \"Holm-adjusted p < .05 (family P4-\u2026)\" (\u00a78.8)",
       "allow_pattern": "holm-adjusted p\\s*<\\s*\\.05\\s*\\(family\\s+p4-"
     },
     {
       "phrase": "improvement",
-      "only_inside": "a sentence carrying \"Holm-adjusted p < .05 (family P4-…)\" (§8.8)",
+      "only_inside": "a sentence carrying \"Holm-adjusted p < .05 (family P4-\u2026)\" (\u00a78.8)",
       "allow_pattern": "holm-adjusted p\\s*<\\s*\\.05\\s*\\(family\\s+p4-"
     },
     {
       "phrase": "equivalent",
-      "only_inside": "\"L2 KL verdict `equivalent` (ε = ±<ε>, N = <N>, family <id>)\" or REQ-XH-122's first-pass label",
-      "allow_pattern": "l2 kl verdict[^\\n]{0,80}ε\\s*=\\s*±[^\\n]{0,80}family|first-pass l2 equivalent at a ±"
+      "only_inside": "\"L2 KL verdict `equivalent` (\u03b5 = \u00b1<\u03b5>, N = <N>, family <id>)\" or REQ-XH-122's first-pass label",
+      "allow_pattern": "l2 kl verdict[^\\n]{0,80}\u03b5\\s*=\\s*\u00b1[^\\n]{0,80}family|first-pass l2 equivalent at a \u00b1"
     }
-  ]
+  ],
+  "site_required": {
+    "note": "REQ-XH-119/REQ-XD-222/REQ-XD-126 (R6.49): mandatory labels on non-absent, non-fixture first-pass pages. A page marked as fixture content is exempt (the seal, X-07).",
+    "entries": [
+      {
+        "name": "first_pass",
+        "label": "first pass \u2014 capability demonstration on 10 held-out TB 2.1 tasks at k = 5; below the declared precision target; not leaderboard-comparable",
+        "pages": [
+          "phase-2/fp/",
+          "phase-3/",
+          "phase-4/"
+        ]
+      },
+      {
+        "name": "pipeline",
+        "label": "pipeline demonstration; confirmatory test pre-stated as near-zero power",
+        "pages": [
+          "phase-3/",
+          "phase-4/"
+        ]
+      },
+      {
+        "name": "baseline_label",
+        "any_of": [
+          "L1-conformant baseline",
+          "first-pass L2 equivalent at a \u00b1",
+          "withheld{"
+        ],
+        "pages": [
+          "phase-3/",
+          "phase-4/"
+        ]
+      },
+      {
+        "name": "finite_manifest_scope",
+        "label": "finite-manifest",
+        "pages": [
+          "phase-4/"
+        ]
+      },
+      {
+        "name": "ofat_caveat",
+        "label": "one-factor-at-a-time: effects are local to the baseline configuration; interactions not estimated",
+        "pages": [
+          "phase-4/"
+        ]
+      },
+      {
+        "name": "w_window_label",
+        "label": "under a declared W-token context window (a harness setting, not the model's 1M limit)",
+        "pages": [
+          "phase-4/"
+        ]
+      },
+      {
+        "name": "catalog_window",
+        "label": "catalog window",
+        "pages": [
+          "phase-4/"
+        ]
+      }
+    ]
+  }
 }

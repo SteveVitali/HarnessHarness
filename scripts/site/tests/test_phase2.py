@@ -44,14 +44,39 @@ def fail(name, msg):
     print("test_phase2: FAIL [%s] %s" % (name, msg), file=sys.stderr)
 
 
-def _page(tmp, profile="internal"):
+FIXTURE_PATHS = {
+    "p2-fp": "scripts/site/fixtures/phase2-fp-results.json",
+    "p3-l1": "scripts/site/fixtures/phase3-l1.json",
+    "p3-l2": "scripts/site/fixtures/phase3-l2.json",
+    "p3-l3": "scripts/site/fixtures/phase3-l3.json",
+    "p4-fp": "scripts/site/fixtures/phase4-fp.json"}
+
+
+def _fixture_cfg(tmp):
+    """The stage-(a) declared-fixture spelling of the sealed inputs —
+    the page legs below verify the computed rendering on the declared
+    fixture while the committed config names the frozen records."""
+    cfg = json.loads((SITE / "config" / "inputs.json").read_text())
+    for e in cfg["inputs"]:
+        if e["id"] in FIXTURE_PATHS:
+            e.pop("frozen", None)
+            e["fixture"] = True
+            e["path"] = FIXTURE_PATHS[e["id"]]
+    p = Path(tmp) / "inputs-fixture.json"
+    p.write_text(json.dumps(cfg))
+    return p
+
+
+def _page(tmp, profile="internal", fixture=False):
     out = Path(tmp) / ("site-" + profile)
-    inputs, digest, bodies = build.emit_bodies()
+    cfg = _fixture_cfg(tmp) if fixture else None
+    inputs, digest, bodies = build.emit_bodies(cfg_path=cfg)
     pubs = build.load_publications(inputs)
     sitepages.build(out, inputs, digest, bodies, profile=profile,
                     publications=pubs)
-    return {str(p.relative_to(out)): p.read_text()
-            for p in out.rglob("*.html")}
+    texts = {str(p.relative_to(out)): p.read_text()
+             for p in out.rglob("*.html")}
+    return texts, bodies
 
 
 # ── the seal (X-07) ────────────────────────────────────────────────────
@@ -99,7 +124,7 @@ def leg_packet():
 
 # ── band + ranks + toggles over the internal build ─────────────────────
 def leg_pages(tmp):
-    texts = _page(tmp)
+    texts, bodies = _page(tmp, fixture=True)
     lb = texts.get("phase-2/fp/index.html", "")
     fr = texts.get("phase-2/fp/frontier/index.html", "")
     if not lb or not fr:
@@ -188,8 +213,7 @@ def leg_pages(tmp):
         if mon not in fr:
             fail("frontier", "monogram %s absent" % mon)
     # deterministic label placement: two renders identical
-    e = json.loads((ROOT / "docs/results/site-data/tfp.json")
-                   .read_text())["body"]["frontier"]["entries"]
+    e = json.loads(bodies["tfp.json"])["body"]["frontier"]["entries"]
     hcfg = json.loads((SITE / "config" / "harnesses.json").read_text())
     ents = [{"cost_micros": x["cost"], "id": x["id"],
              "monogram": hcfg["harnesses"][x["id"]]["monogram"],
@@ -220,7 +244,7 @@ def leg_pages(tmp):
 
 
 def leg_public(tmp):
-    texts = _page(tmp, profile="public")
+    texts, _b = _page(tmp, profile="public")
     for rel in ("phase-2/fp/index.html",
                 "phase-2/fp/frontier/index.html"):
         h = texts.get(rel, "")
@@ -237,7 +261,7 @@ def leg_public(tmp):
 def leg_goldens(tmp):
     """Golden snapshots: the band fragment and the frontier SVG, byte-
     for-byte against committed files."""
-    texts = _page(tmp)
+    texts, _b2 = _page(tmp, fixture=True)
     lb = texts["phase-2/fp/index.html"]
     fr = texts["phase-2/fp/frontier/index.html"]
     m = re.search(r'<tr class="lb-band-label">.*?</tr>', lb, re.S)

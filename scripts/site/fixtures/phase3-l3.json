@@ -1,0 +1,119 @@
+{
+  "discordant_pairs": {
+    "count": 1,
+    "listed": [
+      {
+        "h": "unresolved",
+        "o": "resolved",
+        "pair": "fx-pair-03"
+      }
+    ],
+    "note": "every discordant pair is listed under REQ-XD-120 \u2014 the list is never summarized away"
+  },
+  "fixture": true,
+  "fixture_label": "presentation fixture for the phase-3 site page \u2014 never a first-pass result (the seal, X-07)",
+  "label": "L3 descriptive report \u2014 distributions and discordance only; the schema carries no equivalence wording and none is asserted",
+  "of": "P3-L2",
+  "per_arm": {
+    "h": {
+      "errors": {
+        "label": "descriptive quantiles",
+        "p50": 0,
+        "p90": 1
+      },
+      "label": "descriptive \u2014 per-arm distribution over the H side",
+      "served": 8,
+      "steps": {
+        "label": "descriptive quantiles",
+        "p50": 41,
+        "p90": 77
+      },
+      "tool_calls": {
+        "label": "descriptive quantiles",
+        "p50": 38,
+        "p90": 70
+      },
+      "wall_ms": {
+        "label": "descriptive quantiles",
+        "p50": 312000,
+        "p90": 501000
+      }
+    },
+    "o": {
+      "errors": {
+        "label": "descriptive quantiles",
+        "p50": 0,
+        "p90": 0
+      },
+      "label": "descriptive \u2014 per-arm distribution over the O side",
+      "served": 8,
+      "steps": {
+        "label": "descriptive quantiles",
+        "p50": 39,
+        "p90": 72
+      },
+      "tool_calls": {
+        "label": "descriptive quantiles",
+        "p50": 36,
+        "p90": 66
+      },
+      "wall_ms": {
+        "label": "descriptive quantiles",
+        "p50": 298000,
+        "p90": 477000
+      }
+    }
+  },
+  "per_pair": {
+    "diffs": {
+      "label": "descriptive quantiles",
+      "p50": 20000,
+      "p90": 60000
+    },
+    "label": "descriptive \u2014 the pair-difference distribution",
+    "uncertain_class": [
+      {
+        "class": "infra_partial",
+        "pair": "fx-pair-07"
+      }
+    ]
+  },
+  "planned_pairs": 50,
+  "population": "all 50 planned pairs; uncertain pairs as a separate class",
+  "recorded_at": "2026-11-19T00:00Z (declared; the ticket is clock-free)",
+  "req": "REQ-XD-120",
+  "schema": "hh-fp-l3/1",
+  "served_pairs": 8,
+  "sources": [
+    {
+      "path": "docs/build/reports/2026-11-19-fp-ws1-trials.json",
+      "sha256": "sha256:6132f93923799090cb4a80856db0d563105ebbf405ed8334cf5fc95d0ec42a05"
+    },
+    {
+      "path": "docs/build/reports/2026-11-19-fp-ws1-pp0-evidence.json",
+      "sha256": "sha256:95f872641d41cc881d007b388a330ebeec54a4c5f1144094471441a0be2c30c5"
+    },
+    {
+      "path": "docs/build/reports/2026-11-19-fp-e.json",
+      "sha256": "sha256:d6fa1dab0538bf759581b9524f5184a6f74a402d73128eac82b904e6482b60da"
+    },
+    {
+      "path": "docs/build/reports/2026-11-19-fp-ws1-measurement.json",
+      "sha256": "sha256:7bce872236b5c3bbd4c4eeeff628dea02b39637a99f765a41562efdbeadbdb73"
+    },
+    {
+      "path": "docs/build/reports/2026-11-19-fp-w4-quote.json",
+      "sha256": "sha256:01c91f68bfddf7a7236a0f4a76e2c60f84c24934219a0da0d11186f8fa46d392"
+    },
+    {
+      "path": "docs/build/reports/compute/2026-11-18-fp-ws1-l1-conformance.json",
+      "sha256": "sha256:bdbb0bc93a66988947e7f1712f9c9c397ba6ebbb9642d568fcf29c594e763218"
+    },
+    {
+      "path": "docs/build/reports/2026-11-10-fp-prereg.json",
+      "sha256": "sha256:2e36bf81d3af55491af00608c63bedf3ed035e0193cc0ce4cd0f3b609e450201"
+    }
+  ],
+  "ticket": "R6.48",
+  "verdict": "withheld{window_deadline}:protected_pair_truncated{k<5,R<5}"
+}

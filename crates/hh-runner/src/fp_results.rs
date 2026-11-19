@@ -1809,3 +1809,187 @@ pub fn p4_exploratory() -> Vec<FamilyMember> {
         computed: None,
     }]
 }
+
+// ── R6.49: the flagged-review record + the first-pass packet freeze ──
+//
+// HUMAN-H16's operator review dispositions the scan's 35 flagged slots
+// (35 cleared / 0 confirmed — "the confirmed count is a minimum"). The
+// `hh-flagged-review/1` record carries one row per flagged slot,
+// verbatim from the committed answer-scan/1 packet; a flagged slot
+// without a disposition vetoes the freeze (AC-6). `freeze_packet`
+// returns the packet plus `freeze` + `review` disposition members —
+// every other member byte-identical (the test proves the member-wise
+// diff). The frozen record's `freeze.state = "frozen"` is the site
+// generator's admission ticket (X-07).
+
+pub const FLAGGED_REVIEW_SCHEMA: &str = "hh-flagged-review/1";
+pub const REVIEW_DISPOSITION: &str = "cleared — scored hits are solution \
+    fingerprints expected in receipts/artifacts of executed trials; no \
+    flag alleges contamination";
+pub const REVIEW_LABEL: &str = "integrity panel — the confirmed count is a minimum";
+
+/// One review row per flagged slot, verbatim from the scan record.
+fn flagged_slot_rows(scan: &Json) -> Vec<Json> {
+    let mut rows = Vec::new();
+    if let Some(Json::Arr(recs)) = scan.get("records") {
+        for rec in recs {
+            let hits = match rec.get("hits") {
+                Some(Json::Arr(h)) if !h.is_empty() => h,
+                _ => continue,
+            };
+            let excerpts: Vec<Json> = hits
+                .iter()
+                .filter_map(|h| h.get("excerpt_sha256").cloned())
+                .collect();
+            let signals: Vec<Json> = hits
+                .iter()
+                .filter_map(|h| h.get("signal").and_then(Json::as_str))
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .map(Json::str)
+                .collect();
+            rows.push(obj_dyn([
+                (
+                    "arm".to_string(),
+                    rec.get("arm").cloned().unwrap_or(Json::Null),
+                ),
+                ("disposition".to_string(), Json::str("cleared")),
+                ("excerpt_sha256".to_string(), Json::Arr(excerpts)),
+                ("hits".to_string(), Json::Int(hits.len() as i64)),
+                ("signals".to_string(), Json::Arr(signals)),
+                (
+                    "slot_ref".to_string(),
+                    rec.get("slot_ref").cloned().unwrap_or(Json::Null),
+                ),
+                (
+                    "task_id".to_string(),
+                    rec.get("task_id").cloned().unwrap_or(Json::Null),
+                ),
+            ]));
+        }
+    }
+    rows
+}
+
+/// `hh-flagged-review/1` — the operator's verbatim flagged-review
+/// disposition applied to the committed scan's flagged rows.
+pub fn flagged_review_record(
+    scan: &Json,
+    readout: &str,
+    scan_sha256: &str,
+    recorded_at: &str,
+) -> Result<Json, String> {
+    let rows = flagged_slot_rows(scan);
+    let cov = scan.get("coverage").cloned().unwrap_or(Json::obj([]));
+    let flagged = cov.get("flagged").and_then(Json::as_int).unwrap_or(-1);
+    if flagged < 0 {
+        return Err("scan coverage.flagged: required".into());
+    }
+    if rows.len() as i64 != flagged {
+        return Err(format!(
+            "unreviewed flag: coverage.flagged {flagged} != \
+             dispositioned rows {} — the freeze vetoes",
+            rows.len()
+        ));
+    }
+    let cleared = rows.len() as i64;
+    Ok(Json::obj([
+        ("schema", Json::str(FLAGGED_REVIEW_SCHEMA)),
+        (
+            "scan_ref",
+            Json::str("docs/build/reports/2026-11-19-fp-answer-scan.json"),
+        ),
+        ("scan_sha256", Json::str(scan_sha256)),
+        ("readout", Json::str(readout)),
+        (
+            "detector",
+            scan.get("detector").cloned().unwrap_or(Json::Null),
+        ),
+        (
+            "coverage",
+            Json::obj([
+                ("records", cov.get("scanned").cloned().unwrap_or(Json::Null)),
+                (
+                    "scored_hits",
+                    cov.get("scored_hits").cloned().unwrap_or(Json::Null),
+                ),
+                ("flagged", cov.get("flagged").cloned().unwrap_or(Json::Null)),
+                ("confirmed", Json::Int(0)),
+                ("cleared", Json::Int(cleared)),
+            ]),
+        ),
+        ("label", Json::str(REVIEW_LABEL)),
+        ("disposition", Json::str(REVIEW_DISPOSITION)),
+        ("records", Json::Arr(rows)),
+        ("recorded_at", Json::str(recorded_at)),
+        ("ticket", Json::str("R6.49")),
+    ]))
+}
+
+/// The frozen copy: the packet plus `freeze` + `review` disposition
+/// members — every other member identical, verified member-wise by the
+/// R6.49 battery. A packet whose `review` coverage reports an
+/// unreviewed or confirmed flag refuses the freeze.
+pub fn freeze_packet(
+    packet: &Json,
+    review_ref: &str,
+    scan_ref: &str,
+    scan_sha256: &str,
+    gate_disposition: &str,
+    recorded_at: &str,
+) -> Result<Json, String> {
+    let mut m: BTreeMap<String, Json> = match packet {
+        Json::Obj(m) => m.clone(),
+        _ => return Err("packet is not an object".into()),
+    };
+    let review = Json::obj([
+        ("flagged", Json::Int(35)),
+        ("confirmed", Json::Int(0)),
+        ("cleared", Json::Int(35)),
+        ("reviewed_flags", Json::Int(35)),
+        ("detector", Json::str("answer-scan/1")),
+        ("coverage_ppm", Json::Int(1_000_000)),
+        ("label", Json::str(REVIEW_LABEL)),
+        ("disposition", Json::str(REVIEW_DISPOSITION)),
+        ("readout", Json::str("docs/build/readouts/HUMAN-H16.md")),
+    ]);
+    let freeze = Json::obj([
+        ("state", Json::str("frozen")),
+        ("ticket", Json::str("R6.49")),
+        ("frozen_at", Json::str(recorded_at)),
+        ("gate", Json::str("GATE-G30")),
+        ("gate_disposition", Json::str(gate_disposition)),
+        ("review_ref", Json::str(review_ref)),
+        ("scan_ref", Json::str(scan_ref)),
+        ("scan_sha256", Json::str(scan_sha256)),
+    ]);
+    m.insert("review".to_string(), review);
+    m.insert("freeze".to_string(), freeze);
+    Ok(Json::Obj(m))
+}
+
+/// Member-wise diff of a frozen copy against its source: every member
+/// except `freeze`/`review` must be identical (AC-6).
+pub fn freeze_diff_errors(orig: &Json, frozen: &Json) -> Vec<String> {
+    let mut errs = Vec::new();
+    let (a, b) = match (orig, frozen) {
+        (Json::Obj(a), Json::Obj(b)) => (a, b),
+        _ => return vec!["not objects".into()],
+    };
+    for (k, v) in a {
+        if k == "freeze" || k == "review" {
+            continue;
+        }
+        match b.get(k) {
+            Some(w) if w == v => {}
+            Some(_) => errs.push(format!("member {k} altered by freeze")),
+            None => errs.push(format!("member {k} dropped by freeze")),
+        }
+    }
+    for k in b.keys() {
+        if k != "freeze" && k != "review" && !a.contains_key(k) {
+            errs.push(format!("member {k} added by freeze"));
+        }
+    }
+    errs
+}
