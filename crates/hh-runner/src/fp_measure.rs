@@ -182,7 +182,11 @@ pub struct MeasureTrial {
     pub scan_flags: i64,
 }
 
-const TRIAL_KEYS: [&str; 20] = [
+/// The committed `hh-fp-trials/1` row may also carry the admission/
+/// machinery evidence members `denied_hosts`, `agent_end_cause` and
+/// `receipt_count` (REQ-XH-121's carve-out: PP0 AG evidence reads
+/// exit state, receipts and egress rows, never a task verdict).
+const TRIAL_KEYS: [&str; 23] = [
     "slot",
     "arm",
     "task",
@@ -203,6 +207,9 @@ const TRIAL_KEYS: [&str; 20] = [
     "budget_id",
     "run_id",
     "withheld",
+    "denied_hosts",
+    "agent_end_cause",
+    "receipt_count",
 ];
 
 impl MeasureTrial {

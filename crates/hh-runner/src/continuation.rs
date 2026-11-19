@@ -55,8 +55,12 @@ pub const MIN_MEASURED: usize = 10;
 pub const MIN_WALL_MEASURED: usize = 3;
 /// The wall-time prior per trial: 1,040 s (§10.1.4/§10.1.5).
 pub const T_PRIOR_MS: i64 = 1_040_000;
-/// The first-pass compute line: Σ ceilings ≤ $20 (REQ-XH-118).
-pub const FP_COMPUTE_CAP_MICROS: i64 = 20_000_000;
+/// The first-pass compute line: the D_max sum stays ≤ **$30** —
+/// REQ-XH-118's "$20" is superseded by the 2026-11-16 A2 amendment
+/// (§10.5 row A2 / ADR-0444; "first-pass compute ≤ $30"). Under the
+/// amended accounting completed windows count at billed/cost_lib,
+/// authorized-but-unrun at ceilings.
+pub const FP_COMPUTE_CAP_MICROS: i64 = 30_000_000;
 /// Milliseconds per hour for D_max arithmetic.
 pub const MS_PER_HOUR: i64 = 3_600_000;
 /// Milliseconds per day for the Q-X62 trigger arithmetic.
@@ -1437,10 +1441,11 @@ pub fn overflow_reservation_micros(
 }
 
 /// `d_max_ms(completed, w4, wc)` — the largest W4 dead-man D (ms)
-/// that keeps Σ ceilings ≤ $20: completed windows at billed where
-/// reconciled else ceiling; an unauthorized Wc contributes only its
-/// restart-overflow reservation. Floor division — the largest D that
-/// still fits.
+/// that keeps the first-pass compute Σ ≤ $30 (A2-amended bound):
+/// completed windows at billed where reconciled else `cost_lib`
+/// (never the ceiling), authorized-but-unrun windows at ceilings; an
+/// unauthorized Wc contributes only its restart-overflow
+/// reservation. Floor division — the largest D that still fits.
 pub fn d_max_ms(completed: &[WindowSum], w4: &W4Ceiling, wc: &WcTerm) -> i64 {
     let others: i64 = completed
         .iter()

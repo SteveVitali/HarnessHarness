@@ -1,0 +1,2 @@
+01c91f68bfddf7a7236a0f4a76e2c60f84c24934219a0da0d11186f8fa46d392  docs/build/reports/2026-11-19-fp-w4-quote.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-19-fp-w4-quote.json.sha256 (run from the repo root; hh-compute-quote/1 via scripts/gce-backend/receipt_lib.py quote, sort_keys output)

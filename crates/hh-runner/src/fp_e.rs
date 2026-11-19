@@ -603,6 +603,10 @@ pub fn fp_e_quote(decl: &Json) -> Result<Json, FpEErr> {
         ),
         ("w4_quote_inputs", w4_inputs),
         ("comparative_quote", packet_json),
+        // The declared credit/root accounting (AC-4's A, A_eff,
+        // purchase need and the recomputed, carried root) — echoed
+        // verbatim; the machinery never derives money members.
+        ("credit", m.get("credit").cloned().unwrap_or(Json::Null)),
         ("withheld", Json::Arr(withheld)),
         ("fallback", {
             if full {

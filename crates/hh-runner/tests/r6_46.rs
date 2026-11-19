@@ -260,7 +260,7 @@ fn ac4_amended_accounting() {
         reservation_micros: 560_740,
     };
     let d = d_max_ms(&[billed, unreconciled], &w4, &wc);
-    let expect = (20_000_000 - (4_900_000 + 2_410_000 + 560_740) - 1_000_000) * 3_600_000 / 314_140;
+    let expect = (30_000_000 - (4_900_000 + 2_410_000 + 560_740) - 1_000_000) * 3_600_000 / 314_140;
     assert_eq!(d, expect);
     // A completed row without billed or cost_lib refuses at decode.
     let decl = base_decl();
@@ -445,4 +445,141 @@ fn ac5_full_requires_gl1_pass() {
         fp_e_quote(&decl),
         Err(hharness_runner::fp_e::FpEErr::MissingGl1)
     ));
+}
+
+// ── AC-1: the retained-WAL extractor (fp_ws1) ─────────────────────────
+//
+// Synthetic WAL fixture: two `model.call.completed` + one
+// `measurement.cost.attributed` row per slot, linked through
+// `control.budget.reserved` (`holder = "mc:<id>"`). An outcome member
+// on the WAL line is never read by the fold.
+
+use hharness_runner::continuation::check_cost_only;
+use hharness_runner::fp_ws1::{
+    corpus_evidence, extract_trials, merge_pp0_snapshots, merged_pp0_decl, SlotEvidence,
+};
+use hharness_runner::holds::{pp0_hold, Pp0HoldKind, Pp0TrialEvidence};
+
+fn wal_lines(run: &str, slot: &str, budget: &str, mc: &str, cost: i64, t0: i64) -> String {
+    let rows = [
+        format!(
+            r#"{{"v":{{"class":"control.budget.reserved","payload":{{"holder":"mc:{mc}","budget_id":"{budget}"}}}}}}"#
+        ),
+        format!(
+            r#"{{"v":{{"class":"measurement.cost.attributed","payload":{{"attribution":{{"budget_id":"{budget}","participant_ref":"{slot}"}},"money":{{"micro_units":{cost}}},"roles":{{"tokens.input.uncached":10,"tokens.output.visible":5}}}}}}}}"#
+        ),
+        format!(
+            r#"{{"v":{{"class":"model.call.completed","payload":{{"model_call_id":"{mc}","verdict":"pass","timing":{{"received_ms":{t0},"receipted_ms":{t1},"queue_wait_ms":7,"latency_ms":100}},"usage":{{"cache_read":3}}}}}}}}"#,
+            t1 = t0 + 1_000,
+        ),
+    ];
+    let _ = run;
+    rows.join("\n") + "\n"
+}
+
+fn one_evidence() -> BTreeMap<String, SlotEvidence> {
+    BTreeMap::from([(
+        "ws1-corpus-01".to_string(),
+        SlotEvidence {
+            slot: "ws1-corpus-01".into(),
+            arm: "mini-swe-agent".into(),
+            task: "task-a".into(),
+            denied_hosts: vec![],
+            agent_end_cause: "exited{0}".into(),
+            receipt_count: 1,
+        },
+    )])
+}
+
+#[test]
+fn ac1_extract_trials_deterministic_cost_only() {
+    let wal = wal_lines("r", "ws1-corpus-01", "b1", "c1", 111, 5_000)
+        + &wal_lines("r", "ws1-corpus-01", "b2", "c2", 222, 9_000);
+    let runs = vec![("run-a".to_string(), wal.into_bytes())];
+    let srcs = BTreeMap::from([("wal".to_string(), "sha256:abc".to_string())]);
+    let r1 = extract_trials(&runs, &one_evidence(), &srcs).unwrap();
+    let r2 = extract_trials(&runs, &one_evidence(), &srcs).unwrap();
+    assert_eq!(
+        r1.to_canonical_string(),
+        r2.to_canonical_string(),
+        "extractor output must be byte-deterministic"
+    );
+    let t = &r1.get("trials").and_then(Json::as_arr).unwrap()[0];
+    assert_eq!(t.get("cost_micros").and_then(Json::as_int), Some(333));
+    assert_eq!(t.get("calls").and_then(Json::as_int), Some(2));
+    // One contributing run → wall = first received → last receipted
+    // inside that run (5000 → 10000).
+    assert_eq!(t.get("wall_ms").and_then(Json::as_int), Some(5_000));
+    // The digest binding rides verbatim.
+    assert_eq!(
+        r1.get("fold")
+            .and_then(|f| f.get("sources"))
+            .and_then(|s| s.get("wal"))
+            .and_then(Json::as_str),
+        Some("sha256:abc")
+    );
+    // The outcome member on the WAL line is never propagated; the
+    // emitted record passes the firewall scan and the fold.
+    check_cost_only(&r1).unwrap();
+    fold_packet(&r1).unwrap();
+}
+
+#[test]
+fn ac1_extract_trials_missing_evidence_refuses() {
+    let wal = wal_lines("r", "ws1-corpus-09", "b1", "c1", 1, 0);
+    let runs = vec![("run-a".to_string(), wal.into_bytes())];
+    let err = extract_trials(&runs, &one_evidence(), &BTreeMap::new()).unwrap_err();
+    assert!(err.contains("ws1-corpus-09"), "err: {err}");
+}
+
+#[test]
+fn ac1_pp0_merge_union_failures_primary_scalars() {
+    let primary = vec![parse(
+        r#"{"trial_ref":"pp0/ws1-pp0-5","harness":"pi","task":"task-a",
+            "checks":{"AG3":"pass","AG6":"pass"},
+            "agent_end_cause":"agent_timeout","receipt_count":4}"#,
+    )
+    .unwrap()];
+    let rerun = vec![parse(
+        r#"{"trial_ref":"pp0/ws1-pp0-5","harness":"pi","task":"task-a",
+            "checks":{"AG3":"fail","AG6":"fail"},
+            "agent_end_cause":"exited{1}","receipt_count":0}"#,
+    )
+    .unwrap()];
+    let merged = merge_pp0_snapshots(&[primary, rerun]);
+    let row = merged.get("ws1-pp0-5").unwrap();
+    // Union of failures — a re-execution never rescues a failure.
+    let ag = row.get("ag").and_then(Json::as_obj).unwrap();
+    assert_eq!(ag.get("AG3").and_then(Json::as_str), Some("fail"));
+    assert_eq!(ag.get("AG6").and_then(Json::as_str), Some("fail"));
+    // Scalars keep the primary snapshot's values.
+    assert_eq!(
+        row.get("agent_end_cause").and_then(Json::as_str),
+        Some("agent_timeout")
+    );
+    assert_eq!(row.get("receipt_count").and_then(Json::as_int), Some(4));
+    // The decl member decodes strictly and the hold names AG3.
+    let decl = merged_pp0_decl(&merged);
+    let ev: Vec<Pp0TrialEvidence> = decl["pi"]
+        .iter()
+        .map(Pp0TrialEvidence::from_json)
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(pp0_hold(&ev), Some(Pp0HoldKind::Gate(3)));
+}
+
+#[test]
+fn ac1_corpus_evidence_manifest_members() {
+    let manifest = parse(
+        r#"{"schema":"hh-ws1-corpus-manifest/1","slots":[
+            {"slot_id":"ws1-corpus-03","task":"task-z",
+             "denied_hosts":["bad.example"],"agent_end_cause":"exited{0}",
+             "receipt_count":2}]}"#,
+    )
+    .unwrap();
+    let ev = corpus_evidence(&manifest);
+    assert_eq!(ev.len(), 1);
+    assert_eq!(ev[0].slot, "ws1-corpus-03");
+    assert_eq!(ev[0].arm, "mini-swe-agent");
+    assert_eq!(ev[0].denied_hosts, vec!["bad.example".to_string()]);
 }

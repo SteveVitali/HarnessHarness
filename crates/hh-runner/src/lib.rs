@@ -41,6 +41,7 @@ pub mod fp_measure;
 pub mod fp_partition;
 pub mod fp_prereg;
 pub mod fp_seal;
+pub mod fp_ws1;
 pub mod harbor;
 pub mod holds;
 pub mod l1_corpus;
