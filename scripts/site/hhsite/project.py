@@ -866,10 +866,12 @@ def tfp(inputs):
     pkt = i["p2-fp"]
 
     if _is_withheld(pkt):
-        # The first-pass tranche withheld every arm — the page projects
-        # the packet's full computed structure verbatim (REQ-XH-020).
+        # A typed non-compute disposition — the first-pass tranche
+        # withheld every arm, then the executed-W4 fold landed typed
+        # markers beside real values — the page projects the packet's
+        # full computed structure verbatim (REQ-XH-020).
         return {
-            "withheld": True,
+            **_verbatim_flag(pkt),
             "claim": _t(pkt, "/claim"),
             "executed_evidence": _t(pkt, "/executed_evidence"),
             "expected_precision": _t(pkt, "/expected_precision"),
@@ -1257,12 +1259,31 @@ def phase3(inputs):
 
 
 def _is_withheld(pkt):
-    """A packet whose overall disposition is a typed withhold/refusal
-    renders its full computed structure — never a bare null page
-    (REQ-XH-020)."""
+    """A packet whose overall disposition is a typed non-compute
+    marker — ``withheld{``, ``refused{``, ``unavailable{`` or
+    ``not_run{`` — renders its full computed structure verbatim
+    (landed values where the packet carries them, typed markers
+    elsewhere), never a bare null page and never a leaderboard over
+    missing arms (REQ-XH-020). The executed-W4 packets carry exactly
+    this shape: landed arms beside ``not_run{admission:AG3}`` and
+    ``unavailable{…}`` verdicts."""
     d = pkt.doc.get("packet_disposition")
     return isinstance(d, str) and (
-        d.startswith("withheld{") or d.startswith("refused{"))
+        d.startswith("withheld{") or d.startswith("refused{")
+        or d.startswith("unavailable{") or d.startswith("not_run{"))
+
+
+def _verbatim_flag(pkt):
+    """The body's disposition flags: ``withheld`` stays the literal
+    ``withheld{…}`` case (the committed test vocabulary); every typed
+    non-compute disposition also carries ``verbatim_structure`` so the
+    renderer picks the verbatim-structure page without mislabelling a
+    landed-but-typed packet as withheld."""
+    d = pkt.doc.get("packet_disposition")
+    return {
+        "verbatim_structure": True,
+        "withheld": isinstance(d, str) and d.startswith("withheld{"),
+    }
 
 
 def _fp_arm_rows(pkt):
@@ -1346,9 +1367,11 @@ def trials_fp(inputs):
                          reason="withheld{dataset_private}"))}
 
     if _is_withheld(pkt):
-        # No tranche trial executed — the index renders zero rows and
-        # the packet's own withhold + executed-evidence text verbatim.
+        # A typed non-compute disposition — the index renders zero rows
+        # and the packet's own disposition + executed-evidence text
+        # verbatim.
         return {
+            **_verbatim_flag(pkt),
             "dataset": dataset,
             "scans": {
                 "secret_scan_ref": _t(idx, "/scans/secret_scan_ref"),

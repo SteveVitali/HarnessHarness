@@ -12,7 +12,8 @@
 //! ```text
 //! fp-w4-results emit         <repo-root> — the full record set (needs the retained harvest)
 //! fp-w4-results emit-packets <repo-root> — the committed-inputs packets only (byte-stable anywhere)
-//! fp-w4-results freeze       <repo-root> — mint the frozen site-facing copies (refuses on unreviewed flags)
+//! fp-w4-results freeze       <repo-root> — mint the hh-flagged-review/1 record + the frozen
+//!                              site-facing copies (refuses on unreviewed flags)
 //! ```
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -794,10 +795,62 @@ fn typed_arm_row_pub(
 }
 
 fn freeze(repo: &Path) {
-    let scan = load(repo, "docs/build/reports/2026-11-19-fp-w4-answer-scan.json");
-    let scan_sha = sha256_file(&repo.join("docs/build/reports/2026-11-19-fp-w4-answer-scan.json"));
-    let input_sha =
-        sha256_file(&repo.join("docs/build/reports/2026-11-19-fp-w4-flagged-review-input.json"));
+    let scan = load(repo, W4_SCAN_REL);
+    let scan_sha = sha256_file(&repo.join(W4_SCAN_REL));
+    let input_sha = sha256_file(&repo.join(W4_REVIEW_INPUT_REL));
+    let flagged = scan
+        .get("coverage")
+        .and_then(|c| c.get("flagged"))
+        .and_then(Json::as_int)
+        .unwrap_or(-1);
+    // The trivial path (§10.3's "zero flags recorded trivially") —
+    // unchanged. With flags on the record the freeze consumes the
+    // committed `hh-flagged-review/1` inputs: the review record is
+    // minted from HUMAN-H19's verbatim dispositions (the committed
+    // analysis record carries the per-flag reasons), then the reviewed
+    // freeze mints the frozen site-facing copies — every member
+    // byte-identical except `freeze`/`review` (the R6.49 rule).
+    if flagged != 0 {
+        let analysis = load(repo, W4_ANALYSIS_REL);
+        let analysis_sha = sha256_file(&repo.join(W4_ANALYSIS_REL));
+        match w4_flagged_review_record(&scan, &analysis, &scan_sha, &analysis_sha, &input_sha) {
+            Err(reason) => {
+                for src in [
+                    "2026-11-19-fp-w4-results-p2-fp",
+                    "2026-11-19-fp-w4-results-p4-fp",
+                    "2026-11-19-fp-w4-results-p3-l2",
+                    "2026-11-19-fp-w4-l2-audit",
+                    "2026-11-19-fp-w4-l3",
+                ] {
+                    eprintln!("fp-w4-results: freeze {src} refused — {reason}");
+                }
+                return;
+            }
+            Ok(review) => {
+                write_record(repo, W4_REVIEW_REL, &review);
+                for src in [
+                    "2026-11-19-fp-w4-results-p2-fp",
+                    "2026-11-19-fp-w4-results-p4-fp",
+                    "2026-11-19-fp-w4-results-p3-l2",
+                    "2026-11-19-fp-w4-l2-audit",
+                    "2026-11-19-fp-w4-l3",
+                ] {
+                    let pkt = load(repo, &format!("docs/build/reports/{src}.json"));
+                    match w4_freeze_reviewed_packet(&pkt, &review, &scan_sha, &input_sha) {
+                        Ok(fz) => write_record(
+                            repo,
+                            &format!("docs/build/reports/{src}-frozen.json"),
+                            &fz,
+                        ),
+                        Err(reason) => {
+                            eprintln!("fp-w4-results: freeze {src} refused — {reason}")
+                        }
+                    }
+                }
+                return;
+            }
+        }
+    }
     for src in [
         "2026-11-19-fp-w4-results-p2-fp",
         "2026-11-19-fp-w4-results-p4-fp",

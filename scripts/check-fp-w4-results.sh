@@ -31,6 +31,13 @@ records=(
   2026-11-19-fp-w4-results-p3-l2
   2026-11-19-fp-w4-l2-audit
   2026-11-19-fp-w4-l3
+  2026-11-19-fp-w4-flag-analysis
+  2026-11-19-fp-w4-flagged-review
+  2026-11-19-fp-w4-results-p2-fp-frozen
+  2026-11-19-fp-w4-results-p4-fp-frozen
+  2026-11-19-fp-w4-results-p3-l2-frozen
+  2026-11-19-fp-w4-l2-audit-frozen
+  2026-11-19-fp-w4-l3-frozen
 )
 
 # 1 — every emitted record's sha256 sidecar verifies.
@@ -77,7 +84,8 @@ for f in \
     docs/build/reports/2026-11-19-fp-w4-settlement-2.json \
     docs/build/reports/2026-11-19-fp-w4-outcomes.json \
     docs/build/reports/2026-11-19-fp-w4-answer-scan.json \
-    docs/build/reports/2026-11-19-fp-w4-flagged-review-input.json; do
+    docs/build/reports/2026-11-19-fp-w4-flagged-review-input.json \
+    docs/build/reports/2026-11-19-fp-w4-flag-analysis.json; do
   mkdir -p "$SCRATCH/$(dirname "$f")"
   cp "$REPO/$f" "$SCRATCH/$f"
 done
@@ -94,20 +102,31 @@ for r in \
     "$SCRATCH/docs/build/reports/$r.json"
 done
 
-# 5 — the freeze veto refuses while flagged passes stay unreviewed:
-#     no *-frozen record may materialize and the refusal names the
-#     pending review.
-if "$REPO/target/debug/fp_w4_results" freeze "$SCRATCH" \
-    >/tmp/fp-w4-freeze.$$.log 2>&1; then :; fi
-if grep -q "refused — unreviewed flags" /tmp/fp-w4-freeze.$$.log \
-    && [ -z "$(find "$SCRATCH" -name '*-frozen.json')" ]; then
-  echo "fp-w4-results: freeze-veto OK (32 unreviewed flags → pending{human})"
-else
-  echo "fp-w4-results: freeze-veto FAIL"
-  cat /tmp/fp-w4-freeze.$$.log
-  FAIL=1
-fi
-rm -f /tmp/fp-w4-freeze.$$.log
+# 5 — the reviewed freeze re-derives the hh-flagged-review/1 record +
+#     the five frozen copies byte-identically from the committed scan +
+#     packets + analysis (no retained store needed; the member-wise
+#     diff rule is the r6_53 battery's).
+for r in \
+    2026-11-19-fp-w4-results-p2-fp \
+    2026-11-19-fp-w4-results-p4-fp \
+    2026-11-19-fp-w4-results-p3-l2 \
+    2026-11-19-fp-w4-l2-audit \
+    2026-11-19-fp-w4-l3; do
+  cp "$REPO/docs/build/reports/$r.json" "$SCRATCH/docs/build/reports/$r.json"
+done
+leg "reemit-freeze" bash -c \
+  "cd '$REPO' && ./target/debug/fp_w4_results freeze '$SCRATCH'"
+for r in \
+    2026-11-19-fp-w4-flagged-review \
+    2026-11-19-fp-w4-results-p2-fp-frozen \
+    2026-11-19-fp-w4-results-p4-fp-frozen \
+    2026-11-19-fp-w4-results-p3-l2-frozen \
+    2026-11-19-fp-w4-l2-audit-frozen \
+    2026-11-19-fp-w4-l3-frozen; do
+  leg "byte-identical:$r" cmp -s \
+    "$REPO/docs/build/reports/$r.json" \
+    "$SCRATCH/docs/build/reports/$r.json"
+done
 
 # 6 — the retained legs recompute where the W4 harvest resolves.
 if [ -d "$HOME/hh-retained/w4/harvest/run-root-w4" ]; then

@@ -392,6 +392,170 @@ fn freeze_mints_on_zero_flags() {
     assert_eq!(rv.get("flagged").and_then(Json::as_int), Some(0));
 }
 
+// ── R6.54: the reviewed freeze over HUMAN-H19's dispositions ─────────
+
+fn sha_repo(rel: &str) -> String {
+    format!(
+        "sha256:{}",
+        sha256_hex(&std::fs::read(repo_root().join(rel)).expect("read"))
+    )
+}
+
+fn w4_review() -> Json {
+    let scan = load_repo(W4_SCAN_REL);
+    let analysis = load_repo(W4_ANALYSIS_REL);
+    w4_flagged_review_record(
+        &scan,
+        &analysis,
+        &sha_repo(W4_SCAN_REL),
+        &sha_repo(W4_ANALYSIS_REL),
+        &sha_repo(W4_REVIEW_INPUT_REL),
+    )
+    .expect("the committed review mints over the committed inputs")
+}
+
+#[test]
+fn review_record_covers_every_flag() {
+    let review = w4_review();
+    assert_eq!(
+        review.get("schema").and_then(Json::as_str),
+        Some("hh-flagged-review/1")
+    );
+    let cov = review
+        .get("coverage")
+        .and_then(Json::as_obj)
+        .expect("coverage");
+    assert_eq!(cov.get("flagged").and_then(Json::as_int), Some(32));
+    assert_eq!(cov.get("confirmed").and_then(Json::as_int), Some(0));
+    assert_eq!(cov.get("cleared").and_then(Json::as_int), Some(32));
+    assert_eq!(
+        review.get("readout").and_then(Json::as_str),
+        Some("docs/build/readouts/HUMAN-H19.md")
+    );
+    assert_eq!(
+        review.get("analysis_ref").and_then(Json::as_str),
+        Some(W4_ANALYSIS_REL)
+    );
+    let rows = review
+        .get("records")
+        .and_then(Json::as_arr)
+        .expect("records");
+    assert_eq!(rows.len(), 32, "one row per flagged record");
+    for r in rows {
+        assert_eq!(
+            r.get("disposition").and_then(Json::as_str),
+            Some("cleared"),
+            "H19's mass ruling"
+        );
+        assert!(
+            r.get("reason")
+                .and_then(Json::as_str)
+                .map(|s| !s.is_empty())
+                .unwrap_or(false),
+            "every row carries the per-flag reason (REQ-XD-071)"
+        );
+        assert!(
+            r.get("excerpt_sha256")
+                .and_then(Json::as_arr)
+                .map(|a| !a.is_empty())
+                .unwrap_or(false),
+            "every row carries excerpt hashes (REQ-XD-071)"
+        );
+    }
+    // the minted record byte-equals the committed record.
+    let committed = load_repo(W4_REVIEW_REL);
+    assert_eq!(
+        review.to_canonical_string(),
+        committed.to_canonical_string(),
+        "review re-mints byte-identically"
+    );
+    assert!(sidecar_ok(W4_REVIEW_REL), "review sidecar");
+}
+
+#[test]
+fn review_missing_a_flag_refuses() {
+    let mut review = w4_review();
+    if let Json::Obj(m) = &mut review {
+        if let Some(Json::Arr(rows)) = m.get_mut("records") {
+            rows.pop();
+        }
+    }
+    let pkt = load_repo("docs/build/reports/2026-11-19-fp-w4-results-p2-fp.json");
+    let err = w4_freeze_reviewed_packet(&pkt, &review, "sha256:s", "sha256:i")
+        .expect_err("an uncovered flag refuses");
+    assert!(err.contains("records"), "{err}");
+}
+
+#[test]
+fn review_confirmed_flag_refuses() {
+    let mut review = w4_review();
+    if let Json::Obj(m) = &mut review {
+        if let Some(Json::Obj(cov)) = m.get_mut("coverage") {
+            cov.insert("confirmed".to_string(), Json::Int(1));
+            cov.insert("cleared".to_string(), Json::Int(31));
+        }
+    }
+    let pkt = load_repo("docs/build/reports/2026-11-19-fp-w4-results-p2-fp.json");
+    let err = w4_freeze_reviewed_packet(&pkt, &review, "sha256:s", "sha256:i")
+        .expect_err("a confirmed flag stays a veto");
+    assert!(err.contains("confirmed") || err.contains("veto"), "{err}");
+}
+
+#[test]
+fn reviewed_freeze_byte_equals_committed() {
+    let review = w4_review();
+    for p in W4_PACKETS {
+        let pkt = load_repo(p);
+        let frozen = w4_freeze_reviewed_packet(
+            &pkt,
+            &review,
+            &sha_repo(W4_SCAN_REL),
+            &sha_repo(W4_REVIEW_INPUT_REL),
+        )
+        .unwrap_or_else(|e| panic!("freeze {p}: {e}"));
+        let committed = load_repo(&p.replace(".json", "-frozen.json"));
+        assert_eq!(
+            frozen.to_canonical_string(),
+            committed.to_canonical_string(),
+            "{p} frozen copy re-mints byte-identically"
+        );
+        // the W4 member-wise rule: verbatim + {freeze, review,
+        // seal_open_ref} (the REQ-XH-121 citation the committed fold
+        // lacks — the fold of record stays byte-stable).
+        let diffs = w4_freeze_diff_errors(&pkt, &frozen);
+        assert!(diffs.is_empty(), "{p} member diff: {diffs:?}");
+        assert_eq!(
+            frozen.get("seal_open_ref").and_then(Json::as_str),
+            Some("docs/build/reports/2026-11-19-fp-seal-open.json"),
+            "{p} seal-open citation (REQ-XH-121)"
+        );
+        let fr = frozen
+            .get("freeze")
+            .and_then(Json::as_obj)
+            .expect("freeze member");
+        assert_eq!(fr.get("state").and_then(Json::as_str), Some("frozen"));
+        assert_eq!(fr.get("gate").and_then(Json::as_str), Some("ADR-0452"));
+        assert_eq!(
+            fr.get("review_ref").and_then(Json::as_str),
+            Some(W4_REVIEW_REL)
+        );
+        let rv = frozen
+            .get("review")
+            .and_then(Json::as_obj)
+            .expect("review member");
+        assert_eq!(rv.get("flagged").and_then(Json::as_int), Some(32));
+        assert_eq!(rv.get("cleared").and_then(Json::as_int), Some(32));
+        assert_eq!(
+            rv.get("readout").and_then(Json::as_str),
+            Some("docs/build/readouts/HUMAN-H19.md")
+        );
+        assert!(
+            sidecar_ok(&p.replace(".json", "-frozen.json")),
+            "{p} sidecar"
+        );
+    }
+}
+
 // ── the population fold refuses score fabrication ────────────────────
 
 #[test]

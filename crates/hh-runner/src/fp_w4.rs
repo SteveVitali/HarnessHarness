@@ -1617,6 +1617,341 @@ pub fn w4_freeze_packet(
     Ok(Json::Obj(m))
 }
 
+// ── R6.54: the W4 flagged-review record + the reviewed freeze ────────
+//
+// HUMAN-H19 PASSED under the operator's verbatim delegation: the
+// independent `hh-fp-w4-flag-analysis/1` dossier resolved all 32 flags'
+// excerpt hashes to task-design-consistent mechanisms and the operator
+// ruled `cleared` ×32 / `confirmed` ×0 (readout
+// `docs/build/readouts/HUMAN-H19.md`, "the confirmed count is a
+// minimum"). The `hh-flagged-review/1` record the freeze consumes
+// mirrors R6.49's `2026-11-19-fp-flagged-review.json` shape — one row
+// per flagged slot, verbatim from the committed scan, plus the per-flag
+// reason the analysis record carries; any unreviewed flag vetoes the
+// freeze. `w4_freeze_reviewed_packet` is the frozen-copy constructor
+// for the reviewed case: every member of the committed packet stays
+// byte-identical except the inserted `freeze` + `review` disposition
+// members (the R6.49 member-wise diff rule). The folded members — the
+// landed arm's vetoed-fold `theta` beside its `raw` population — are
+// quoted verbatim: the freeze seals the fold of record; it never
+// re-derives a claim inside a frozen copy.
+
+/// The verbatim disposition the HUMAN-H19 signature applies to every
+/// flag (the mass ruling — per-flag reasons ride each review row).
+pub const W4_REVIEW_DISPOSITION: &str = "cleared — the flagged content is \
+    task-design-consistent overlap or an inert agent-authored file, \
+    never evidence of answer access";
+/// The review record path the freeze writes and the frozen copies cite.
+pub const W4_REVIEW_REL: &str = "docs/build/reports/2026-11-19-fp-w4-flagged-review.json";
+/// The analysis record the dispositions stand on.
+pub const W4_ANALYSIS_REL: &str = "docs/build/reports/2026-11-19-fp-w4-flag-analysis.json";
+/// The scan record (shared by the freeze members).
+pub const W4_SCAN_REL: &str = "docs/build/reports/2026-11-19-fp-w4-answer-scan.json";
+/// The flagged-review handoff input the review answers.
+pub const W4_REVIEW_INPUT_REL: &str =
+    "docs/build/reports/2026-11-19-fp-w4-flagged-review-input.json";
+
+/// One review row per flagged scan record, verbatim from the committed
+/// scan plus the analysis record's per-flag reason (the H19 signature's
+/// "reason per flag" obligation — REQ-XD-071).
+fn w4_flagged_slot_rows(scan: &Json, analysis: &Json) -> Vec<Json> {
+    let mut reasons: BTreeMap<String, String> = BTreeMap::new();
+    if let Some(Json::Arr(flags)) = analysis.get("flags") {
+        for f in flags {
+            if let (Some(s), Some(r)) = (
+                f.get("slot_ref").and_then(Json::as_str),
+                f.get("reason").and_then(Json::as_str),
+            ) {
+                reasons.insert(s.to_string(), r.to_string());
+            }
+        }
+    }
+    let mut rows = Vec::new();
+    if let Some(Json::Arr(recs)) = scan.get("records") {
+        for rec in recs {
+            if rec.get("state").and_then(Json::as_str) != Some("flagged") {
+                continue;
+            }
+            let hits = match rec.get("hits") {
+                Some(Json::Arr(h)) if !h.is_empty() => h,
+                _ => continue,
+            };
+            let excerpts: Vec<Json> = hits
+                .iter()
+                .filter_map(|h| h.get("excerpt_sha256").cloned())
+                .collect();
+            let signals: Vec<Json> = hits
+                .iter()
+                .filter_map(|h| h.get("signal").and_then(Json::as_str))
+                .collect::<BTreeSet<_>>()
+                .into_iter()
+                .map(Json::str)
+                .collect();
+            let slot_ref = rec
+                .get("slot_ref")
+                .and_then(Json::as_str)
+                .unwrap_or("")
+                .to_string();
+            rows.push(obj_dyn([
+                (
+                    "arm".to_string(),
+                    rec.get("arm").cloned().unwrap_or(Json::Null),
+                ),
+                ("disposition".to_string(), Json::str("cleared")),
+                ("excerpt_sha256".to_string(), Json::Arr(excerpts)),
+                ("hits".to_string(), Json::Int(hits.len() as i64)),
+                (
+                    "pass".to_string(),
+                    rec.get("pass").cloned().unwrap_or(Json::Null),
+                ),
+                (
+                    "reason".to_string(),
+                    Json::str(
+                        reasons
+                            .get(&slot_ref)
+                            .cloned()
+                            .unwrap_or_else(|| W4_REVIEW_DISPOSITION.to_string()),
+                    ),
+                ),
+                ("signals".to_string(), Json::Arr(signals)),
+                ("slot_ref".to_string(), Json::str(&slot_ref)),
+                (
+                    "task_id".to_string(),
+                    rec.get("task_id").cloned().unwrap_or(Json::Null),
+                ),
+            ]));
+        }
+    }
+    rows.sort_by(|a, b| {
+        a.get("slot_ref")
+            .and_then(Json::as_str)
+            .cmp(&b.get("slot_ref").and_then(Json::as_str))
+    });
+    rows
+}
+
+/// `hh-flagged-review/1` for W4 — HUMAN-H19's verbatim dispositions
+/// applied to the committed scan's flagged rows (the R6.49 record
+/// shape). `Err` names the uncovered flag — an unreviewed flag vetoes
+/// the freeze.
+pub fn w4_flagged_review_record(
+    scan: &Json,
+    analysis: &Json,
+    scan_sha256: &str,
+    analysis_sha256: &str,
+    input_sha256: &str,
+) -> Result<Json, String> {
+    let rows = w4_flagged_slot_rows(scan, analysis);
+    let cov = scan.get("coverage").cloned().unwrap_or(Json::obj([]));
+    let flagged = cov.get("flagged").and_then(Json::as_int).unwrap_or(-1);
+    if flagged < 0 {
+        return Err("scan coverage.flagged: required".into());
+    }
+    if rows.len() as i64 != flagged {
+        return Err(format!(
+            "unreviewed flag: coverage.flagged {flagged} != \
+             dispositioned rows {} — the freeze vetoes",
+            rows.len()
+        ));
+    }
+    // every flagged slot must carry an analysis verdict — the review's
+    // basis (HUMAN-H19's signature cites the analysis record by digest).
+    if let Some(Json::Arr(flags)) = analysis.get("flags") {
+        let analyzed: BTreeSet<&str> = flags
+            .iter()
+            .filter_map(|f| f.get("slot_ref").and_then(Json::as_str))
+            .collect();
+        for r in &rows {
+            let sid = r.get("slot_ref").and_then(Json::as_str).unwrap_or("");
+            if !analyzed.contains(sid) {
+                return Err(format!(
+                    "unreviewed flag: {sid} absent from the analysis \
+                     record's flags — the freeze vetoes"
+                ));
+            }
+        }
+    }
+    let cleared = rows.len() as i64;
+    Ok(Json::obj([
+        (
+            "schema",
+            Json::str(crate::fp_results::FLAGGED_REVIEW_SCHEMA),
+        ),
+        ("scan_ref", Json::str(W4_SCAN_REL)),
+        ("scan_sha256", Json::str(scan_sha256)),
+        ("readout", Json::str(REVIEW_READOUT)),
+        ("review_input_ref", Json::str(W4_REVIEW_INPUT_REL)),
+        ("review_input_sha256", Json::str(input_sha256)),
+        ("analysis_ref", Json::str(W4_ANALYSIS_REL)),
+        ("analysis_sha256", Json::str(analysis_sha256)),
+        (
+            "delegation",
+            Json::str(
+                "operator-delegated independent re-review — HUMAN-H19's \
+                 signature records the verbatim delegation (\"…I defer to \
+                 you…\") and the protocol-deviation note; the dispositions \
+                 are the operator's ruling, the analysis record the cited \
+                 evidence",
+            ),
+        ),
+        (
+            "detector",
+            scan.get("detector").cloned().unwrap_or(Json::Null),
+        ),
+        (
+            "coverage",
+            Json::obj([
+                ("records", cov.get("scanned").cloned().unwrap_or(Json::Null)),
+                (
+                    "scored_hits",
+                    cov.get("scored_hits").cloned().unwrap_or(Json::Null),
+                ),
+                ("flagged", cov.get("flagged").cloned().unwrap_or(Json::Null)),
+                ("confirmed", Json::Int(0)),
+                ("cleared", Json::Int(cleared)),
+            ]),
+        ),
+        ("label", Json::str(crate::fp_results::REVIEW_LABEL)),
+        ("disposition", Json::str(W4_REVIEW_DISPOSITION)),
+        ("records", Json::Arr(rows)),
+        ("recorded_at", Json::str(RECORDED_AT)),
+        ("ticket", Json::str("R6.54")),
+    ]))
+}
+
+/// `w4_freeze_reviewed_packet(packet, review, scan_sha, input_sha)` —
+/// the reviewed case of the freeze: the `hh-flagged-review/1` record is
+/// verified against the committed scan's flagged set (every flagged
+/// record dispositioned, none confirmed — a confirmed flag stays a
+/// veto and refuses this build until its packet's fold is re-scored),
+/// then the packet gains `freeze` + `review` members and every other
+/// member stays byte-identical (the R6.49 member-wise diff rule).
+pub fn w4_freeze_reviewed_packet(
+    packet: &Json,
+    review: &Json,
+    scan_sha256: &str,
+    input_sha256: &str,
+) -> Result<Json, String> {
+    if review.get("schema").and_then(Json::as_str) != Some(crate::fp_results::FLAGGED_REVIEW_SCHEMA)
+    {
+        return Err("review record is not hh-flagged-review/1".into());
+    }
+    let cov = review.get("coverage").cloned().unwrap_or(Json::obj([]));
+    let flagged = cov.get("flagged").and_then(Json::as_int).unwrap_or(-1);
+    let confirmed = cov.get("confirmed").and_then(Json::as_int).unwrap_or(-1);
+    let cleared = cov.get("cleared").and_then(Json::as_int).unwrap_or(-1);
+    if flagged < 0 || confirmed != 0 || cleared != flagged {
+        return Err(format!(
+            "review coverage {{{flagged} flagged, {confirmed} confirmed, \
+             {cleared} cleared}} — a confirmed or unreviewed flag stays a \
+             veto and the freeze refuses"
+        ));
+    }
+    let rows = review
+        .get("records")
+        .and_then(Json::as_arr)
+        .cloned()
+        .unwrap_or_default();
+    if rows.len() as i64 != flagged {
+        return Err(format!(
+            "review records {} != coverage.flagged {flagged} — the \
+             freeze vetoes",
+            rows.len()
+        ));
+    }
+    for r in &rows {
+        if r.get("disposition").and_then(Json::as_str) != Some("cleared") {
+            return Err(format!(
+                "review row {} is not cleared — a non-cleared disposition \
+                 stays a veto and the freeze refuses",
+                r.get("slot_ref").and_then(Json::as_str).unwrap_or("?")
+            ));
+        }
+    }
+    let mut m: BTreeMap<String, Json> = match packet {
+        Json::Obj(m) => m.clone(),
+        _ => return Err("packet is not an object".into()),
+    };
+    let review_member = Json::obj([
+        ("flagged", Json::Int(flagged)),
+        ("confirmed", Json::Int(confirmed)),
+        ("cleared", Json::Int(cleared)),
+        ("reviewed_flags", Json::Int(flagged)),
+        ("detector", Json::str(ANSWER_SCAN_VERSION)),
+        ("coverage_ppm", Json::Int(1_000_000)),
+        ("label", Json::str(crate::fp_results::REVIEW_LABEL)),
+        ("disposition", Json::str(W4_REVIEW_DISPOSITION)),
+        ("readout", Json::str(REVIEW_READOUT)),
+        ("analysis_ref", Json::str(W4_ANALYSIS_REL)),
+    ]);
+    let freeze = Json::obj([
+        ("state", Json::str("frozen")),
+        ("ticket", Json::str("R6.54")),
+        ("frozen_at", Json::str(RECORDED_AT)),
+        ("gate", Json::str("ADR-0452")),
+        (
+            "gate_disposition",
+            Json::str(
+                "executed-W4 supersession — ADR-0452 amends GATE-G30's \
+                re-scope{end-first-pass-early} for the W4 scope",
+            ),
+        ),
+        ("review_ref", Json::str(W4_REVIEW_REL)),
+        ("scan_ref", Json::str(W4_SCAN_REL)),
+        ("scan_sha256", Json::str(scan_sha256)),
+        ("review_input_sha256", Json::str(input_sha256)),
+    ]);
+    m.insert("review".to_string(), review_member);
+    m.insert("freeze".to_string(), freeze);
+    // REQ-XH-121: the site-facing packet cites the one recorded
+    // seal-open act. The committed W4 fold predates the site re-pin and
+    // is sha-pinned in R6.53's run record — append-only, never
+    // rewritten — so the citation lands on the frozen copy as a
+    // freeze-added member beside {freeze, review} (the diff rule below).
+    if !m.contains_key("seal_open_ref") {
+        m.insert(
+            "seal_open_ref".to_string(),
+            Json::str(crate::fp_results::SEAL_OPEN_REL),
+        );
+    }
+    Ok(Json::Obj(m))
+}
+
+/// `w4_freeze_diff_errors(orig, frozen)` — the W4 member-wise diff
+/// rule: every member of the committed packet stays byte-identical and
+/// the freeze may add exactly `freeze`, `review` and `seal_open_ref`
+/// (the REQ-XH-121 citation the committed fold lacks — see
+/// `w4_freeze_reviewed_packet`). R6.49's `freeze_diff_errors` admits
+/// only {freeze, review}; W4's adds the seal citation.
+pub fn w4_freeze_diff_errors(orig: &Json, frozen: &Json) -> Vec<String> {
+    let mut errs = Vec::new();
+    let (a, b) = match (orig, frozen) {
+        (Json::Obj(a), Json::Obj(b)) => (a, b),
+        _ => return vec!["not objects".into()],
+    };
+    for (k, v) in a {
+        if k == "freeze" || k == "review" {
+            continue;
+        }
+        match b.get(k) {
+            Some(w) if w == v => {}
+            Some(_) => errs.push(format!("member {k} altered by freeze")),
+            None => errs.push(format!("member {k} dropped by freeze")),
+        }
+    }
+    for k in b.keys() {
+        if k != "freeze" && k != "review" && k != "seal_open_ref" && !a.contains_key(k) {
+            errs.push(format!("member {k} added by freeze"));
+        }
+    }
+    if let Some(s) = b.get("seal_open_ref").and_then(Json::as_str) {
+        if s != crate::fp_results::SEAL_OPEN_REL {
+            errs.push(format!("seal_open_ref {s} != the seal-open record"));
+        }
+    }
+    errs
+}
+
 // ── the landed-packet validator ──────────────────────────────────────
 
 /// `validate_w4_results_packet(j)` — the superseding-form check: the

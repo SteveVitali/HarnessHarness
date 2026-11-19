@@ -51,6 +51,9 @@ use crate::fp_seal::{check_sealed, check_unsealed, SealClass, SealError};
 /// `hh-fp-seal-open/1` — the one recorded outcome-seal open act
 /// (REQ-XH-121, AC-1 `AC-6.5-1`).
 pub const SEAL_OPEN_SCHEMA: &str = "hh-fp-seal-open/1";
+/// The committed seal-open record every site-facing packet cites
+/// (REQ-XH-121).
+pub const SEAL_OPEN_REL: &str = "docs/build/reports/2026-11-19-fp-seal-open.json";
 /// `hh-fp-answer-scan-report/1` — the folded scan record + the
 /// REQ-XD-071 review handoff (AC-2).
 pub const SCAN_REPORT_SCHEMA: &str = "hh-fp-answer-scan-report/1";

@@ -199,7 +199,7 @@ def validate(doc, path, repo_root):
         # bare basename resolved inside the publication dir (the committed
         # -flip records use the basename form; repaired 2026-11-19).
         sup_rel = sup if isinstance(sup, str) and "/" in sup else (
-            PUB_DIR_REL + "/" + sup if isinstance(sup, str) else sup)
+            "%s/%s" % (PUB_DIR_REL, sup) if isinstance(sup, str) else sup)
         need(isinstance(sup_rel, str) and sup_rel.startswith(PUB_DIR_REL + "/"),
              "supersedes %r is not a docs/results/publication path" % sup)
         if isinstance(sup_rel, str):
