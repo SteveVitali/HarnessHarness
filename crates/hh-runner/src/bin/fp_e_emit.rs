@@ -494,7 +494,7 @@ fn main() {
                         ("gate", Json::str("GATE-G29")),
                         (
                             "readout_ref",
-                            Json::str("docs/build/readouts/GATE-G29.md"),
+                            Json::str(mget("gl1_readout")),
                         ),
                     ]),
                 ),
@@ -551,11 +551,11 @@ fn main() {
                     Json::obj([
                         (
                             "hh_native",
-                            Json::str("docs/build/reports/2026-11-10-fp-prereg.json"),
+                            Json::str(mget("prereg")),
                         ),
                         (
                             "v5",
-                            Json::str("docs/build/reports/2026-11-10-fp-prereg.json"),
+                            Json::str(mget("prereg")),
                         ),
                     ]),
                 ),

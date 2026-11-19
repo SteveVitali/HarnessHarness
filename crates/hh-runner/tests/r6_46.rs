@@ -53,6 +53,7 @@ fn trial(slot: &str, arm: &str, cost: i64, wall: i64, extra: &[(&str, Json)]) ->
     Json::Obj(m)
 }
 
+// Synthetic provenance labels only: these in-memory fixtures never open files.
 fn trials_rec(trials: Vec<Json>) -> Json {
     let mut m = BTreeMap::new();
     m.insert("schema".into(), Json::str("hh-fp-trials/1"));
@@ -61,9 +62,7 @@ fn trials_rec(trials: Vec<Json>) -> Json {
         "fold".into(),
         Json::obj([(
             "sources",
-            Json::Arr(vec![Json::str(
-                "docs/build/reports/compute/harvest/fp-ws1/",
-            )]),
+            Json::Arr(vec![Json::str("fixtures/fp-e/harvest/fp-ws1/")]),
         )]),
     );
     m.insert(
@@ -338,22 +337,22 @@ fn base_decl() -> Json {
     o.insert(
         "w4_quote".into(),
         parse(
-            r#"{"based_on":"docs/build/reports/2026-11-08-fp-w4-quote.json",
+            r#"{"based_on":"fixtures/fp-e/w4-quote.json",
                 "quantities":{"trials":150,"retry_trials":15,"machine_type":"e2-standard-8","disk_gib":300,
                  "dead_man_hours":"45/2","overhead_hours":"5/4","load_hours":"1/2","restart_hours":1,
                  "residual_disk_hours":6,"egress_gib":{"value":3,"label":"estimated"},
                  "nat":false,"external_ipv4":"ephemeral","provisioning_model":"STANDARD",
                  "disk_type":"pd-balanced","surfaces":1,"admission_cutoff_hours":"13/20"},
-                "rate_table":{"path":"docs/build/reports/live/pricing.json","sha256":"x"}}"#,
+                "rate_table":{"path":"fixtures/fp-e/pricing.json","sha256":"x"}}"#,
         )
         .unwrap(),
     );
     o.insert(
         "comparative".into(),
         parse(
-            r#"{"t":50,"k":1,"measure_ref":"docs/build/reports/2026-11-19-fp-ws1-measurement.json",
-                "prior_refs":{"hh_native":"docs/build/reports/2026-11-10-fp-prereg.json",
-                              "v5":"docs/build/reports/2026-11-10-fp-prereg.json"},
+            r#"{"t":50,"k":1,"measure_ref":"fixtures/fp-e/measurement.json",
+                "prior_refs":{"hh_native":"fixtures/fp-e/prereg.json",
+                              "v5":"fixtures/fp-e/prereg.json"},
                 "infra_allowance_ppm":0,
                 "compute":[{"window":"w4","quote_id":"pq-w4","ceiling_micros":7988890},
                            {"window":"wc","quote_id":"pq-wc","ceiling_micros":1940000}]}"#,
