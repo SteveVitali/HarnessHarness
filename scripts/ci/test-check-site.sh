@@ -13,7 +13,7 @@ fails=0
 say() { echo "test-check-site: $*"; }
 bad() { echo "test-check-site: FAIL — $*" >&2; fails=$((fails + 1)); }
 
-seed() {  # $1 = dir — minimal repo carrying the real site surface
+seed() {  # $1 = dir; optional $2 = fp-fixture for fixture-only mutations
   local d="$TMP/$1"
   mkdir -p "$d/scripts" "$d/docs/results/site-data" "$d/docs/results" \
           "$d/docs/build/reports" "$d/docs/build/readouts" \
@@ -26,16 +26,29 @@ seed() {  # $1 = dir — minimal repo carrying the real site surface
   cp "$ROOT/docs/results/phase1-execution-surface-replay.md" "$d/docs/results/"
   cp "$ROOT/docs/results/site-data/"*.json "$d/docs/results/site-data/"
   cp "$ROOT/docs/tickets/00_MANIFEST.md" "$d/docs/tickets/"
-  python3 - "$ROOT" "$d" <<'PY'
+  python3 - "$ROOT" "$d" "${2:-real}" <<'PY'
 import json, shutil, sys
 from pathlib import Path
 root, d = Path(sys.argv[1]), Path(sys.argv[2])
 cfg = json.loads((root / "scripts/site/config/inputs.json").read_text())
+# The ranks, zero-solve and private-viewer mutations exercise fixture
+# surfaces absent from the frozen all-withheld first-pass packet.
+if sys.argv[3] == "fp-fixture":
+    entries = [i for i in cfg["inputs"] if i["id"] == "p2-fp"]
+    assert len(entries) == 1
+    entries[0].update(path="scripts/site/fixtures/phase2-fp-results.json",
+                      fixture=True)
+    entries[0].pop("frozen", None)
+    (d / "scripts/site/config/inputs.json").write_text(
+        json.dumps(cfg, indent=2) + "\n")
 for i in cfg["inputs"]:
     dst = d / i["path"]
     dst.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(root / i["path"], dst)
 PY
+  if [ "${2:-real}" = fp-fixture ]; then
+    python3 "$d/scripts/site/build.py" --emit >/dev/null
+  fi
   git -C "$d" init -q >/dev/null
   git -C "$d" config user.email t@t; git -C "$d" config user.name t
   git -C "$d" add -A >/dev/null 2>&1
@@ -69,6 +82,8 @@ mutate() { sed -i '' "$2" "$1" 2>/dev/null || sed -i "$2" "$1"; }
 
 D=$(seed good)
 expect ok "seeded tree" "$D"
+F=$(seed good-fp fp-fixture)
+expect ok "seeded first-pass fixture tree" "$F"
 expect ok "seeded tree (public, zero records → nothing published)" --profile public "$D"
 
 # (a) drop an interval — intervals
@@ -84,7 +99,7 @@ expect_leg "intervals" "(a) interval dropped" "$D"
 
 # (b) a rank in the leader band — ranks (R6.20: seeded on the
 # leaderboard fixture's band label)
-D=$(seed mut-b)
+D=$(seed mut-b fp-fixture)
 mutate "$D/scripts/site/hhsite/sitepages.py" 's|("observed-leader group|("#1 observed-leader group|'
 expect_leg "ranks" "(b) ordinal in leader band" "$D"
 
@@ -195,7 +210,7 @@ expect_leg "a11y-static" "(m) token below 4.5:1" "$D"
 # (n) $0.00 for $/solve at 0 solves — labels (R6.21: seeded on
 # the undefined-solve renderer — a dollar figure in $/solve context is
 # the defect the labels leg names)
-D=$(seed mut-n)
+D=$(seed mut-n fp-fixture)
 python3 - "$D/scripts/site/hhsite/sitepages.py" <<'PY'
 import sys
 p = sys.argv[1]; t = open(p).read()
@@ -209,7 +224,7 @@ expect_leg "labels" '(n) dollar zero for $/solve at 0 solves' "$D"
 # (o) a trajectory link while the index is private — no-third-party
 # (R6.21: seeded inside the viewer block — the private index shows the
 # sha256 and never a link)
-D=$(seed mut-o)
+D=$(seed mut-o fp-fixture)
 python3 - "$D/scripts/site/hhsite/sitepages.py" <<'PY'
 import sys
 p = sys.argv[1]; t = open(p).read()
