@@ -75,3 +75,63 @@ leg green, so they stay. Proposed DEFERRALS/LEDGER text below.
   under the full check).`
 - **BUILD_INDEX.md**: out of scope for a repair PR unless the coordinator
   mints a row for the intervention.
+
+## I-3 closeout — 2026-11-19T16:56Z
+
+Harness: codex/gpt-6/subagent
+
+**I-3 done — reader allowlist repair, existing PR #420.** The verified repair
+head is `c6e0f8b89636d3678eef34348e7b7f895e181d45`, tree
+`f49a89fcadccf5ed3df92d4f539cccd1823e4b41`. Normal main inheritance brings the
+previously approved CI/publication repairs. Eight original fp_e_emit/r6_46
+allowlist literals became stale after that earlier source repair and were
+removed; every other owner entry, comment and ordering is preserved. The
+three full-mode gated-script entries remain live and retained. The final
+independent scan matches 73 hits to 70 exact entries, with no missing or
+stale entries. No broadened exception, checker relaxation, new ticket or
+BUILD_INDEX row was introduced.
+
+**Hosted verification:** [run 44567178740, attempt 1](https://github.com/SteveVitali/HarnessHarness/actions/runs/44567178740) completed
+successfully on the exact repair head above, verified 2026-11-19T16:54:55Z.
+All four jobs succeeded: cargo-deny (135712001382), macOS build/test
+(135712001785), Ubuntu build/test (135712001792), and gitleaks
+(135712001948). Both OS jobs actually passed CI scripts self-tests,
+step-mode lint, results-site claims/provenance/a11y checks, Build, Test and
+the offline GCE battery. Ubuntu additionally passed clean-clone Quickstart,
+Rustdoc warnings and MSRV; those three steps were skipped by the existing
+macOS conditions and are not claimed as macOS executions.
+
+**Independent scope review:** root / Codex, separate from the implementation
+worker, reviewed the exact repair head/tree above at
+2026-11-19T16:32:45Z and returned PASS. Independent byte checks established
+that the final allowlist is precisely the owner version minus the eight
+reviewed lines (patch SHA256
+`de8522f58fa61994468d2d667c8f5de449b488ff032d8ee375a642be8aef7ba0`).
+Its remaining 70 full lines equal main as a multiset, differing only in
+order; no permission or exception was added. Before this append, the
+original I3-REPAIR.md was byte-identical to the owner's record. That record
+and the allowlist were the only paths differing from main; all other source,
+signed records, ledger and deferrals equalled main. Both expected merge
+parents were retained. Root did not redundantly rerun the worker's local
+checks; the scope review and subsequent hosted verification are distinct.
+
+**Local evidence and limits:** 32 publication controls and 18 reader
+self-tests passed; backlog validation covered 235 sources with engineering
+and requirement sums both 66/66. Required tree-memory validation returned
+zero violations and 19 legacy warnings (external tooling revision
+`e981ec57d487a2c41d416672483b5a4df15b1233`). The original local full reader
+checker returned zero but emitted `grep: out of memory`; this remains a
+validation limitation, not an unqualified local scanner pass. Supplemental
+pre-merge staged-history validation remained FAIL with two findings: the
+exact R6.51 ledger entry and DF-R6.45l-1 disposition inherited from owner
+commit `5cac2a4117e9c478202d82aee24ad8fab8fa67de` via landed main. No
+historical line was manually edited and no checker exemption was added.
+
+This dated append supersedes only the completion status of I-3's repair;
+the original report and its unapplied coordinator proposals above remain
+unchanged historical evidence. The separate results-site real trial/results
+negative-control deferral remains **OPEN**; this repair does not discharge
+that real-data coverage obligation. CURRENT STATE, manifest and BUILD_INDEX
+are unchanged. The new records commit containing this closeout has not yet
+passed CI; fresh exact-head CI, completion-identity review and the normal
+settle/merge gates remain required.
