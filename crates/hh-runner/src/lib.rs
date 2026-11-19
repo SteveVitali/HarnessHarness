@@ -64,4 +64,5 @@ pub mod supervision;
 pub mod sweep;
 pub mod task_toml;
 pub mod verdict;
+pub mod verify_hosts;
 pub mod worker;
