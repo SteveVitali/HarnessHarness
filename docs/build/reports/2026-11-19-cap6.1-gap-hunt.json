@@ -1,0 +1,119 @@
+{
+ "checks": [
+  {
+   "check": "NC-11",
+   "detail": "456 {'merged-with': 81, 'adopted': 370, 'superseded-by': 5}",
+   "name": "register counts vs spec S0.2 (456=370+81+5)",
+   "verdict": "pass"
+  },
+  {
+   "check": "NC-2",
+   "detail": "unlanded=[]",
+   "name": "every adopted first-pass id's owner has a BUILD_INDEX row",
+   "verdict": "pass"
+  },
+  {
+   "check": "NC-2b",
+   "detail": "missing={}",
+   "name": "landed owners carry run+pr evidence anchors",
+   "verdict": "pass"
+  },
+  {
+   "check": "NC-3",
+   "detail": "open=['DF-R6.45l-1', 'DF-R6.50-1']; DF-R6.50-1 lead-OPEN but discharged by a dated DONE row (HUMAN-H17 + phase-3/4 flip records \u2014 verify clause met; dated-marker governed per AGENTS rule 8). Scanner seam: the row reader still emits it \u2014 reconciliation owed at CAP6.2",
+   "name": "open D-rows (deferrals-open.sh verbatim)",
+   "verdict": "pass"
+  },
+  {
+   "check": "NC-4",
+   "detail": "bad=[]",
+   "name": ".sha256 sidecars verify (35 checked)",
+   "verdict": "pass"
+  },
+  {
+   "check": "NC-4b",
+   "detail": "bad=[]",
+   "name": "publication-record embedded sha256 pins verify",
+   "verdict": "pass"
+  },
+  {
+   "check": "NC-5",
+   "detail": "missing=[]",
+   "name": "round-6 gate/human readouts exist, non-PENDING",
+   "verdict": "pass"
+  },
+  {
+   "check": "NC-5b",
+   "detail": "missing_from_region=['GATE-G28i', 'GATE-G28j', 'GATE-G28k', 'GATE-G28l', 'GATE-G28m', 'GATE-G28n', 'GATE-G29', 'GATE-G30', 'GATE-G31', 'HUMAN-H15']; out_of_region_rows=15",
+   "name": "all round-6 gate decisions inside the parsed region",
+   "verdict": "fail"
+  },
+  {
+   "check": "NC-6",
+   "detail": "files=['docs/build/reports/archive/2026-11-19-fp-w4-upload.json', 'docs/build/reports/2026-11-19-fp-w4-settlement.json']",
+   "name": "W4 n/a{scope_end} records cite GATE-G30 verbatim, no metered calls",
+   "verdict": "pass"
+  },
+  {
+   "check": "NC-7",
+   "detail": "bad=[]; prose_mentions(honest)=['docs/build/readouts/GATE-ACCEPT.md', 'docs/build/readouts/GATE-G1.md', 'docs/build/readouts/GATE-G10.md', 'docs/build/readouts/GATE-G11.md', 'docs/build/readouts/GATE-G12.md', 'docs/build/readouts/GATE-G13.md', 'docs/build/readouts/GATE-G14.md', 'docs/build/readouts/GATE-G15.md', 'docs/build/readouts/GATE-G16.md', 'docs/build/readouts/GATE-G17.md', 'docs/build/readouts/GATE-G18.md', 'docs/build/readouts/GATE-G19.md', 'docs/build/readouts/GATE-G2.md', 'docs/build/readouts/GATE-G20.md', 'docs/build/readouts/GATE-G21.md', 'docs/build/readouts/GATE-G22.md', 'docs/build/readouts/GATE-G23.md', 'docs/build/readouts/GATE-G24.md', 'docs/build/readouts/GATE-G25.md', 'docs/build/readouts/GATE-G26.md', 'docs/build/readouts/GATE-G27.md', 'docs/build/readouts/GATE-G28.md', 'docs/build/readouts/GATE-G28b.md', 'docs/build/readouts/GATE-G28c.md', 'docs/build/readouts/GATE-G28d.md', 'docs/build/readouts/GATE-G28e.md', 'docs/build/readouts/GATE-G28f.md', 'docs/build/readouts/GATE-G28g.md', 'docs/build/readouts/GATE-G28h.md', 'docs/build/readouts/GATE-G28i.md', 'docs/build/readouts/GATE-G28j.md', 'docs/build/readouts/GATE-G28k.md', 'docs/build/readouts/GATE-G28l.md', 'docs/build/readouts/GATE-G28m.md', 'docs/build/readouts/GATE-G28n.md', 'docs/build/readouts/GATE-G28o.md', 'docs/build/readouts/GATE-G29.md', 'docs/build/readouts/GATE-G3.md', 'docs/build/readouts/GATE-G30-postsmoke4-scope.md', 'docs/build/readouts/GATE-G30-postsmoke5-scope.md', 'docs/build/readouts/GATE-G30-postwc10-scope.md', 'docs/build/readouts/GATE-G30-postwc9-scope.md', 'docs/build/readouts/GATE-G30.md', 'docs/build/readouts/GATE-G31.md', 'docs/build/readouts/GATE-G33.md', 'docs/build/readouts/GATE-G4.md', 'docs/build/readouts/GATE-G5.md', 'docs/build/readouts/GATE-G6.md', 'docs/build/readouts/GATE-G7.md', 'docs/build/readouts/GATE-G8.md', 'docs/build/readouts/GATE-G9.md', 'docs/build/readouts/HUMAN-H10.md', 'docs/build/readouts/HUMAN-H11.md', 'docs/build/readouts/HUMAN-H12.md', 'docs/build/readouts/HUMAN-H13.md', 'docs/build/readouts/HUMAN-H14.md', 'docs/build/readouts/HUMAN-H15.md', 'docs/build/readouts/HUMAN-H16.md', 'docs/build/readouts/HUMAN-H17.md', 'docs/build/readouts/HUMAN-H18.md', 'docs/build/readouts/HUMAN-H7.md', 'docs/build/readouts/HUMAN-H8.md', 'docs/build/readouts/HUMAN-H9.md', 'docs/build/readouts/_TEMPLATE.md']",
+   "name": "live-executed claims backed by committed records; publication labels outside_verified=false",
+   "verdict": "pass"
+  },
+  {
+   "check": "NC-8",
+   "detail": "bad=[]",
+   "name": "shared-decision owners precede consumers (38 rows)",
+   "verdict": "pass"
+  },
+  {
+   "check": "NC-10",
+   "detail": "24 distinct tokens: ['n/a{no_instance}', 'n/a{no_model_calls}', 'n/a{none}', 'n/a{not an arm-bearing packet \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\u2014 no slots[] carried}', 'n/a{not an arm-bearing packet \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\u2014 no slots[] carried}', 'n/a{not an arm-bearing packet \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\u2014 no slots[] carried}', 'n/a{not an arm-bearing packet \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\u2014 no slots[] carried}', 'n/a{not an arm-bearing packet \\\\\\\\\\\\\\\\u2014 no slots[] carried}', 'n/a{not an arm-bearing packet \\\\u2014 no slots[] carried}', 'n/a{not an arm-bearing packet \u2014 no slots[] carried}', 'n/a{scope_end}', 'unused{scope_end}', 'withheld{admission:AG3}', 'withheld{budget}', 'withheld{l1_not_passed}', 'withheld{n_declared:0}', 'withheld{no_adjacent_donor}', 'withheld{no_independent_correct_artifact}', 'withheld{reading_2_pending}', 'withheld{sealed_until_results}', 'withheld{tranche_absent}', 'withheld{un_reproofed_successor:task_lists_state=blocked}', 'withheld{un_reproofed_successor}', 'withheld{window_deadline}']",
+   "name": "withheld/n-a token census (vocabulary sample)",
+   "verdict": "pass"
+  },
+  {
+   "check": "AC-1",
+   "detail": "rows=456 ac1_bad=[]",
+   "name": "one row per id; MET rows cite evidence; achieved>=required",
+   "verdict": "pass"
+  },
+  {
+   "check": "AC-2",
+   "detail": "bad=[]",
+   "name": "accepted_scope never raises a verdict past MET-ENGINEERED",
+   "verdict": "pass"
+  },
+  {
+   "check": "NC-1",
+   "detail": "{'MET': 409, 'PARTIAL': 46, 'MET-DIFFERENTLY': 1}; engineering-closed=410 satisfied=410",
+   "name": "verdict roll-up",
+   "verdict": "pass"
+  }
+ ],
+ "findings": [
+  {
+   "check": "NC-3",
+   "evidence": "docs/build/BUILD_INDEX.md R6.45b/R6.45c/R6.45d rows; docs/tickets/DEFERRALS.md",
+   "owed_home": "CAP6.2",
+   "severity": "medium",
+   "summary": "BUILD_INDEX names ['DF-R6.45b-1', 'DF-R6.45b-2'] (opened/discharged) but DEFERRALS.md has no such rows \u2014 a deferral not in the file did not happen (window-internal machinery rows tracked in run ledgers only)"
+  },
+  {
+   "check": "NC-5",
+   "evidence": "docs/build/LEDGER.md rows immediately before '## GATE DECISIONS'; supplement_guard.load_decisions",
+   "owed_home": "CAP6.2 (append-only repair)",
+   "severity": "high",
+   "summary": "15 round-6 decision rows sit outside '## GATE DECISIONS' (appended at the tail of '## OPEN FINDINGS'): ids invisible to the guard parser ['GATE-G28i', 'GATE-G28j', 'GATE-G28k', 'GATE-G28l', 'GATE-G28m', 'GATE-G28n', 'GATE-G29', 'GATE-G30', 'GATE-G31', 'HUMAN-H15'] \u2014 chainTip route computes HOLD 'gate GATE-G28i pending'; GATE-G28i's row also lost its date cell in 0bffdb3c (in-place rewrite of a committed row \u2014 append-only violation)"
+  }
+ ],
+ "rows": 456,
+ "schema": "hh-cap6-gap-hunt/1",
+ "ticket": "CAP6.1",
+ "verdict_rollup": {
+  "MET": 409,
+  "MET-DIFFERENTLY": 1,
+  "PARTIAL": 46
+ },
+ "written": "2026-11-19"
+}
