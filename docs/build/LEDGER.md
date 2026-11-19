@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket: CAP6.2
-lastCompleted:   CAP6.1
+nextTicket: CAP6.3
+lastCompleted:   CAP6.2
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-cap6.1
+chainTip:        codex/harnessharness-cap6.2
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           6
 harness:         devin-cli/swe-2-high/subagent
-updatedAt:       2026-11-19T05:10Z
+updatedAt:       2026-11-19T05:40Z
 ```
 
 ## OPEN FINDINGS
@@ -1357,6 +1357,7 @@ updatedAt:       2026-11-19T05:10Z
 
 ## PHASE LOG — Round 6
 
+- 2026-11-19T05:40Z · **CAP6.2 done — round closure (manifest 322; offline, $0)** — branch `codex/harnessharness-cap6.2` (PR #418) · base `codex/harnessharness-cap6.1`. DF-CAP6.1-1/4/5 CLOSED (decision rows restated verbatim in GATE DECISIONS — guard now PASS/DISPATCH; register normalization + 12 missing BUILD_INDEX landings backfilled; checker repairs incl. flip filenames, compute-receipts guard, clippy, ADR index, triggers); DF-CAP6.1-2 discharged via dated deviation (frozen records untouched); DF-CAP6.1-3 deferred→G32 waiver list (XC-325 unexecuted, honest). Closure: 410/456 engineering-closed; spend $4.52 model billed + $27,367,214µ compute estimated = $31.887214 ≤ $110; compute-open empty; DELETE_REQUESTED 02:01:58Z verified. Carried to G32: base-stack CI red (#414–#416), operator-disk retention decision, waiver list (XC-325, Ws1 estimate-over-ceiling, two-fold variance). chainTip → codex/harnessharness-cap6.2 · nextTicket → CAP6.3 · engineered (offline, $0.00) · devin-cli/swe-2-high/subagent
 - 2026-11-19T05:10Z · **CAP6.1 done — whole-round gap analysis + seam hunt (manifest 321; offline, $0)** — branch `codex/harnessharness-cap6.1` (PR #417) · base `codex/harnessharness-r6.50`. `hh-cap6-gap-hunt/1` + COVERAGE_MATRIX (456 rows): **MET 409 · MET-DIFFERENTLY 1 (ADR-0439) · PARTIAL 46 · MISSING 0** — engineering-closed 410/456; PARTIALs routed→CAP6.2 (41) + scope-ended (4, GATE-G30) + 1 unexecuted (XC-325). 15 findings typed: **GAP-01 high** — 11 decision rows misplaced inside `## OPEN FINDINGS` + G28i date cell lost at `0bffdb3c` (restored this entry, dated-repair convention); **GAP-02 high** — frozen prereg arm `admission_sha256` drift vs template-hash amendments (pre-existing); mediums incl. check-site REFUSED on `*-flip.json` filenames, register primary_kind drift; lows incl. pre-existing checker drift items. CI read `blockedOn` — #414–#416 red on build·test·fmt·drift (stack tip red at base). DF-CAP6.1-1…5 opened. nextTicket → CAP6.2 · engineered (offline, $0.00) · devin-cli/swe-2-high/subagent
 - 2026-11-19T04:45Z · **HUMAN-H18 done — billing reconcile PASSED (manifest 320)** — operator console "$4.52 Ollama month-to-date" confirmed identical via provider usage API (trailing 7d/30d = $4.52). Entries: W1 within · W2 model within / compute unavailable · W3 compute unavailable / model N/A (model_line none) · Wc model within / compute unavailable · W4 N/A{unused scope_end, deletion receipt 02:01:58Z}. GCP billed compute has no API read (project deleted, no export) — recorded `unavailable`, not fabricated; CAP6.2 folds. nextTicket → CAP6.1 · devin-cli/swe-2-high/coordinator
 - 2026-11-19T04:25Z · **HUMAN-H17 done — dataset visibility flip PASSED (manifest 318)** — operator verbatim "you do everything via HF_TOKEN" authorized agent execution: card `50c417b3…` uploaded to `SteveVitali/harnessharness-archive` (commit a11591e9), `PUT settings {private:false}` confirmed `private: false` at 04:23Z; post-flip revision **`a11591e931442908c34a5bc7a65e8e664f4752d7`** pinned; token provided yes/never stored. Superseding publication records `*-flip.json` (visibility public) emitted; DF-R6.50-1 discharged. nextTicket → HUMAN-H18 · devin-cli/swe-2-high/coordinator
