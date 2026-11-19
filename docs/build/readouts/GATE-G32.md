@@ -65,7 +65,7 @@ An `inconclusive`/`withheld` first-pass outcome is acceptable as recorded; no th
 ## Signature   <!-- appended at signing; nothing above is edited or deleted -->
 ## Signature   <!-- appended at signing; nothing above is edited or deleted -->
 
-- **Operator:** Steve Vitali · **UTC:** 2026-11-19T06:15Z · **Channel:** operator CLI session.
+- **Operator:** Steve Vitali · **UTC:** 2026-11-19T07:00Z · **Channel:** operator CLI session.
 - **Verbatim rulings** (in the operator's own words, applied per the readout's stated semantics —
   a waiver = operator-accepted deviation, recorded verbatim, never marked satisfied):
   - **(a) accepted deviations + (c) waivers 1–4:** "I'm okay with these deviations and want to
