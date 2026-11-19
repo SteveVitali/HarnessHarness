@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket: R6.53 complete)
-lastCompleted:   R6.52
+nextTicket: HUMAN-H19 complete)
+lastCompleted:   R6.53
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-r6.52c-run
+chainTip:        codex/harnessharness-r6.53
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           6
 harness:         devin-cli/swe-2-high/subagent
-updatedAt:       2026-11-20T02:30Z
+updatedAt:       2026-11-20T03:10Z
 ```
 
 ## OPEN FINDINGS
@@ -1361,6 +1361,7 @@ updatedAt:       2026-11-20T02:30Z
 
 ## PHASE LOG — Round 6
 
+- 2026-11-20T03:10Z · **R6.53 done — W4 results re-fold (manifest 325b; offline, $0)** — branch `codex/harnessharness-r6.53` (PR #424) · base `codex/harnessharness-r6.52c-run`. `hh-fp-w4-outcomes/1` (55e5fa6e…): mini 50 rc=0/**29 pass**, hh_native 46 rc=0 + 4 rc=1 recorded, v5 20 `verifier_unavailable` + 30 `dropped{makespan}`, Pi/CC `not_run{admission:AG3}`. 5 superseding packets (P2-FP landed reference on mini; P4-FP/P3-L2 unavailable-members honest); R6.48 frozen packets byte-untouched. Answer-scan: **32 flagged / 16 flagged passes → HUMAN-H19** (review input emitted, `pending{human}`); **freeze veto holds** — no `*-frozen` minted, no publication supersession until review. Verify: r6_53 9/9, r6_48/49 20/20, check-fp-w4-results 25/25, check-fp-results 36/36, site 15/15 ×2. DF-R6.53-1 OPEN (H19 withholds freeze). nextTicket → HUMAN-H19 · engineered (offline, $0.00) · devin-cli/swe-2-high/subagent
 - 2026-11-20T02:30Z · **R6.52 done — W4 RESURRECTED + EXECUTED (manifest 325a; ~$10.35 of $100 bound)** — branch `codex/harnessharness-r6.52c-run` (PR #423) · chain r6.52 → -run → -b-run → -c-run. Project undeleted (ACTIVE 07:33Z) → provisioned → `w4-main` driver built live → window ran to completion: **protected pair k=5/R=5 landed** — mini-swe-agent 50/50 rc=0, hh_native 50/50 (46 rc=0 + 4 honest rc=1 verifier-127 recorded); v5 20× `verifier_unavailable` (sealed-doc `RefUnresolved`, verbatim, dropped round-2 on makespan); Pi/CC `not_run{admission:AG3}`; `withheld: []`. Live-surfaced defects fixed: writer-lease TTL fence (HH_WRITER_TTL_MS), lane-hold scope, image-ref pinning. Spend model $6.98 + compute ~$3.37; settlement `pending` (2h provider clock, boundary_ambiguous honest); archive `archive_verified` (HF 80859e54); teardown DELETE_REQUESTED again; compute-open empty. Records: `hh-fp-window/1` 4f26fed3… + receipts/sidecars. nextTicket → R6.53 (re-fold) · engineered+live-executed (~$10.35) · devin-cli/swe-2-high/subagent
 - 2026-11-19T07:35Z · **ADR-0452 + manifest inserts 325a–325c — operator supersedes GATE-G30 for W4** — verbatim ruling recorded: undelete `hh-fp-a1b2c3`, amend compute pool, run protected pair + V5, Pi/CC `not_run{admission}`; "increase the budget if that is a constraint". G30 disposition stands in history; supersession via dated ADR. nextTicket → R6.52 · devin-cli/swe-2-high/coordinator
 - 2026-11-19T07:25Z · **DOC6.1 done — documentation refresh (manifest 325; offline, $0)** — branch `codex/harnessharness-doc6.1` (PR #421) · base `codex/harnessharness-cap6.3`. refresh-repo-docs + agent-docs run: reader surfaces (README/status/evidence/reference/architecture/results) reconciled to the landed round (H17 public dataset a11591e9, flip records, G32 sums, landed binaries — withhelds verbatim, card states unchanged); AGENTS.md hierarchy gains R6 machinery rows + Round-7 entry points. Checkers: living-docs 554 · position 14/14 ×2 · examples/trace/contributing all green ×2 modes · site 15/15 ×2 · run-examples EX-01–04 · quickstart green · agent-docs detector 0 issues; stale fixed 4, gaps filled 2, verified 6, report-only 24. I-3 repair landed PR #420 (check-ci-gating 82/78 allowlisted). **Round-6 chain complete — all 325 manifest rows landed.** nextTicket → (round-6 complete) · engineered (offline, $0.00) · devin-cli/swe-2-high/subagent
