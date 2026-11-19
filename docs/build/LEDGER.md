@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket: R6.49
-lastCompleted:   HUMAN-H16
+nextTicket: GATE-G31
+lastCompleted:   R6.49
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-r6.48
+chainTip:        codex/harnessharness-r6.49
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           6
 harness:         devin-cli/swe-2-high/subagent
-updatedAt:       2026-11-19T03:15Z
+updatedAt:       2026-11-19T03:40Z
 ```
 
 ## OPEN FINDINGS
@@ -1339,6 +1339,7 @@ updatedAt:       2026-11-19T03:15Z
 
 ## PHASE LOG — Round 6
 
+- 2026-11-19T03:40Z · **R6.49 done — site phase-3/4 freeze (manifest 316; offline, $0)** — branch `codex/harnessharness-r6.49` (PR #415) · base `codex/harnessharness-r6.48`. `fp_results freeze` mints `hh-flagged-review/1` (b4637868…) applying HUMAN-H16 verbatim — 35 flagged → 35 cleared, "the confirmed count is a minimum", unreviewed flag vetoes at emit; 5 frozen packets byte-identical to R6.48's except `{freeze,review}` members (r6_49 5/5); withholds preserved verbatim (`window_deadline`/`budget`/`admission:AG3`/`protected_pair_truncated{k<5,R<5}`); site phase-3/4 pages render real withheld structure w/ per-member provenance (REQ-XH-020); REQ-XH-105 prereqs: contamination scan `clean` + dataset card staged (H17 flip left to operator). Verify: check-fp-results all OK · check-site 15/15 (internal/public/--head) · site batteries green · fmt/scoped clippy. Drift recorded: base clippy fp_e_emit.rs:189 (pre-existing); validator 2 inherited violations. chainTip → codex/harnessharness-r6.49 · nextTicket → GATE-G31 · engineered (offline, $0.00) · devin-cli/swe-2-high/subagent
 - 2026-11-19T03:15Z · **HUMAN-H16 done — flagged-pass review PASSED (manifest 315)** — reviewer operator, verbatim "Looks good to me, please continue" over the 35-flag table (all `scored_state: clean`, `fingerprint:solution` hits on executed trials): 35 cleared / 0 confirmed / 35 reviewed, "the confirmed count is a minimum"; masking `harness_masked`. Readout `docs/build/readouts/HUMAN-H16.md`. Results freeze unblocked for R6.49. nextTicket → R6.49 · engineered (offline, $0.00) · devin-cli/swe-2-high/coordinator
 - 2026-11-19T02:55Z · **R6.48 done — FP-RESULTS packets (manifest 314; offline, $0)** — branch `codex/harnessharness-r6.48` (PR #414) · base `codex/harnessharness-r6.47`. `hh-fp-seal-open/1` (sha256:199cb874…) opens the outcome seal exactly once (25 records class-checked); `hh-fp-answer-scan-report/1` (f836343a…) covers 53/53 scored trials — 35 flagged, 18 clean, 0 unresolved, flagged-pass 0 — with the REQ-XD-071 handoff (`hh-flagged-review-input/1` + `hh-flagged-review-report/1`) to HUMAN-H16; `hh-comparative-results/1` P2-FP (61cff760…) + P4-FP (7c9994f2…), `hh-fp-l2/1` (f604310f…), `hh-fp-l2-audit/1` (dbf28373…), `hh-fp-l3/1` (98035c8e…) — all typed `withheld{window_deadline}:protected_pair_truncated{k<5,R<5}` verbatim under `re-scope{end-first-pass-early}`; arm withholds `admission:AG3`/`budget`/`window_deadline` carried verbatim; request-fingerprint leg `not_checked` (no header facts in retained WAL — honest). Verify: r6_48 15/15 · runner suite green · fmt/scoped clippy clean · sidecars verified · re-emit byte-identical · drift recorded (base clippy fp_e_emit.rs:189, prereg sidecar). **Deferrals:** none opened/closed — none open. chainTip → codex/harnessharness-r6.48 · nextTicket → HUMAN-H16 · engineered (offline, $0.00) · devin-cli/swe-2-high/subagent
 - 2026-11-19T02:06Z · **R6.47 done — W4 `unused{scope_end}`: the phase-close GCP project deletion (manifest 313; records + one production act, USD $0.00)** — branch `codex/harnessharness-r6.47` · base `codex/harnessharness-gate-g30` @`38693dc6` (the GATE-G30 signature tip `47380824` + the stacked r6.51 worker's manifest-321a insert `38693dc6`, landed while this run was in flight — a valid descendant; the concurrent worker's checkout was left untouched, all writes in a separate worktree). Skeleton → ticket fleshed in place (dated note; same id/sequence/slug) under GATE-G30's recorded `re-scope{end-first-pass-early}` (readout `docs/build/readouts/GATE-G30.md`; operator verbatim 2026-11-19T01:54Z; FP-E `hh-fp-e/1` sha256 `d6fa1dab…` admits zero executable work — D_max 3,737,185 ms < W_p 6,300,000, every arm withheld on cost fields, `continuing: {}`). No PROV/LOAD/lane probe/rounds/checkpoint/VM; no `R6.47a`… suffix rows. **The one production act (§3.9 step 7):** pre-state `projects describe` `ACTIVE` + billable-class inventory empty (`firewalls: 5` the declared non-billable residue) → `gcloud projects delete hh-fp-a1b2c3` exit 0 (2026-11-19T02:01:58Z, REQ-XB-212's one first-pass project) → post `projects describe` **`DELETE_REQUESTED`** (2026-11-19T02:02:15Z); receipt `docs/build/reports/compute/2026-11-19-fp-w4-teardown.json` (`hh-compute-receipt/1`, `kind: teardown`, 11 receipted commands through `receipt_lib.py`, `cost_record: n/a{scope_end}`). Typed `n/a{scope_end}` records: `docs/build/reports/archive/2026-11-19-fp-w4-upload.json` + `docs/build/reports/2026-11-19-fp-w4-settlement.json` — no window ran → no harvest to upload, no settlement clock to serve; outcome fields stay `withheld{sealed_until_results}` (REQ-XH-121); HUMAN-H18's W4 entry `N/A` (unrun class). **Deferrals:** DF-R6.23-1 **DONE** — the W4 archive leg resolves `n/a{scope_end}` and the citation chain is complete through GATE-G30's readout verbatim (W1→Ws1 incl. every Wc/Wcs1 + smoke, smoke4/5 backfill PR #410); DF-R6.45l-1 stays OPEN for the 321a `R6.51` closure insert (GATE-G30's named discharge). **Machinery:** `compute-open.sh` non-dict-JSON guard repair — a pre-existing crash on the R6.45q-committed list-typed `2026-11-18-fp-ws1r-refold-diffs.json` made the REQ-XB-211 closure check traceback; output now empty, exit 0. **Verify:** `validate_receipt.py` clean · `compute-open.sh` empty · `deferrals-open.sh` DF-R6.45l-1 only · `git diff` verified (shell/python writes only); `check-compute-receipts.sh` FAIL at base on the pre-existing ws1-era non-compute-schema records + the same list-typed file — 101/101 hh-compute-receipt/1 receipts (incl. this row's) + 24/24 declarations validate individually, recorded verbatim. lastCompleted → R6.47 · nextTicket → R6.48 · run `docs/build/runs/R6.47.md` · devin-cli/swe-2-high/subagent
