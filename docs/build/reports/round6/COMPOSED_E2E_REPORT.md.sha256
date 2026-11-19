@@ -1,0 +1,2 @@
+8c95413ac2556886ab83fe8774f78a1eeb89225ffb9519361436a94b7f1e5ab3  docs/build/reports/round6/COMPOSED_E2E_REPORT.md
+# recompute: shasum -a 256 -c docs/build/reports/round6/COMPOSED_E2E_REPORT.md.sha256 (run from the repo root)
