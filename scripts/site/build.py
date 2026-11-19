@@ -115,7 +115,7 @@ def load_publications(inputs, repo_root=ROOT):
     for e in errors:
         raise values.Refusal("publication record — %s" % e)
     for rel, doc in records:
-        mism = publication.pin_errors(doc, inputs)
+        mism = publication.checked_pin_errors(rel, doc, inputs, repo_root)
         for e in mism:
             raise values.Refusal(
                 "publication record %s does not pin the current input "
