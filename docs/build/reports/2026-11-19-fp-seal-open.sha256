@@ -1,0 +1,2 @@
+199cb8746e447a0307d378686bf36aac73ba327f4ccd9da07d7128f68ccfa933  docs/build/reports/2026-11-19-fp-seal-open.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-19-fp-seal-open.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)

@@ -1,0 +1,15 @@
+# fp-results emit inputs — the committed repo-relative records and the
+# retained-store paths (the same manifest idiom as fp-ws1-trials;
+# retained paths are read only and cited by sha256 in the records).
+trials=docs/build/reports/2026-11-19-fp-ws1-trials.json
+pp0=docs/build/reports/2026-11-19-fp-ws1-pp0-evidence.json
+fp_e=docs/build/reports/2026-11-19-fp-e.json
+measurement=docs/build/reports/2026-11-19-fp-ws1-measurement.json
+w4_quote=docs/build/reports/2026-11-19-fp-w4-quote.json
+gl1=docs/build/reports/compute/2026-11-18-fp-ws1-l1-conformance.json
+prereg=docs/build/reports/2026-11-10-fp-prereg.json
+# retained store (the R6.44 ws1 harvest — the scan + the retained-side
+# seal firewall legs read these; `emit-packets` never touches them).
+retained_root=~/hh-retained/ws1
+pp0_evidence_main=~/hh-retained/ws1/pp0-evidence/pp0-evidence
+pp0_evidence_leasefence=~/hh-retained/ws1/pp0-evidence-leasefence-run3
