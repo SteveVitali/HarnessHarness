@@ -1748,7 +1748,7 @@ impl EmbedService {
     }
 
     /// The session's armed exec surfaces — the L1 host reads the ids
-    /// before [`rebind_exec_executor`] (each bound surface gets one
+    /// before [`Self::rebind_exec_executor`] (each bound surface gets one
     /// clone of the shared replay queue).
     pub fn exec_surface_ids(&self, sess_id: &str) -> Vec<String> {
         self.session(sess_id)
