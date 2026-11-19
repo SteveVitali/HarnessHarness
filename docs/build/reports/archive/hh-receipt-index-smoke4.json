@@ -1,0 +1,208 @@
+{
+ "artifacts": [
+  {
+   "bytes": 563622,
+   "name": "run-root.tar.gz",
+   "note": "the byte-exact harvested tar \u2014 non-UTF8 (unscannable by the REQ-XH-103 prescan); the tree rides as the prescanned smoke4/run-root-tree.json bundle (101 UTF-8 members; 2 non-UTF8 binary members \u2014 the make-doom-for-mips reference.jpg fixtures \u2014 ride the digest_only tar only) + per-member sha256 in smoke4/harvest/MANIFEST.sha256; tar bytes retained in ~/hh-retained/smoke4/harvest/run-root.tar.gz",
+   "path": null,
+   "role": "run_root_tar",
+   "sha256": "0d16a74c9776998f3647cd3f92be2b6d38cf1cf6dd2a54827d9884ea1c148cbc",
+   "upload": "digest_only",
+   "window": "smoke4"
+  }
+ ],
+ "attempts": [
+  {
+   "attempt": "smoke4-window",
+   "cites_prior_window": {
+    "disposition": "archive_verified",
+    "terminal_dataset_revision": "ab1e8634e0134c05ca07a7218a6b72f1f1e248ce",
+    "verify_receipt": "docs/build/reports/archive/2026-11-16-fp-wc9-verify.json",
+    "window": "wc9"
+   },
+   "dataset": {
+    "repo": "SteveVitali/harnessharness-archive",
+    "revision": "main",
+    "visibility": "private"
+   },
+   "files": [
+    {
+     "bytes": 3748,
+     "path": "smoke4/2026-11-16-fp-smoke4-cost.json",
+     "role": "window_record",
+     "sha256": "b06e8ae90e08b9af027df8c140210270e0a825e3bb983a985d37a1c02c9bfa74"
+    },
+    {
+     "bytes": 22191,
+     "path": "smoke4/2026-11-16-fp-smoke4-harvest.json",
+     "role": "window_record",
+     "sha256": "34f36dfdd790b708ffc074113dac54bf208b9598ac949288bc9bbbd439176a3e"
+    },
+    {
+     "bytes": 2524,
+     "path": "smoke4/2026-11-16-fp-smoke4-prepull.json",
+     "role": "window_record",
+     "sha256": "4970939d655ff8e5ecf24b2540d0d7da84987b3527cde43ace4d3b3b25b0b766"
+    },
+    {
+     "bytes": 17913,
+     "path": "smoke4/2026-11-16-fp-smoke4-provision.json",
+     "role": "window_record",
+     "sha256": "b5f32e67d49c268cc744829cca766974a52874cde8b84b8e174155b7f4f42fcd"
+    },
+    {
+     "bytes": 2169,
+     "path": "smoke4/2026-11-16-fp-smoke4-quote.json",
+     "role": "window_record",
+     "sha256": "ead171d6db0bf715d208677f27b4d9158c44aba775236b033ea8ee0ef9224329"
+    },
+    {
+     "bytes": 50496,
+     "path": "smoke4/2026-11-16-fp-smoke4-teardown.json",
+     "role": "window_record",
+     "sha256": "68da2b8519b96ca8ffd3a62083921c20293b7698b6e987871017e9036268c824"
+    },
+    {
+     "bytes": 16450,
+     "path": "smoke4/2026-11-16-fp-smoke4-verify.json",
+     "role": "window_record",
+     "sha256": "4bc4d91497e4190a72287c8f1f97d94f51206d338a22c488bb49c095827d981e"
+    },
+    {
+     "bytes": 5087,
+     "path": "smoke4/2026-11-16-smoke4-model-port-collision-diagnosis.json",
+     "role": "window_record",
+     "sha256": "40b47ce9f0541acbaece7817f6647d12ad19f6b733796f48077b6d61502585e9"
+    },
+    {
+     "bytes": 12830,
+     "path": "smoke4/harvest/MANIFEST.sha256",
+     "role": "window_record",
+     "sha256": "48909768621a92787be5efc58caf93a300a58f63fc66fa85f2f44b88cae51ea4"
+    },
+    {
+     "bytes": 411651,
+     "path": "smoke4/harvest/journald.log",
+     "role": "window_record",
+     "sha256": "ac4dbccba368571da249adcb361c20b34b88583837e907f8eb9a5e545186181c"
+    },
+    {
+     "bytes": 243716,
+     "path": "smoke4/harvest/serial.log",
+     "role": "window_record",
+     "sha256": "c28fab91a49d54d856feb93174a9723b0a96ad3f7e8117ce011dad75ef2b54ce"
+    },
+    {
+     "bytes": 23,
+     "path": "smoke4/harvest/usage.txt",
+     "role": "window_record",
+     "sha256": "de744a25f86297c492836e9ccb913c20e5f246f13ec7e4bd538d3ecf01054b9a"
+    },
+    {
+     "bytes": 9740998,
+     "path": "smoke4/run-root-tree.json",
+     "role": "window_record",
+     "sha256": "65904d633d0f7d55ddadf5f5f69579e175ff21d7958044c31bd9aba4ac3e6754"
+    },
+    {
+     "bytes": 1267,
+     "path": "smoke4/run-root/hh-carried-load-infra.json",
+     "role": "window_record",
+     "sha256": "ca0f5dfad3fc0c850abeac8c53b8ad8d5ca6472dedb677650cbbb6254833e5e3"
+    },
+    {
+     "bytes": 4018,
+     "path": "smoke4/run-root/smoke4-window-record.json",
+     "role": "window_record",
+     "sha256": "d17bf4c44a0e9a4d3c586a03d9bce9c0d985361b3f488282197318d6337c3ee2"
+    },
+    {
+     "bytes": 2798,
+     "path": "smoke4/run-root/store-check.json",
+     "role": "window_record",
+     "sha256": "edc1cc49b5857f24dbd2cec7bd7c1f7baac3da3a5af5d0910ce559fd37702973"
+    },
+    {
+     "bytes": 782,
+     "path": "smoke4/run-root/verifier-first-errors.txt",
+     "role": "window_record",
+     "sha256": "bc5b1767f9167f6e36b4a1121ab6c3c245695d0a868778b55d05e5da2d2afc92"
+    },
+    {
+     "bytes": 1313,
+     "path": "smoke4/wiring/Containerfile",
+     "role": "window_record",
+     "sha256": "68f2ffd7a05a52af9ca78f4ae71b3c58e83b80763eb72f38ceb856b20f354dc3"
+    },
+    {
+     "bytes": 603,
+     "path": "smoke4/wiring/cfg.json",
+     "role": "window_record",
+     "sha256": "f0128e7923a9b64277b483385dabda94d4b46b08b63a718907125549480e2080"
+    },
+    {
+     "bytes": 971,
+     "path": "smoke4/wiring/freeze.json",
+     "role": "window_record",
+     "sha256": "a73b81af88c9102ae12b1e85acc063c20e1b88373cb02f1caf8c2be1212512c7"
+    },
+    {
+     "bytes": 516,
+     "path": "smoke4/wiring/pin.json",
+     "role": "window_record",
+     "sha256": "fbab009af4d5d2b6339ae7ac4fc55df58b6c50323513edba3fc4bf3648ad27ee"
+    },
+    {
+     "bytes": 257,
+     "path": "smoke4/wiring/prov-auth.json",
+     "role": "window_record",
+     "sha256": "a72bf34efb892dca0b5f7a2b8162c8b4a3ccaadc366c0cc74e18828f3f62bfe4"
+    },
+    {
+     "bytes": 1184,
+     "path": "smoke4/wiring/smoke4-cells.sh",
+     "role": "window_record",
+     "sha256": "a945cea64b9c5ef52e0bf3876f8d0cc13695e73cc6078407619e88c5e557e7bd"
+    },
+    {
+     "bytes": 2521,
+     "path": "smoke4/wiring/smoke4-closeout.py",
+     "role": "window_record",
+     "sha256": "45c258cada45abfacd76f1d0bcbde96069ef119d936c6a22836193d316188f20"
+    },
+    {
+     "bytes": 2995,
+     "path": "smoke4/wiring/smoke4-load-infra.py",
+     "role": "window_record",
+     "sha256": "00831885476b981d3b344fdfac999c018578d852b963511fd607fd5415a825e1"
+    },
+    {
+     "bytes": 2098,
+     "path": "smoke4/wiring/smoke4-pulls.sh",
+     "role": "window_record",
+     "sha256": "133c0eb961dfbb944d54b50c8b086fbeec256c1c5dd373703260b04eaeabcd1d"
+    },
+    {
+     "bytes": 2958,
+     "path": "smoke4/wiring/smoke4-settle-fetch.py",
+     "role": "window_record",
+     "sha256": "05029aac6f9eba7416ea6f75a1f4a31007cbe7783ad68e35d82cee5745e44409"
+    },
+    {
+     "bytes": 5532,
+     "path": "smoke4/wiring/smoke4-setup.sh",
+     "role": "window_record",
+     "sha256": "d0158637b3f5a0f5cb514f0b574c2372c9a7c2fe589e891238498e8810fc5721"
+    },
+    {
+     "bytes": 6647,
+     "path": "smoke4/wiring/smoke4-store-check.py",
+     "role": "window_record",
+     "sha256": "9ef84f7a847eaf26f66b7334a371731812f8683a7fb48b4c1a424d89e117c761"
+    }
+   ],
+   "note": "non-evidence smoke (internal; never re-proof evidence) \u2014 DF-R6.23-1 stays OPEN for R6.47"
+  }
+ ],
+ "schema": "hh-receipt-index/1"
+}
