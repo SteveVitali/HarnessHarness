@@ -338,7 +338,7 @@ p = sys.argv[1]; t = open(p).read()
 m = re.search(r"### Card — Configuration sweep, first pass "
               r"\[config-sweep\].*?(?=\n### )", t, re.S)
 t = t.replace(m.group(0), m.group(0).replace(
-    "results/publication/phase-4-2026-11-19.json",
+    "results/publication/phase-4-2026-11-19-flip.json",
     "results/README.md", 1))
 open(p, "w").write(t)
 PY2
