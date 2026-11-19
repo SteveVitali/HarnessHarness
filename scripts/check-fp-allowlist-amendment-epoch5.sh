@@ -146,6 +146,30 @@ PY
 leg "deferral-row" bash -c '
   grep -q "DF-R6.45l-1" docs/tickets/DEFERRALS.md'
 
+# 9 — the runtime-evidence leg (R6.51; DF-R6.45l-1's discharge): the
+#     committed `hh-verify-host-derivation/1` record folds smoke1's
+#     runtime evidence — verify-phase-attributed
+#     `security.egress.decided` deny rows + captured cell observations —
+#     into the candidate set with no hand-listing, checked against the
+#     freeze's verify set; the derived set must equal the epoch-4→5
+#     verify delta and the agent-phase `download.pytorch.org` deny must
+#     sit in the excluded leg (never derived).
+DERIV="docs/build/reports/2026-11-19-fp-verify-host-derivation-smoke1.json"
+leg "runtime-evidence-derived" bash scripts/egress-conformance/runtime-verify.sh "$DERIV" "$ART"
+leg "derived-equals-epoch5-delta" python3 - "$REPO" <<'PY'
+import json, sys
+repo = sys.argv[1]
+d = json.load(open(repo + "/docs/build/reports/2026-11-19-fp-verify-host-derivation-smoke1.json"))
+r5 = json.load(open(repo + "/docs/build/reports/2026-11-16-fp-egress-allowlist-freeze-epoch-5.json"))
+r4 = json.load(open(repo + "/docs/build/reports/2026-11-16-fp-egress-allowlist-freeze-epoch-4.json"))
+delta = set(r5["list"]["verify"]) - set(r4["list"]["verify"])
+assert set(d["hosts"]) == delta, (set(d["hosts"]), delta)
+excluded = {x["host"] for x in d["non_verify_denies"]}
+assert "download.pytorch.org" in excluded, excluded
+assert not (excluded & delta), "a derived host sits in the excluded leg"
+assert d["na"] is None, d["na"]
+PY
+
 if [ "$FAIL" -ne 0 ]; then
   echo "fp-allowlist-amendment-epoch5: FAIL"
   exit 1

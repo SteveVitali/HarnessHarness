@@ -23,8 +23,6 @@ crates/hh-eval/src/bin/fp_select.rs	const EXCLUSION_PATH: &str = "docs/build/rep
 crates/hh-eval/src/bin/fp_select.rs	const SELECTION_PATH: &str = "docs/build/reports/2026-11-08-fp-selection.json";	# emitter output destination for the committed record — a write path, never opened as a checkout read
 crates/hh-eval/src/bin/fp_select.rs	const COMMIT_PATH: &str = "docs/build/reports/2026-11-08-fp-select-commit.json";	# emitter output destination for the committed record — a write path, never opened as a checkout read
 crates/hh-eval/src/bin/fp_select.rs	const COMPARATIVE_PATH: &str = "docs/build/reports/2026-11-08-fp-w1-comparative-quote.json";	# emitter output destination for the committed record — a write path, never opened as a checkout read
-crates/hh-runner/src/bin/fp_e_emit.rs	                            Json::str("docs/build/readouts/GATE-G29.md"),	# string literal or comment in test/source; never opened as a checkout path
-crates/hh-runner/src/bin/fp_e_emit.rs	                            Json::str("docs/build/reports/2026-11-10-fp-prereg.json"),	# string literal or comment in test/source; never opened as a checkout path
 crates/hh-runner/src/bin/fp_results.rs	        let scan_rel = "docs/build/reports/2026-11-19-fp-answer-scan.json";	# committed build-record read — declared fp-emitter-battery input; the committed record is the emit/test subject (I-3 allowlist, GATE-G32 ruling)
 crates/hh-runner/src/bin/fp_results.rs	        let review_rel = "docs/build/reports/2026-11-19-fp-flagged-review.json";	# emitter output destination for the committed record — a write path, never opened as a checkout read
 crates/hh-runner/src/bin/fp_results.rs	            "docs/build/readouts/HUMAN-H16.md",	# string literal or comment in test/source; never opened as a checkout path
@@ -49,12 +47,6 @@ crates/hh-runner/src/bin/fp_results.rs	        "docs/build/reports/2026-11-19-fp
 crates/hh-runner/src/fp_results.rs	            Json::str("docs/build/reports/2026-11-19-fp-seal-open.json"),	# string literal or comment in test/source; never opened as a checkout path
 crates/hh-runner/src/fp_results.rs	            Json::str("docs/build/reports/2026-11-19-fp-answer-scan.json"),	# string literal or comment in test/source; never opened as a checkout path
 crates/hh-runner/src/fp_results.rs	        ("readout", Json::str("docs/build/readouts/HUMAN-H16.md")),	# string literal or comment in test/source; never opened as a checkout path
-crates/hh-runner/tests/r6_46.rs	                "docs/build/reports/compute/harvest/fp-ws1/",	# string literal or comment in test/source; never opened as a checkout path
-crates/hh-runner/tests/r6_46.rs	            r#"{"based_on":"docs/build/reports/2026-11-08-fp-w4-quote.json",	# string literal or comment in test/source; never opened as a checkout path
-crates/hh-runner/tests/r6_46.rs	                "rate_table":{"path":"docs/build/reports/live/pricing.json","sha256":"x"}}"#,	# string literal or comment in test/source; never opened as a checkout path
-crates/hh-runner/tests/r6_46.rs	            r#"{"t":50,"k":1,"measure_ref":"docs/build/reports/2026-11-19-fp-ws1-measurement.json",	# string literal or comment in test/source; never opened as a checkout path
-crates/hh-runner/tests/r6_46.rs	                "prior_refs":{"hh_native":"docs/build/reports/2026-11-10-fp-prereg.json",	# string literal or comment in test/source; never opened as a checkout path
-crates/hh-runner/tests/r6_46.rs	                              "v5":"docs/build/reports/2026-11-10-fp-prereg.json"},	# string literal or comment in test/source; never opened as a checkout path
 crates/hh-runner/tests/r6_48.rs	            "docs/build/readouts/GATE-G29.md".into(),	# string literal or comment in test/source; never opened as a checkout path
 crates/hh-runner/tests/r6_48.rs	            path: "docs/build/reports/2026-11-19-fp-ws1-trials.json".into(),	# string literal or comment in test/source; never opened as a checkout path
 crates/hh-runner/tests/r6_48.rs	            record: load_repo("docs/build/reports/2026-11-19-fp-ws1-trials.json"),	# committed build-record read — declared fp-emitter-battery input; the committed record is the emit/test subject (I-3 allowlist, GATE-G32 ruling)
