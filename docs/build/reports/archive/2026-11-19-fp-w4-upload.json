@@ -1,0 +1,34 @@
+{
+  "basis": "GATE-G30 recorded PASSED \u2014 re-scope{end-first-pass-early} (docs/build/readouts/GATE-G30.md, operator verbatim 2026-11-19T01:54Z): the FP-E quote admits zero executable work, W4 is skipped, and no W4 harvest exists. There is nothing to upload; the typed outcome is n/a{scope_end}, never a fabricated upload.",
+  "commands": [],
+  "dataset": {
+    "repo": "SteveVitali/harnessharness-archive",
+    "revision": "main",
+    "visibility": "private"
+  },
+  "files": [],
+  "kind": "upload",
+  "phase": "fp",
+  "provided": {
+    "HF_WRITE_TOKEN": "no"
+  },
+  "recipe": {
+    "git_head": "38693dc61c486d47fcbb81c4d7fbc3dce41c0346",
+    "path": "scripts/hf-upload.sh",
+    "sha256": "2f0c75a2d0e5c96e1a9c60a550d81e4f7570983cd979c0df88b30611fb58fe84"
+  },
+  "recorded_at": "2026-11-19T02:04:14Z",
+  "schema": "hh-archive-upload/1",
+  "status": "n/a{scope_end}",
+  "ticket": "R6.47",
+  "tool": {
+    "admission": "ADR-0437",
+    "name": "hf",
+    "package": "huggingface_hub",
+    "scope": "one private HF dataset repository",
+    "token_handling": "HF_TOKEN env per invocation; no login",
+    "version": "not invoked"
+  },
+  "verification": "n/a{scope_end}",
+  "window": "w4"
+}

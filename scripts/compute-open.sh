@@ -29,6 +29,8 @@ def pw(path):
         d = json.load(open(path))
     except Exception:
         return None
+    if not isinstance(d, dict):  # non-receipt JSON (e.g. a diff list) is not a receipt
+        return None
     if d.get("schema") != "hh-compute-receipt/1":
         return None
     return (d.get("phase"), d.get("window"), d.get("kind"), path)
