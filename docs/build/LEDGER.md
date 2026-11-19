@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket: R6.50
-lastCompleted:   GATE-G31
+nextTicket: CAP6.1
+lastCompleted:   HUMAN-H18
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-r6.49
+chainTip:        codex/harnessharness-r6.50
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           6
 harness:         devin-cli/swe-2-high/subagent
-updatedAt:       2026-11-19T03:52Z
+updatedAt:       2026-11-19T04:45Z
 ```
 
 ## OPEN FINDINGS
@@ -1343,6 +1343,9 @@ updatedAt:       2026-11-19T03:52Z
 
 ## PHASE LOG — Round 6
 
+- 2026-11-19T04:45Z · **HUMAN-H18 done — billing reconcile PASSED (manifest 320)** — operator console "$4.52 Ollama month-to-date" confirmed identical via provider usage API (trailing 7d/30d = $4.52). Entries: W1 within · W2 model within / compute unavailable · W3 compute unavailable / model N/A (model_line none) · Wc model within / compute unavailable · W4 N/A{unused scope_end, deletion receipt 02:01:58Z}. GCP billed compute has no API read (project deleted, no export) — recorded `unavailable`, not fabricated; CAP6.2 folds. nextTicket → CAP6.1 · devin-cli/swe-2-high/coordinator
+- 2026-11-19T04:25Z · **HUMAN-H17 done — dataset visibility flip PASSED (manifest 318)** — operator verbatim "you do everything via HF_TOKEN" authorized agent execution: card `50c417b3…` uploaded to `SteveVitali/harnessharness-archive` (commit a11591e9), `PUT settings {private:false}` confirmed `private: false` at 04:23Z; post-flip revision **`a11591e931442908c34a5bc7a65e8e664f4752d7`** pinned; token provided yes/never stored. Superseding publication records `*-flip.json` (visibility public) emitted; DF-R6.50-1 discharged. nextTicket → HUMAN-H18 · devin-cli/swe-2-high/coordinator
+- 2026-11-19T04:10Z · **R6.50 done — first-pass publication records (manifest 319; offline, $0)** — branch `codex/harnessharness-r6.50` (PR #416) · base `codex/harnessharness-r6.49`. Two append-only `hh-site-publication/1` records land for GATE-G31's verbatim scope: `docs/results/publication/phase-3-2026-11-19.json` (a363530c…; pins p3-l1/p3-l2/p3-l3) + `phase-4-2026-11-19.json` (17cf9784…; pins p4-fp) — both cite the gate readout, both scans + card revision, carry labels + `dataset_flip: pending{human_h17}`; phase-2's premature G31 mapping dropped (fails closed until its own gate); site publishes phase-3/4 w/ `published — GATE-G31` tile; check-site gains record/page-disagreement leg. DF-R6.50-1 OPEN (H17 withholds transcript viewer + public dataset). Verify: check-publication 3 valid · check-site 15/15 ×4 profiles incl. --head · position 14 legs · 8 site batteries green. chainTip → codex/harnessharness-r6.50 · nextTicket → HUMAN-H17 · engineered (offline, $0.00) · devin-cli/swe-2-high/subagent
 - 2026-11-19T03:52Z · **GATE-G31 done — first-pass publication PASSED — publish (manifest 317)** — verbatim rulings: scope "yes, publish" (presented scope, packets pinned); Q-X43 "(b) links only"; task-derived policy "sanitized publish only"; Q-H1-6 "I've read hugging face and ollama terms". Dataset flip stays a separate act — HUMAN-H17 next after R6.50. nextTicket → R6.50 · devin-cli/swe-2-high/coordinator
 - 2026-11-19T03:40Z · **R6.49 done — site phase-3/4 freeze (manifest 316; offline, $0)** — branch `codex/harnessharness-r6.49` (PR #415) · base `codex/harnessharness-r6.48`. `fp_results freeze` mints `hh-flagged-review/1` (b4637868…) applying HUMAN-H16 verbatim — 35 flagged → 35 cleared, "the confirmed count is a minimum", unreviewed flag vetoes at emit; 5 frozen packets byte-identical to R6.48's except `{freeze,review}` members (r6_49 5/5); withholds preserved verbatim (`window_deadline`/`budget`/`admission:AG3`/`protected_pair_truncated{k<5,R<5}`); site phase-3/4 pages render real withheld structure w/ per-member provenance (REQ-XH-020); REQ-XH-105 prereqs: contamination scan `clean` + dataset card staged (H17 flip left to operator). Verify: check-fp-results all OK · check-site 15/15 (internal/public/--head) · site batteries green · fmt/scoped clippy. Drift recorded: base clippy fp_e_emit.rs:189 (pre-existing); validator 2 inherited violations. chainTip → codex/harnessharness-r6.49 · nextTicket → GATE-G31 · engineered (offline, $0.00) · devin-cli/swe-2-high/subagent
 - 2026-11-19T03:15Z · **HUMAN-H16 done — flagged-pass review PASSED (manifest 315)** — reviewer operator, verbatim "Looks good to me, please continue" over the 35-flag table (all `scored_state: clean`, `fingerprint:solution` hits on executed trials): 35 cleared / 0 confirmed / 35 reviewed, "the confirmed count is a minimum"; masking `harness_masked`. Readout `docs/build/readouts/HUMAN-H16.md`. Results freeze unblocked for R6.49. nextTicket → R6.49 · engineered (offline, $0.00) · devin-cli/swe-2-high/coordinator

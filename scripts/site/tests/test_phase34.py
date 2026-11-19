@@ -14,7 +14,9 @@ generator/test level):
               REQ-XH-122's label with ε and N; withheld stays typed
               (never 'parity-verified baseline')                (AC-5)
   goldens     the three verdict renders byte-equal committed      (AC-2)
-  public      phase-3/4 render publication-pending, no values    (AC-7)
+  public      under GATE-G31's committed records the public profile
+              renders the pinned phase-3/4 pages; an unpinned input
+              set is refused                                  (AC-7)
   withheld    withheld{l1_not_passed} renders as a typed outcome with
               the same structure as computed ones        (REQ-XH-020)
   mutations   'parity-verified baseline' on a phase-3 page fails;
@@ -110,7 +112,10 @@ def _page(tmp, profile="internal", fixture=False):
     out = Path(tmp) / ("site-" + profile)
     cfg = _fixture_cfg(tmp) if fixture else None
     inputs, digest, bodies = build.emit_bodies(cfg_path=cfg)
-    pubs = build.load_publications(inputs)
+    # a fixture cfg is a test render, not the deployable input set —
+    # the committed records pin the real set, so it carries none
+    # (REQ-XF-129); leg_public proves the refusal on the same cfg.
+    pubs = [] if fixture else build.load_publications(inputs)
     sitepages.build(out, inputs, digest, bodies, profile=profile,
                     publications=pubs)
     return {str(p.relative_to(out)): p.read_text()
@@ -245,17 +250,34 @@ def leg_baseline():
 
 # ── public profile + withheld structure ────────────────────────────────
 def leg_public(tmp):
+    # GATE-G31's committed records pin the phase-3/4 input sets — the
+    # public profile renders the real frozen pages verbatim (typed
+    # withholds at full prominence), never a fixture value.
     texts = _page(tmp, profile="public")
     for rel in ("phase-3/index.html", "phase-4/index.html"):
         t = texts.get(rel, "")
         if not t:
             fail("public", "%s absent from public build" % rel)
             continue
-        if "publication gate pending" not in t:
-            fail("public", "%s not publication-pending" % rel)
-        if "fixture" in t or FP_LABEL in t:
-            fail("public", "%s leaks fixture/first-pass content" % rel)
-    ok("public", "phase-3/4 publication-pending in public profile")
+        if "publication gate pending" in t:
+            fail("public", "%s gate-pending under a pinning record"
+                 % rel)
+        if FP_LABEL not in t or "withheld{" not in t:
+            fail("public", "%s lacks first-pass label/typed withholds"
+                 % rel)
+        if "fixture ·" in t or "fixture-labelled" in t:
+            fail("public", "%s leaks fixture content" % rel)
+    # a cfg the records do not pin is refused, never partially
+    # published (REQ-XF-129).
+    cfg = _fixture_cfg(tmp)
+    inputs, _d, _b = build.emit_bodies(cfg_path=cfg)
+    try:
+        build.load_publications(inputs)
+        fail("public", "fixture cfg accepted — the records pin the "
+             "real input set, not the fixture spelling")
+    except values.Refusal:
+        ok("public-refusal", "unpinned input set refused (REQ-XF-129)")
+    ok("public", "phase-3/4 record-pinned in public profile")
 
 
 def leg_withheld(tmp):

@@ -1,0 +1,42 @@
+{
+  "schema": "hh-site-publication/1",
+  "phase": "phase-4",
+  "pages": [
+    "/phase-4/"
+  ],
+  "inputs": [
+    {
+      "path": "docs/build/reports/2026-11-19-fp-results-p4-fp-frozen.json",
+      "sha256": "5c425c1a462246fd702f77b80a4ed5a27f1a3f9a6601481cdefc79ae8707cecd"
+    }
+  ],
+  "inputs_digest": "sha256:937aa94c7b0012aae21893746bb3dfd3c4b96bb1cdfe137b37150af84229ae16",
+  "gate_row": "317 GATE-G31 (317_GATE-G31__pub-fp.md)",
+  "readout": "docs/build/readouts/GATE-G31.md",
+  "labels": {
+    "evidence_class": "recorded execution",
+    "outside_verified": false
+  },
+  "dataset": {
+    "visibility": "private",
+    "revision": null,
+    "secret_scan_ref": null,
+    "contamination_scan_ref": null
+  },
+  "dataset_flip": "pending{human_h17}",
+  "scan_refs": [
+    {
+      "path": "docs/build/reports/2026-11-19-fp-answer-scan.json",
+      "sha256": "f836343a99c056a0567fb2027fb4c9f9db0f90f6728765bc2cb75bddf0b13853"
+    },
+    {
+      "path": "docs/build/reports/2026-11-19-fp-contamination-scan.json",
+      "sha256": "421399fd7025375b288ce7cc01ecd8cde39bb75ee0942a8996e90647f8284cdd"
+    }
+  ],
+  "dataset_card_ref": {
+    "path": "docs/build/reports/2026-11-19-fp-dataset-card.md",
+    "sha256": "50c417b3c252bafffdae7f460e6d83572ef197fec6d313f0b7cd8d3e7212737a"
+  },
+  "recorded_at": "2026-11-19"
+}

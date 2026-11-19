@@ -71,7 +71,9 @@ def _page(tmp, profile="internal", fixture=False):
     out = Path(tmp) / ("site-" + profile)
     cfg = _fixture_cfg(tmp) if fixture else None
     inputs, digest, bodies = build.emit_bodies(cfg_path=cfg)
-    pubs = build.load_publications(inputs)
+    # a fixture cfg is a test render — the committed records pin the
+    # real input set, so it carries no publications (REQ-XF-129).
+    pubs = [] if fixture else build.load_publications(inputs)
     sitepages.build(out, inputs, digest, bodies, profile=profile,
                     publications=pubs)
     texts = {str(p.relative_to(out)): p.read_text()

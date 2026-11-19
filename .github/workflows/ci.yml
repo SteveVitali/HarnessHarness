@@ -120,6 +120,7 @@ jobs:
           bash scripts/ci/test-check-position.sh
           bash scripts/ci/test-check-trace.sh
           bash scripts/ci/test-check-site.sh
+          python3 scripts/site/tests/test_publication_relocations.py
           bash scripts/ci/test-check-pages-workflow.sh
           bash scripts/ci/test-gen-revisit-triggers.sh
           bash scripts/ci/test-publish-order.sh

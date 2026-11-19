@@ -12,7 +12,7 @@ None of the rows below is an agent act (REQ-XF-130).
 ## Before the record
 
 - [ ] The phase's manifest **gate row is `PASSED` by the operator** —
-      GATE-G22 (phase-1) / GATE-G31 (phase-2 first-pass) — and the
+      GATE-G22 (phase-1) / GATE-G31 (first pass — phases 3–4) — and the
       readout under `docs/build/readouts/` names the gate and carries
       the operator's verbatim decision. The record references the
       readout; it never copies it.

@@ -277,17 +277,24 @@ behind it, its limits, and the access or exit route.
 
 - **State:** Available — internal record; not outside-verified
 - **Scope:** the public results site at the recorded project URL —
-  the pinned phase-1 pages (`/phase-1/`, `/phase-1/tasks/`) and the
-  always-present pages (home, method, spend, limits, changelog,
-  data, about). Phases 2–4 render their designed absent states:
-  "not yet published — publication gate pending", no numbers.
+  the pinned phase-1 pages (`/phase-1/`, `/phase-1/tasks/`), the
+  first-pass phase-3/4 pages (`/phase-3/`, `/phase-4/` — every
+  outcome a typed withhold) and the always-present pages (home,
+  method, spend, limits, changelog, data, about). Phase 2 renders
+  its designed absent state: "not yet published — publication gate
+  pending", no numbers.
 - **Evidence:** the committed
-  [`hh-site-publication/1` record](results/publication/phase-1-2026-11-09.json)
-  pins the phase-1 input set (`inputs_digest`
-  `sha256:15f819883d372ebe…`) and references the
-  [GATE-G22 readout](build/readouts/GATE-G22.md); `check-site.sh`
-  (every profile and `--head`) verifies the rendered claims and
-  provenance.
+  [`hh-site-publication/1` records](results/publication/) — phase-1
+  pinned by
+  [phase-1-2026-11-09.json](results/publication/phase-1-2026-11-09.json)
+  (`inputs_digest` `sha256:15f819883d372ebe…`,
+  [GATE-G22](build/readouts/GATE-G22.md)), phases 3–4 pinned by
+  [phase-3-2026-11-19.json](results/publication/phase-3-2026-11-19.json)
+  and
+  [phase-4-2026-11-19.json](results/publication/phase-4-2026-11-19.json)
+  ([GATE-G31](build/readouts/GATE-G31.md) `PASSED — publish`,
+  presented scope); `check-site.sh` (every profile and `--head`)
+  verifies the rendered claims and provenance.
 - **Limits:** internal record; not outside-verified — public
   visibility upgrades nothing (no capability or evidence label is
   earned by the deploy). Deployment follows only the operator's
@@ -295,7 +302,49 @@ behind it, its limits, and the access or exit route.
   back, never assumed.
 - **Access:** <https://stevevitali.github.io/HarnessHarness/> —
   a phase without a publication record stays publication-gate
-  pending; the dataset stays private.
+  pending; the dataset stays private (transcripts links-only,
+  HUMAN-H17 pending).
+
+### Card — HIR parity, first pass [hir-parity]
+
+- **State:** Available — internal record; not outside-verified
+- **Scope:** the pinned `/phase-3/` page — the L1 conformance
+  record (`hh-l1-conformance/1`, report id
+  `l1-pass:sha256:80bfafee35ac9dd6…`, result `pass`, the packet's
+  own label "L1 precondition gate — not parity evidence"), the
+  L2 typed verdict
+  `withheld{window_deadline}:protected_pair_truncated{k<5,R<5}`
+  and the L3 descriptive trace shape under the same typed
+  withhold.
+- **Evidence:** the committed
+  [`hh-site-publication/1` record](results/publication/phase-3-2026-11-19.json)
+  pins the phase-3 input set and references the
+  [GATE-G31 readout](build/readouts/GATE-G31.md); the page renders
+  the frozen packets' members verbatim with per-member provenance.
+- **Limits:** internal record; not outside-verified — the L2/L3
+  verdicts are withheld (window deadline; the protected-pair floor
+  k ≥ 5, R ≥ 5 unmet); no parity, equivalence or baseline claim is
+  made.
+- **Access:** <https://stevevitali.github.io/HarnessHarness/phase-3/>
+
+### Card — Configuration sweep, first pass [config-sweep]
+
+- **State:** Available — internal record; not outside-verified
+- **Scope:** the pinned `/phase-4/` page — the first-pass
+  configuration packet whose `packet_disposition` is the typed
+  withhold
+  `withheld{window_deadline}:protected_pair_truncated{k<5,R<5}`
+  (hh_native `withheld{window_deadline}`, v5 `withheld{budget}`).
+- **Evidence:** the committed
+  [`hh-site-publication/1` record](results/publication/phase-4-2026-11-19.json)
+  pins the phase-4 input set and references the
+  [GATE-G31 readout](build/readouts/GATE-G31.md); the page renders
+  the frozen packet's members verbatim with per-member
+  provenance.
+- **Limits:** internal record; not outside-verified — every arm
+  and the packet outcome are withheld; the exploratory family is
+  descriptive and nothing confirmatory is claimed.
+- **Access:** <https://stevevitali.github.io/HarnessHarness/phase-4/>
 
 ### Card — Optional packaged component [component]
 

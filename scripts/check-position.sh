@@ -293,6 +293,8 @@ REQUIRED = {
     "contribute": "Available",
     "replay-record": "Available",
     "results-site": "Available",
+    "hir-parity": "Available",
+    "config-sweep": "Available",
 }
 if ev:
     for key, want in REQUIRED.items():
@@ -407,30 +409,36 @@ if ev and "study" in cards:
     sect = [s for s in ev.split("### Card — ")[1:] if "[study]" in s.split("\n")[0]]
     if not sect or "phase1-execution-surface-replay.md" not in sect[0].split("\n### ")[0]:
         fail("record", "the study card does not link the record")
-# the [results-site] card carries the cap and its Available state
-# follows the first committed publication record (§9.6 register)
-if ev and "results-site" in cards:
+# the publication cards (§9.6 register) each carry the cap, link a
+# committed hh-site-publication/1 record and the site URL; an Available
+# state follows the first committed record for its phase ([results-site]
+# any record, [hir-parity] phase-3, [config-sweep] phase-4 — R6.50)
+for key, ph in (("results-site", None), ("hir-parity", "phase-3"),
+                ("config-sweep", "phase-4")):
+    if not (ev and key in cards):
+        continue
     sect = [s for s in ev.split("### Card — ")[1:]
-            if "[results-site]" in s.split("\n")[0]]
+            if "[%s]" % key in s.split("\n")[0]]
     if not sect:
-        fail("record", "[results-site] card section absent")
-    else:
-        body = sect[0].split("\n### ")[0].split("\n## ")[0]
-        if "internal record; not outside-verified" not in \
-                cards["results-site"][1]:
-            fail("record", "[results-site] promoted beyond the cap "
-                           "'internal record; not outside-verified'")
-        if "results/publication/" not in body:
-            fail("record", "[results-site] does not link a "
-                           "publication record")
-        if SITE_URL not in body:
-            fail("record", "[results-site] does not name the site URL")
-if cards.get("results-site") and \
-        cards["results-site"][1].startswith("Available") and \
-        not pub_records:
-    fail("record", "[results-site] reads Available with no committed "
-                   "hh-site-publication/1 record — the transition "
-                   "follows the first record")
+        fail("record", "[%s] card section absent" % key)
+        continue
+    body = sect[0].split("\n### ")[0].split("\n## ")[0]
+    if "internal record; not outside-verified" not in cards[key][1]:
+        fail("record", "[%s] promoted beyond the cap "
+                       "'internal record; not outside-verified'" % key)
+    if "results/publication/" not in body:
+        fail("record", "[%s] does not link a publication record" % key)
+    if SITE_URL not in body:
+        fail("record", "[%s] does not name the site URL" % key)
+    if cards[key][1].startswith("Available"):
+        if ph is None and not pub_records:
+            fail("record", "[results-site] reads Available with no "
+                           "committed hh-site-publication/1 record — "
+                           "the transition follows the first record")
+        if ph is not None and not any(
+                f.startswith(ph + "-") for f in pub_records):
+            fail("record", "[%s] reads Available with no committed %s "
+                           "publication record" % (key, ph))
 
 # ── record-surface bans (RECORD_BANNED over record + evidence + spine) ──
 if ev:
