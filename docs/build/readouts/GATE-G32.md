@@ -1,5 +1,5 @@
 # GATE-G32 readout — Round-6 acceptance
-Status: PENDING   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
+Status: PASSED   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
 
 > Milestone gate. The chain STOPS until the operator dispositions the list for signature. Agents
 > never sign, tick or infer approval; old acceptance (GATE-G17) never substitutes.
@@ -63,3 +63,24 @@ your words now or it stays open**.
 An `inconclusive`/`withheld` first-pass outcome is acceptable as recorded; no threshold moved.
 
 ## Signature   <!-- appended at signing; nothing above is edited or deleted -->
+## Signature   <!-- appended at signing; nothing above is edited or deleted -->
+
+- **Operator:** Steve Vitali · **UTC:** 2026-11-19T06:15Z · **Channel:** operator CLI session.
+- **Verbatim rulings** (in the operator's own words, applied per the readout's stated semantics —
+  a waiver = operator-accepted deviation, recorded verbatim, never marked satisfied):
+  - **(a) accepted deviations + (c) waivers 1–4:** "I'm okay with these deviations and want to
+    proceed with them" — ACCEPTED: SR-18, reconcile placement, re-partition/tail-split, prereg
+    pin drift, seal-open byte-identical; waivers: REQ-XC-325 `unexecuted{no_executor}` WAIVED,
+    Ws1 estimate-over-ceiling ACCEPTED (5,250,954 vs 4,136,280 µ$ recorded verbatim), two-fold
+    compute-estimate variance ACCEPTED as folded, AR-08/AR-10 unminted WAIVED (R6A-2 records the
+    operator quote).
+  - **(c)5 CI repair (I-3):** "Fix with allowlist" — the check-ci-gating docs/build-literal span
+    repairs via allowlist entries (same class as the 25 existing fp_select.rs entries); repair
+    rides its own PR, gates Phase-B merges.
+  - **Operator-disk retention (REQ-XH-106):** "don't delete evidence if it's our only copy of it
+    and we might need it later" — RETAIN the retained harvest trees.
+  - **(b) owed legs:** all `withheld{…}` tokens + BL-50 carried verbatim as recorded.
+- **Decision:** **PASSED — Round-6 accepted as recorded.** Every row dispositioned; none left
+  unsigned. `accepted_scope` set ⇒ verdict ≤ MET-ENGINEERED holds; routed ids accepted as
+  routing. An `inconclusive`/`withheld` first-pass outcome stands as recorded.
+- Layer: `signed` — operator act; expires/voids only by a later recorded operator decision.
