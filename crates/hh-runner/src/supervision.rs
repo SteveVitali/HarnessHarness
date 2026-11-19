@@ -738,6 +738,12 @@ impl Supervision {
         let mut proxy = ProxyCtl::spawn(proxy_bin, &Json::obj(cfg), &decl.proxy.child_env)?;
         proxy.store_root = PathBuf::from(&decl.proxy.store_root);
         proxy.run_id = decl.proxy.run_id.clone();
+        proxy
+            .listen
+            .rsplit(':')
+            .next()
+            .and_then(|p| p.parse::<u16>().ok())
+            .ok_or_else(|| err("proxy listen has no port"))?;
         // The cell loopback relay reaches the host proxy through model.sock
         // (ADR-0433; design/33 §1.1). Its port is independent of the host's
         // listener: an OS-assigned host port may be in the registered band.
