@@ -75,3 +75,12 @@ description = "R6.42 fp-partition/dev-projection records: generic-api-key false 
 condition = "AND"
 rules = ["generic-api-key"]
 paths = ['''^docs/build/reports/2026-11-11-fp-partition\.json$''', '''^docs/build/reports/2026-11-11-fp-dev-projection\.json$''']
+
+[[allowlists]]
+description = "R6.52c order_key scheduling SHA-256 digests recomputed from public seed/task/replicate, not credentials; exact introducing commit, file and field format only"
+condition = "AND"
+commits = ["b2a469ae3c891e7246f1dba1085bde5c68e1646c"]
+rules = ["generic-api-key"]
+paths = ['''^docs/build/reports/2026-11-19-fp-w4-window\.json$''']
+regexTarget = "match"
+regexes = ['''^order_key": "[0-9a-f]{64}"$''']
