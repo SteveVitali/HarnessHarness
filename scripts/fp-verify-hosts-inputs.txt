@@ -1,0 +1,24 @@
+# fp-verify-hosts emit inputs — the R6.51 smoke1 runtime evidence
+# (DF-R6.45l-1): the committed hh-smoke/1 record plus the retained
+# mediator stores, verify phase layers and cell reports (retained-store
+# paths; read only, cited by sha256 in the emitted record — never the
+# absolute path).
+window=smoke1
+smoke_record=docs/build/reports/smoke/2026-11-16-smoke1.json
+wal_prove-plus-comm/H-allow/r0=~/hh-retained/smoke1/harvest/run-root/trials/prove-plus-comm/H-allow/r0/mediator-store/runs/w1-hh-w1-prove-plus-comm-allow/events.wal
+policy_prove-plus-comm/H-allow/r0=~/hh-retained/smoke1/harvest/run-root/trials/prove-plus-comm/H-allow/r0/policy.json
+report_prove-plus-comm/H-allow/r0=~/hh-retained/smoke1/harvest/run-root/trials/prove-plus-comm/H-allow/r0/cell-report.json
+wal_pytorch-model-cli/H-allow/r0=~/hh-retained/smoke1/harvest/run-root/trials/pytorch-model-cli/H-allow/r0/mediator-store/runs/w1-hh-w1-pytorch-model-cli-allow/events.wal
+policy_pytorch-model-cli/H-allow/r0=~/hh-retained/smoke1/harvest/run-root/trials/pytorch-model-cli/H-allow/r0/policy.json
+report_pytorch-model-cli/H-allow/r0=~/hh-retained/smoke1/harvest/run-root/trials/pytorch-model-cli/H-allow/r0/cell-report.json
+wal_pytorch-model-cli/H-allow-diag/r0=~/hh-retained/smoke1/harvest/run-root/trials/pytorch-model-cli/H-allow-diag/r0/mediator-store/runs/w1-hh-w1-pytorch-model-cli-allow/events.wal
+policy_pytorch-model-cli/H-allow-diag/r0=~/hh-retained/smoke1/harvest/run-root/trials/pytorch-model-cli/H-allow-diag/r0/policy.json
+report_pytorch-model-cli/H-allow-diag/r0=~/hh-retained/smoke1/harvest/run-root/trials/pytorch-model-cli/H-allow-diag/r0/cell-report.json
+wal_query-optimize/H-allow/r0=~/hh-retained/smoke1/harvest/run-root/trials/query-optimize/H-allow/r0/mediator-store/runs/w1-hh-w1-query-optimize-allow/events.wal
+policy_query-optimize/H-allow/r0=~/hh-retained/smoke1/harvest/run-root/trials/query-optimize/H-allow/r0/policy.json
+report_query-optimize/H-allow/r0=~/hh-retained/smoke1/harvest/run-root/trials/query-optimize/H-allow/r0/cell-report.json
+report_query-optimize/H-pub/r0=~/hh-retained/smoke1/harvest/run-root/trials/query-optimize/H-pub/r0/cell-report.json
+wal_torch-tensor-parallelism/H-allow/r0=~/hh-retained/smoke1/harvest/run-root/trials/torch-tensor-parallelism/H-allow/r0/mediator-store/runs/w1-hh-w1-torch-tensor-parallelism-allow/events.wal
+policy_torch-tensor-parallelism/H-allow/r0=~/hh-retained/smoke1/harvest/run-root/trials/torch-tensor-parallelism/H-allow/r0/policy.json
+report_torch-tensor-parallelism/H-allow/r0=~/hh-retained/smoke1/harvest/run-root/trials/torch-tensor-parallelism/H-allow/r0/cell-report.json
+out=docs/build/reports/2026-11-19-fp-verify-host-derivation-smoke1.json
