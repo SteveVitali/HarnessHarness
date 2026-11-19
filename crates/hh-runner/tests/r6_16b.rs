@@ -9,8 +9,10 @@
 //! and the supervised drive end-to-end.
 
 use std::collections::BTreeMap;
+use std::net::{Ipv4Addr, SocketAddr, TcpListener};
 use std::path::{Path, PathBuf};
 
+use hharness_env::egress_allowlist::MODEL_RELAY_PORT_MIN;
 use hharness_ledger::event::{Event, Producer, Scope};
 use hharness_ledger::manifest::{RunKind, RunManifest};
 use hharness_ledger::store::Store;
@@ -356,6 +358,14 @@ fn ac7_mediator_spawn_ready_and_stop() {
 #[test]
 fn ac9_supervised_drive_tokens_grants_and_credential_confinement() {
     let root = tmp("sup");
+    // A host proxy may use a registered-range port. The cell's independent
+    // relay must still use the dynamic/private band (ADR-0433).
+    let host_addresses: Vec<_> = (10_000..MODEL_RELAY_PORT_MIN)
+        .map(|port| SocketAddr::from((Ipv4Addr::LOCALHOST, port)))
+        .collect();
+    let host_reservation = TcpListener::bind(host_addresses.as_slice()).unwrap();
+    let host_address = host_reservation.local_addr().unwrap();
+    drop(host_reservation);
     let prior_root = root.join("prior-proxy");
     prior_ledger(&prior_root, "proxy-W0");
     // The supervision declaration — as a Json member, the same spelling
@@ -370,7 +380,7 @@ fn ac9_supervised_drive_tokens_grants_and_credential_confinement() {
                     Json::str(root.join("proxy").display().to_string()),
                 ),
                 ("run_id", Json::str("proxy-W1")),
-                ("listen", Json::str("127.0.0.1:0")),
+                ("listen", Json::str(host_address.to_string())),
                 (
                     "lane",
                     Json::obj([
@@ -418,6 +428,9 @@ fn ac9_supervised_drive_tokens_grants_and_credential_confinement() {
     let decl = SupervisionDecl::from_json(&decl_json).unwrap();
     let pbin = proxy_bin();
     let mut sup = Supervision::open(&decl, &pbin, None).unwrap();
+    assert_eq!(sup.proxy.listen, host_address.to_string());
+    assert!(host_address.port() < MODEL_RELAY_PORT_MIN);
+    assert_eq!(sup.model_port, MODEL_RELAY_PORT_MIN);
     // The folded carry-in is the declared ledger's mechanical sum —
     // refused rows would have stopped the open.
     assert_eq!(sup.prior_windows.len(), 1);
@@ -425,6 +438,10 @@ fn ac9_supervised_drive_tokens_grants_and_credential_confinement() {
     // Slot open — the token + grants + env projection.
     let stamp = sup.slot_open("slot-live-1").unwrap();
     let env = stamp.get("env").map(obj).unwrap();
+    assert_eq!(
+        env.get("OPENAI_BASE_URL").and_then(Json::as_str),
+        Some(format!("http://127.0.0.1:{MODEL_RELAY_PORT_MIN}/v1").as_str())
+    );
     // DF-R6.7-1: no cell-env member carries the upstream credential;
     // the model routing credential is the slot token only.
     for (k, v) in env {
