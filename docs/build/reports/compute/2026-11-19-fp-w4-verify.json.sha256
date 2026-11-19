@@ -1,0 +1,2 @@
+e1bebfce1469cbf449451ace4fe87199e656c96f93672ddbd74e6fa5489ea387  docs/build/reports/compute/2026-11-19-fp-w4-verify.json
+# recompute: shasum -a 256 -c docs/build/reports/compute/2026-11-19-fp-w4-verify.json.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)

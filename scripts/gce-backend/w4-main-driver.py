@@ -45,7 +45,7 @@ PROTECTED = ["mini-swe-agent", "hh_native"]
 # measured trials of an arm land (the continuation rule's own prior leg).
 P_HAT_PRIOR = {"mini-swe-agent": 386_163, "hh_native": 374_000, "v5": 374_000}
 T_HAT_PRIOR = {"mini-swe-agent": 477_792, "hh_native": 477_792, "v5": 477_792}
-PROBE_SLICE_MICROS = 50_000
+PROBE_SLICE_MICROS = 250_000
 
 def eprint(*a): print(*a, file=sys.stderr)
 
@@ -295,9 +295,10 @@ def launch_member(a, sess, m, slot_dir):
         cmd = [a.l1_drive_bin, "--store-root", os.path.join(slot_dir, "store"),
                "--workspace-root", stage, "--holder", "hh-native",
                "--definition", docf, "--override", ovf,
-               "--environment", json.dumps({"connection_info": conn}),
+               "--environment", json.dumps({"kind": "connection_info",
+                                            "connection_info": conn}),
                "--instruction", inst,
-               "--endpoint", f"http://127.0.0.1:{a.model_upstream}",
+               "--endpoint", f"http://127.0.0.1:{a.model_upstream}/v1",
                "--model", a.model, "--mswea-pack", a.mswea_pack,
                "--pack-reasoning",
                "drop" if arm == "v5" else "provider_specific_fields",
@@ -463,7 +464,13 @@ def main():
             results[sid] = row
             measured_costs[m["arm"]].append(row["cost_micros"])
             measured_walls[m["arm"]].append(row["wall_ms"])
-            if m["arm"] in ("hh_native", "v5") and len(infra_native) < 3:
+            # the lane-hold probe measures the hh_native lane only — a v5
+            # slot's own doc/participant failure (e.g. the sealed level
+            # doc's selector defect surfacing as RefUnresolved in ~2 s,
+            # settling long before the first hh_native slot) must not
+            # stand in as a native-lane infra failure and withhold the
+            # protected pair (REQ-XH-124 names the native lane).
+            if m["arm"] == "hh_native" and len(infra_native) < 3:
                 infra_native.append(rc != 0 or row["cost_micros"] == 0)
             done.append(sid)
         for sid in done:
