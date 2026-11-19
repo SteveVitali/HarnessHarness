@@ -1,5 +1,5 @@
 # GATE-G31 readout — First-pass publication
-Status: PENDING   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
+Status: PASSED   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
 
 > Milestone gate. Pending operator review is RETURN PASS; a failed technical prerequisite is
 > blockedOn. Agents never sign or infer approval. A decision here authorizes publication acts only —
@@ -53,3 +53,19 @@ prominence (REQ-XH-020) are already on the frozen pages.
 <!-- agent-drafted:end -->
 
 ## Signature   <!-- appended at signing; nothing above is edited or deleted -->
+## Signature   <!-- appended at signing; nothing above is edited or deleted -->
+
+- **Operator:** Steve Vitali · **UTC:** 2026-11-19T04:05Z · **Channel:** operator CLI session.
+- **Decision:** `PASSED — publish` (presented scope: phase-3/4 first-pass pages pinned to the five
+  frozen packets `a8485bd8…`/`01db3d7f…`/`9869c904…`/`eb7ac3a1…`/`5c425c1a…`; every outcome a
+  typed withhold verbatim).
+- **Verbatim rulings (REQ-XH-105's three + scope):**
+  - Scope: "yes, publish"
+  - Transcript option (Q-X43): "(b) links only" (verbatim ruling: "ok sure, let's do b and continue")
+  - Task-derived content policy: "sanitized publish only" (verbatim: "i guess sanitized publish only")
+  - Terms read (Q-H1-6): "I've read hugging face and ollama terms" (earlier HF-only statement
+    "yes i've read the HF terms" superseded by this verbatim covering both)
+- Agent-draft hash confirmed at signature: presentation block sha256 `c907c69c…` unchanged.
+- Dataset visibility flip remains a separate HUMAN act — **HUMAN-H17** — after both scans
+  (answer-scan `f836343a…`, contamination `421399fd…` `clean`) with card revision `50c417b3…`.
+- Layer: `signed` — operator act recorded; expires/voids only by a later recorded operator decision.
