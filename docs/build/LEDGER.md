@@ -16,7 +16,7 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket: (round-6 complete)
+nextTicket: R6.52 complete)
 lastCompleted:   DOC6.1
 blockedOn:       (none)
 pauseRequested:  false
@@ -34,7 +34,7 @@ autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           6
 harness:         devin-cli/swe-2-high/subagent
-updatedAt:       2026-11-19T07:25Z
+updatedAt:       2026-11-19T07:35Z
 ```
 
 ## OPEN FINDINGS
@@ -46,6 +46,8 @@ updatedAt:       2026-11-19T07:25Z
 
 - 2026-09-18 · **File-mutation anomaly confirmed (orchestrator + S1.23 worker) — tool-cache, not a second writer.** The S1.23 worker's `edit`-tool writes to `LEDGER.md` reported success but were absent at commit; the orchestrator then reproduced it: an `edit` reported success (insert before `## GATE DECISIONS`) yet `git status` stayed clean, and a subsequent `edit` failed `String not found` on a line `tail` proved present — the edit tool is serving a stale view of this file (cached from before the workers rewrote it), so its writes vanish. Shell writes (echo/python) persist normally. Unlike S1.9 there is no foreign content and no wholesale file replacement — not an external writer. **Operational rule going forward (upgraded 2026-09-18 after the S2.2 worker hit it a third time — same stale-view signature, no foreign content):** build-memory writes (`LEDGER.md`/`DEFERRALS.md`/`BUILD_INDEX.md`) MUST go through shell/python, and every such write is verified by `git diff` before commit; the `edit` tool is not to be used on those files. If foreign content or reverted files appear, re-open the concurrent-writer investigation.
 | GATE-G32 | 2026-11-19 | PASSED — accepted as recorded | verbatim: deviations+waivers "I'm okay with these deviations and want to proceed with them"; I-3 "Fix with allowlist"; retention "don't delete evidence if it's our only copy of it and we might need it later" | docs/build/readouts/GATE-G32.md |
+| GATE-G30-AMEND | 2026-11-19 | SUPERSEDED for W4 scope | verbatim: "amend the compute pool to run W4's admissible arms (protected pair + V5), record Pi/CC not_run{admission}" — ADR-0452 supersedes re-scope{end-first-pass-early} for W4 only; G30 stands in history | docs/adr/ADR-0452-w4-scope-amendment.md |
+
 
 
 - 2026-09-18 · **Foreign-writer sweep after S2.4 worker flag — clear.** The S2.4 worker saw live `claude --dangerously-skip-permissions` processes and non-persisting `edit` writes. Orchestrator sweep: all claude cwds resolve to other repos (Episteme ×4, Eleutheria, agent-discourse, Rhēma, `$HOME`, and the *main* MetaHarness checkout — none in `MetaHarness-harnessharness`); only `hh-helper` pid 4853 holds a cwd in the build worktree (a test-spawned leftover, not a writer). The non-persisting writes are the established `edit`-tool stale-view anomaly — rule already in force (shell/python + `git diff` for build-memory files).
@@ -1359,6 +1361,7 @@ updatedAt:       2026-11-19T07:25Z
 
 ## PHASE LOG — Round 6
 
+- 2026-11-19T07:35Z · **ADR-0452 + manifest inserts 325a–325c — operator supersedes GATE-G30 for W4** — verbatim ruling recorded: undelete `hh-fp-a1b2c3`, amend compute pool, run protected pair + V5, Pi/CC `not_run{admission}`; "increase the budget if that is a constraint". G30 disposition stands in history; supersession via dated ADR. nextTicket → R6.52 · devin-cli/swe-2-high/coordinator
 - 2026-11-19T07:25Z · **DOC6.1 done — documentation refresh (manifest 325; offline, $0)** — branch `codex/harnessharness-doc6.1` (PR #421) · base `codex/harnessharness-cap6.3`. refresh-repo-docs + agent-docs run: reader surfaces (README/status/evidence/reference/architecture/results) reconciled to the landed round (H17 public dataset a11591e9, flip records, G32 sums, landed binaries — withhelds verbatim, card states unchanged); AGENTS.md hierarchy gains R6 machinery rows + Round-7 entry points. Checkers: living-docs 554 · position 14/14 ×2 · examples/trace/contributing all green ×2 modes · site 15/15 ×2 · run-examples EX-01–04 · quickstart green · agent-docs detector 0 issues; stale fixed 4, gaps filled 2, verified 6, report-only 24. I-3 repair landed PR #420 (check-ci-gating 82/78 allowlisted). **Round-6 chain complete — all 325 manifest rows landed.** nextTicket → (round-6 complete) · engineered (offline, $0.00) · devin-cli/swe-2-high/subagent
 - 2026-11-19T07:00Z · **GATE-G32 done — Round-6 ACCEPTED (manifest 324)** — verbatim rulings: deviations+waivers accepted ("I'm okay with these deviations and want to proceed with them" — XC-325 waived, Ws1 over-ceiling + two-fold variance accepted, AR-08/10 waived); I-3 "Fix with allowlist"; disk retention RETAIN ("don't delete evidence if it's our only copy of it and we might need it later"). All signature rows dispositioned, none unsigned. nextTicket → DOC6.1 (final ticket) · devin-cli/swe-2-high/coordinator
 - 2026-11-19T06:05Z · **CAP6.3 done — spec reconciliation + integration plan (manifest 323; offline, $0)** — branch `codex/harnessharness-cap6.3` (PR #419) · base `codex/harnessharness-cap6.2`. 85 landed rows tagged in-spec/implied/ticket-added (no new ids); ADR parity 19/21 + 7 intervention + 2 record ADRs; **real gap: AR-08/AR-10 never minted** → R6A-2 mint-or-waive rides G32; spec sha256 re-verified frozen. Merge dry-run 13/13 clean onto main; stack CI read: #407–#413 pass, #414–#418 FAIL on check-ci-gating docs/build literals (diagnosed, repair = maintainer decision I-3). Integration order Phase A 407→408→409→410→411→413→412; Phase B holds 414–419 pending I-3. G32 staging verbatim: XC-325 waiver, Ws1 over-ceiling, two-fold variance, disk-retention, merge ordering, AR-08/10. nextTicket → GATE-G32 · engineered (offline, $0.00) · devin-cli/swe-2-high/subagent
