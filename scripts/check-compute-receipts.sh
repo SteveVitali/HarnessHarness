@@ -12,9 +12,19 @@ n=0
 c=0
 fail=0
 
+# Scope repair 2026-11-19 (DF-CAP6.1-5 / CAP6.2): the reports dir carries
+# non-compute window records (ws1-era hh-l1-conformance/1, hh-l1-corpus/1, an
+# empty-schema coverage record and a top-level-array refold-diffs record) —
+# this checker owns hh-compute-* schemas only. Non-dict JSON and non-compute
+# schemas are skipped with a note (they belong to other checkers); a record
+# claiming an hh-compute-* schema of an unknown variant still fails.
+skip=0
 for f in docs/build/reports/compute/*.json; do
   [ -f "$f" ] || continue
-  schema=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1])).get('schema',''))" "$f")
+  schema=$(python3 -c "
+import json,sys
+d=json.load(open(sys.argv[1]))
+print(d.get('schema','') if isinstance(d,dict) else '')" "$f")
   case "$schema" in
     hh-compute-receipt/1)
       if python3 -I "$B/validate_receipt.py" "$f"; then
@@ -31,13 +41,17 @@ for f in docs/build/reports/compute/*.json; do
         fail=1
       fi
       ;;
-    *)
+    hh-compute-*)
       echo "check-compute-receipts: $f unknown schema '$schema'" >&2
       fail=1
       ;;
+    *)
+      echo "check-compute-receipts: $f non-compute record (schema '${schema:-none}') — out of scope, skipped" >&2
+      skip=$((skip + 1))
+      ;;
   esac
 done
-echo "check-compute-receipts: $n receipt(s) + $c cost record(s) valid"
+echo "check-compute-receipts: $n receipt(s) + $c cost record(s) valid ($skip non-compute record(s) skipped)"
 
 m=0
 for f in scripts/gce-backend/declarations/*.json; do

@@ -53,7 +53,11 @@ EVIDENCE_CLASSES = frozenset([
     "recorded execution", "fixture-verified", "live-executed",
     "foreign-run-verified", "environment-pending"])
 
-_FILENAME_RE = re.compile(r"^(phase-[0-9]+)-(\d{4}-\d{2}-\d{2})\.json$")
+# Record naming 2026-11-19 (DF-CAP6.1-5 / CAP6.2): the HUMAN-H17 dataset-flip
+# records are named <phase>-<YYYY-MM-DD>-flip.json — the -flip suffix marks the
+# superseding visibility-flip record minted by the HUMAN act (R6.50). The
+# suffix is optional and the record must then carry `supersedes`.
+_FILENAME_RE = re.compile(r"^(phase-[0-9]+)-(\d{4}-\d{2}-\d{2})(-flip)?\.json$")
 _SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -90,16 +94,27 @@ def validate(doc, path, repo_root):
 
     m = _FILENAME_RE.match(Path(path).name)
     need(m is not None,
-         "filename %r is not <phase>-<YYYY-MM-DD>.json" % Path(path).name)
+         "filename %r is not <phase>-<YYYY-MM-DD>[-flip].json" % Path(path).name)
 
     phase = doc.get("phase")
     need(phase in PHASES, "phase %r not a known phase" % phase)
     if m and phase is not None:
         need(m.group(1) == phase,
              "filename phase %r != record phase %r" % (m.group(1), phase))
-        need(doc.get("recorded_at") == m.group(2),
-             "recorded_at %r != filename date %r"
-             % (doc.get("recorded_at"), m.group(2)))
+        if m.group(3):
+            # -flip record: recorded_at opens with the filename date and may
+            # carry the flip-act annotation ("… (HUMAN-H17 flip 04:23Z)").
+            ra = doc.get("recorded_at")
+            need(isinstance(ra, str) and ra.startswith(m.group(2)),
+                 "recorded_at %r does not open with filename date %r"
+                 % (doc.get("recorded_at"), m.group(2)))
+            need(isinstance(doc.get("supersedes"), str)
+                 and bool(doc["supersedes"]),
+                 "-flip record lacks a supersedes reference")
+        else:
+            need(doc.get("recorded_at") == m.group(2),
+                 "recorded_at %r != filename date %r"
+                 % (doc.get("recorded_at"), m.group(2)))
 
     gate = PHASE_GATES.get(phase)
     need(gate is not None,
@@ -180,11 +195,16 @@ def validate(doc, path, repo_root):
 
     sup = doc.get("supersedes")
     if sup is not None:
-        need(isinstance(sup, str) and sup.startswith(PUB_DIR_REL + "/"),
+        # supersedes may be a repo-relative docs/results/publication path or a
+        # bare basename resolved inside the publication dir (the committed
+        # -flip records use the basename form; repaired 2026-11-19).
+        sup_rel = sup if isinstance(sup, str) and "/" in sup else (
+            PUB_DIR_REL + "/" + sup if isinstance(sup, str) else sup)
+        need(isinstance(sup_rel, str) and sup_rel.startswith(PUB_DIR_REL + "/"),
              "supersedes %r is not a docs/results/publication path" % sup)
-        if isinstance(sup, str):
-            sp = repo_root / sup
-            need(sp.is_file(), "superseded record %s absent" % sup)
+        if isinstance(sup_rel, str):
+            sp = repo_root / sup_rel
+            need(sp.is_file(), "superseded record %s absent" % sup_rel)
             if sp.is_file():
                 try:
                     old = json.loads(sp.read_text())

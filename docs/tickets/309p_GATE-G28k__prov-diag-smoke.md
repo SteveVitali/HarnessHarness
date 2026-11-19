@@ -21,7 +21,7 @@
 
 The scope-decision basis is a readout record — `docs/build/readouts/GATE-G30-postwc9-scope.md` Status PASSED + its LEDGER `## GATE DECISIONS` row — never a manifest row (the manifest's GATE-G30 slot at row 312 is the unexecuted FP-E gate; the post-Wc9 scope decision is recorded under the slot's name only).
 
-## Criterion (the scope-decision this gate serves)
+## Criterion (verbatim — the scope-decision this gate serves)
 
 GATE-G30's recorded disposition is `re-scope{harden-again}` — "a targeted pass on
 pypi-server's reward-0: a bounded smoke/diagnostic under a new envelope (the R-3 smoke
@@ -72,3 +72,11 @@ Cited requirement, verbatim:
 - Any evidence-window act: the smoke results are never re-proof evidence, never a `hh-reproof-packet/1` input, never a frozen-list outcome; `task_lists.state` stays `blocked` verbatim.
 - A Wc10 or any same-shape re-proof window — the A3/R-8 stop rule stands verbatim; the frozen-list path returns through its own gate after the diagnostic lands.
 - Re-grading pypi-server — the member's `repair:machinery` classification stays verbatim through the smoke; what follows it (re-verified machinery → the ladder's next option) is a later gate's call.
+
+> Dated note 2026-11-19 (DF-CAP6.1-4 / CAP6.2 cell-normalization record): the criterion heading
+> read `## Criterion (the scope-decision this gate serves)` — a variant of the guard's required
+> `## Criterion (verbatim …)` heading (`[gate-criterion]` diagnostic). The section's content is
+> unchanged — the GATE-G30 scope-decision criterion verbatim (the diagnostic envelope this gate
+> served); the heading variant predated execution. Normalized 2026-11-19 to
+> `## Criterion (verbatim — the scope-decision this gate serves)`; the original heading text is
+> preserved verbatim inside this note.

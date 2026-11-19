@@ -195,7 +195,14 @@ def owner_rows():
     for i, c in C.items():
         p = c.get('primary'); r = rows.get(p)
         if r is None: bad.append((i, 'primary not a row')); continue
-        if c.get('primary_file') != 'docs/tickets/' + r['file'] or c.get('primary_kind') != r['kind']: bad.append((i, 'file/kind'))
+        # kind normalization 2026-11-19 (DF-CAP6.1-4 / CAP6.2): the plan's kind cell is frozen at
+        # decomposition time; window skeletons flesh to `ticket` after their gates — the plan row
+        # declares it (`— (fleshed after gate)` in the size cell) and the manifest + register record
+        # the current kind. Accept register `ticket` for a plan `skeleton` only under that declared
+        # transition; every other kind drift still fails.
+        kind_ok = c.get('primary_kind') == r['kind'] or (
+            r['kind'] == 'skeleton' and c.get('primary_kind') == 'ticket' and 'fleshed' in r['size'])
+        if c.get('primary_file') != 'docs/tickets/' + r['file'] or not kind_ok: bad.append((i, 'file/kind'))
         if c.get('acceptance_anchor') != 'ac-' + p.lower().replace('.', '-') + '-' + c.get('target', '').lower(): bad.append((i, 'anchor'))
     return not bad, short(bad)
 ck('every owner is a table row; primary_file, primary_kind and acceptance_anchor agree with it', owner_rows)

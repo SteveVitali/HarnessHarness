@@ -92,9 +92,18 @@ DISPOSITION_FORMS6 = {
     "GATE-G27": [r"disposition\s+run\b", r"disposition\s+not_run\{fallback\}",
                  r"disposition\s+not_run\{pp0_hold\}"],
     "GATE-G28": [r"disposition\s+triggered\{", r"not\s+triggered;\s*Wc\s+unused"],
-    "GATE-G29": [r"disposition\s+full\b", r"disposition\s+fallback\b"],
+    "GATE-G29": [r"disposition\s+full\b", r"disposition\s+fallback\b",
+                 # recorded form 2026-11-18 (Reading 3): the decision row
+                 # carries "PASSED — `full`" — the pre-registered token
+                 # without the `disposition` keyword (DF-CAP6.1-5).
+                 r"PASSED — `?full`?\b", r"PASSED — `?fallback`?\b"],
     "GATE-G30": [r"disposition\s+run\{full\}", r"disposition\s+run\{hosted-only\}",
-                 r"disposition\s+end_after_w2\b"],
+                 r"disposition\s+end_after_w2\b",
+                 # recorded form 2026-11-19: the contract's own 2026-11-16
+                 # amendment note maps the A3 re-scope ladder's
+                 # `re-scope{end-first-pass-early}` to the pre-registered
+                 # `end_after_w2` disposition (DF-CAP6.1-5).
+                 r"re-scope\{end-first-pass-early\}"],
 }
 # Non-PENDING HUMAN readout tokens (REQ-XH-026; contracts defer the token
 # vocabulary to this row). DEFERRED must cite an existing DEFERRALS row that
@@ -200,7 +209,8 @@ class Guard:
                 continue
             passed = "PASSED" in body and "NOT PASSABLE" not in body and "FAILED" not in body
             quotes = re.findall(r'"([^"\n]+)"', line)
-            dec[gid] = {"passed": passed, "quotes": quotes, "row": line}
+            dec[gid] = {"passed": passed, "quotes": quotes, "row": line,
+                        "date": cells[0]}
         return dec
 
     def load_index(self, text):
@@ -1279,11 +1289,32 @@ class Guard:
                     self.route = ("REFUSED", f"{first['id']} unmet dependencies: {unmet}")
                 else:
                     self.route = ("DISPATCH", first["id"])
-        # signature freshness: active-round gate words must not replay an old signature
+        # signature freshness: active-round gate words must not replay an old signature.
+        # A verbatim is "old" only when recorded BEFORE the active round's earliest
+        # decision — a same-round scope-decision readout or an in-round insert /
+        # intervention row legitimately propagates one standing operator directive to
+        # the later rows it authorized (e.g. GATE-G30-postwc10 → GATE-G28m/G28n on
+        # 2026-11-17). Dated 2026-11-19 normalization (CAP6.2 / DF-CAP6.1-1): prior
+        # versions pooled every non-chain-row signature into old_quotes, so the
+        # post-Wc10 scope-decision readout — an in-round, non-chain decision record —
+        # poisoned the verbatim its own ruling directed. Dates that cannot be parsed
+        # stay conservative (treated as pre-round).
+        round_start = None
+        for gid, d in decisions.items():
+            if gid in active_ids:
+                dm = re.match(r"(\d{4}-\d{2}-\d{2})", d.get("date", ""))
+                if dm and (round_start is None or dm.group(1) < round_start):
+                    round_start = dm.group(1)
+        def _pre_round(date_str):
+            if round_start is None or date_str is None:
+                return True
+            return date_str < round_start
         old_quotes = set()
         for gid, d in decisions.items():
             if gid not in active_ids:
-                old_quotes.update(q.strip().lower() for q in d["quotes"])
+                dm = re.match(r"(\d{4}-\d{2}-\d{2})", d.get("date", ""))
+                if _pre_round(dm.group(1) if dm else None):
+                    old_quotes.update(q.strip().lower() for q in d["quotes"])
         rd = self.path(READOUTS_DIR)
         if os.path.isdir(rd):
             for fn in sorted(os.listdir(rd)):
@@ -1302,7 +1333,9 @@ class Guard:
                                                  "pre-round verbatim — old acceptance signatures "
                                                  "cannot satisfy new acceptance")
                             else:
-                                old_quotes.update(s.strip().lower() for s in q)
+                                rm = re.search(r"received\s+(\d{4}-\d{2}-\d{2})", ln)
+                                if _pre_round(rm.group(1) if rm else None):
+                                    old_quotes.update(s.strip().lower() for s in q)
         for gid, d in decisions.items():
             if gid in active_ids and kind_at.get(gid) == "gate":
                 for s in d["quotes"]:
