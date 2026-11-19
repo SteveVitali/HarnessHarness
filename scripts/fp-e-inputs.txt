@@ -1,0 +1,41 @@
+# fp-e-emit emit inputs — committed, repo-relative records only.
+trials=docs/build/reports/2026-11-19-fp-ws1-trials.json
+pp0=docs/build/reports/2026-11-19-fp-ws1-pp0-evidence.json
+gl1=docs/build/reports/l1/2026-11-18-fp-ws1-l1-conformance.json
+gl1_readout=docs/build/readouts/GATE-G29.md
+prereg=docs/build/reports/2026-11-10-fp-prereg.json
+readiness=docs/build/reports/2026-11-10-fp-fps-readiness.json
+w4_decl=scripts/gce-backend/declarations/fp-w4-fp-e.json
+w4_requote=docs/build/reports/2026-11-19-fp-w4-quote.json
+phase_spend=docs/build/reports/live/PHASE_SPEND.jsonl
+# completed compute windows' quote records (ceiling citations; cost_lib
+# comes from PHASE_SPEND). w1-rerun re-uses the w1 quote's ceiling.
+quote_smoke1=docs/build/reports/2026-11-16-fp-smoke1-quote.json
+quote_smoke2=docs/build/reports/2026-11-16-fp-smoke2-quote.json
+quote_smoke3=docs/build/reports/2026-11-16-fp-smoke3-quote.json
+quote_smoke4=docs/build/reports/2026-11-16-fp-smoke4-quote.json
+quote_smoke5=docs/build/reports/2026-11-16-fp-smoke5-quote.json
+quote_w1=docs/build/reports/2026-11-08-fp-w1-quote.json
+quote_w1-rerun=docs/build/reports/2026-11-08-fp-w1-quote.json
+quote_w2=docs/build/reports/2026-11-08-fp-w2-quote.json
+quote_w3=docs/build/reports/2026-11-08-fp-w3-quote.json
+quote_wc=docs/build/reports/2026-11-08-fp-wc-quote.json
+quote_wc10=docs/build/reports/2026-11-16-fp-wc10-quote.json
+quote_wc2=docs/build/reports/2026-11-11-fp-wc2-quote.json
+quote_wc3=docs/build/reports/2026-11-12-fp-wc3-quote.json
+quote_wc4=docs/build/reports/2026-11-12-fp-wc4-quote.json
+quote_wc5=docs/build/reports/2026-11-13-fp-wc5-quote.json
+quote_wc6=docs/build/reports/2026-11-13-fp-wc6-quote.json
+quote_wc7=docs/build/reports/2026-11-14-fp-wc7-quote.json
+quote_wc8=docs/build/reports/2026-11-15-fp-wc8-quote.json
+quote_wc9=docs/build/reports/2026-11-16-fp-wc9-quote.json
+quote_wcs1=docs/build/reports/2026-11-17-fp-wcs1-quote.json
+quote_ws1=docs/build/reports/2026-11-17-fp-ws1-quote.json
+# ws1r re-ran under the ws1 quote — no separate quote record exists.
+quote_ws1r=docs/build/reports/2026-11-17-fp-ws1-quote.json
+out_decl=docs/build/reports/2026-11-19-fp-e-decl.json
+out_record=docs/build/reports/2026-11-19-fp-e.json
+out_measure=docs/build/reports/2026-11-19-fp-ws1-measurement.json
+out_comparative=docs/build/reports/2026-11-19-fp-e-comparative-quote.json
+out_w4_inputs=docs/build/reports/2026-11-19-fp-w4-quote-inputs.json
+w4_requote_id=pq-4f15fc7015dc1db1

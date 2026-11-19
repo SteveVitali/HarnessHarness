@@ -1,0 +1,11 @@
+# fp-ws1-trials emit inputs — the retained Ws1 proxy WALs and evidence
+# rows (retained-store paths; read only, cited by sha256 in the record).
+wal_fp-ws1-pp0=~/hh-retained/ws1/harvest/proxy-store/runs/fp-ws1-pp0/events.wal
+wal_fp-ws1-corpus=~/hh-retained/ws1/harvest/proxy-store/runs/fp-ws1-corpus/events.wal
+wal_fp-ws1-corpus-b=~/hh-retained/ws1/harvest/proxy-store/runs/fp-ws1-corpus-b/events.wal
+wal_fp-ws1-corpus-c=~/hh-retained/ws1/harvest/proxy-store/runs/fp-ws1-corpus-c/events.wal
+corpus_manifest=~/hh-retained/ws1/harvest/corpus-out/_manifest.json
+pp0_evidence_main=~/hh-retained/ws1/pp0-evidence/pp0-evidence
+pp0_evidence_leasefence=~/hh-retained/ws1/pp0-evidence-leasefence-run3
+out_trials=docs/build/reports/2026-11-19-fp-ws1-trials.json
+out_pp0=docs/build/reports/2026-11-19-fp-ws1-pp0-evidence.json

@@ -1,0 +1,2 @@
+cf59cbec9bda9519f0e9d9cce4dfa2e5dabfa27600e7a9d48377168103a80100  docs/build/reports/2026-11-19-fp-e-comparative-quote.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-19-fp-e-comparative-quote.json.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)

@@ -541,16 +541,22 @@ fn ac4_d_max_releases_wc_only_when_unauthorized() {
             window: "w1".to_string(),
             ceiling_micros: 5_050_000,
             billed_micros: Some(4_900_000), // reconciled → billed
+            cost_lib_micros: Some(5_100_000),
+            done: true,
         },
         WindowSum {
             window: "w2".to_string(),
             ceiling_micros: 2_410_000,
-            billed_micros: None, // ceiling
+            billed_micros: None,
+            cost_lib_micros: Some(2_410_000), // A2: completed → cost_lib
+            done: true,
         },
         WindowSum {
             window: "w3".to_string(),
             ceiling_micros: 2_410_000,
             billed_micros: None,
+            cost_lib_micros: Some(2_410_000),
+            done: true,
         },
     ];
     let w4 = W4Ceiling {
@@ -592,6 +598,8 @@ fn ac4_d_max_releases_wc_only_when_unauthorized() {
         window: "wx".to_string(),
         ceiling_micros: 30_000_000,
         billed_micros: None,
+        cost_lib_micros: None,
+        done: false, // authorized-but-unrun → the ceiling counts
     });
     assert_eq!(d_max_ms(&tight, &w4, &unauthorized), 0);
 }
