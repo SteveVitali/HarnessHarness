@@ -1,0 +1,2 @@
+6172679366c588cc8e9d6f92af4f01b2447c6f27f473dad5dfb598d0cb483458  docs/build/pr/CAP6.1.md
+# recompute: shasum -a 256 -c docs/build/pr/CAP6.1.md.sha256 (run from the repo root)

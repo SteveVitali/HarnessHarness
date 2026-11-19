@@ -1,0 +1,2 @@
+3e396617b271acb8e4d0b027f09fb2ed00849663c75a6ef3cd2528b36439d368  docs/build/reports/round6/COVERAGE_MATRIX.csv
+# recompute: shasum -a 256 -c docs/build/reports/round6/COVERAGE_MATRIX.csv.sha256 (run from the repo root)

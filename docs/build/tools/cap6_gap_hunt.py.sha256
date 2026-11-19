@@ -1,0 +1,2 @@
+1e3cd2cb8a4a781ec755f8f25057f90edbf23e3f618a2a1121ebd3d0ec1b5e0c  docs/build/tools/cap6_gap_hunt.py
+# recompute: shasum -a 256 -c docs/build/tools/cap6_gap_hunt.py.sha256 (run from the repo root)

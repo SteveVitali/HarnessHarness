@@ -1,0 +1,2 @@
+169875ea1229eb7d3e67a99cba450db729ef54ef09d510cb3e15f85dba6f91ab  docs/build/reports/2026-11-19-cap6.1-gap-hunt.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-19-cap6.1-gap-hunt.json.sha256 (run from the repo root)
