@@ -1,7 +1,11 @@
-# ADR-0452 — W4 scope amendment: GATE-G30 disposition superseded by operator ruling
+# ADR-0452: W4 scope amendment — GATE-G30 `end-first-pass-early` superseded for W4 only by operator ruling (R6.52 resurrection)
 
-## Status
-Accepted — recorded verbatim from the operator, 2026-11-19 (channel: operator CLI session).
+- **Status:** Accepted — recorded verbatim from the operator, 2026-11-19 (channel: operator CLI session)
+- **Date:** 2026-11-19
+- **Ticket:** R6.52 (W4 resurrection); amendment authored under the operator's explicit revert ruling
+- **Requirement ids:** REQ-XH-126 (W4 wall-time rule), REQ-XH-127 (PP0 holds); GATE-G30 / GATE-G32 decision records
+- **Spec:** `hh-fp-window/1` / `hh-fp-w4-outcomes/1`; W4 window protocol as recorded in `docs/build/runs/R6.52.md`
+- **Rung (ADR-0024 obligation):** an explicit non-contract note — this ADR governs the experiments-program scope amendment boundary, not the canonical kernel contract ladder.
 
 ## Context
 GATE-G30 ruled `re-scope{end-first-pass-early}` (2026-11-19 ~03:52Z): the A2 compute accounting
