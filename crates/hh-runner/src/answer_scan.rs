@@ -235,6 +235,26 @@ pub fn scan(
     }
     let mut hits: Vec<ScanHit> = Vec::new();
     let mut requested_only: Vec<String> = Vec::new();
+    // The corpus normalizes once — per-request normalization of every
+    // corpus member is the same fold at O(requests × lines) cost for
+    // nothing; the haystack spellings are identical either way.
+    let mut norm_corpus: Vec<(String, String)> = Vec::new();
+    if let Some(c) = corpus {
+        for (kind, lines) in &c.lines {
+            for l in lines {
+                if l.len() >= FP_MIN_LEN {
+                    norm_corpus.push((kind.clone(), haystack(l)));
+                }
+            }
+        }
+        for (kind, sh) in &c.shingles {
+            for l in sh {
+                if l.len() >= FP_MIN_LEN {
+                    norm_corpus.push((kind.clone(), haystack(l)));
+                }
+            }
+        }
+    }
     // ── received-body signals (receipts alone) ─────────────────────
     for (i, (body, ua, names)) in input.received_requests.iter().enumerate() {
         let src = format!("receipts[{i}]");
@@ -242,20 +262,9 @@ pub fn scan(
         if norm.contains(CANARY_GUID) {
             hits.push(hit("canary", &src, CANARY_GUID, true));
         }
-        if let Some(c) = corpus {
-            for (kind, lines) in &c.lines {
-                for l in lines {
-                    if l.len() >= FP_MIN_LEN && norm.contains(&haystack(l)) {
-                        hits.push(hit(&format!("fingerprint:{kind}"), &src, l, true));
-                    }
-                }
-            }
-            for (kind, sh) in &c.shingles {
-                for l in sh {
-                    if l.len() >= FP_MIN_LEN && norm.contains(&haystack(l)) {
-                        hits.push(hit(&format!("fingerprint:{kind}"), &src, l, true));
-                    }
-                }
+        for (kind, l) in &norm_corpus {
+            if norm.contains(l) {
+                hits.push(hit(&format!("fingerprint:{kind}"), &src, l, true));
             }
         }
         for sig in REPO_SIGNATURES {

@@ -1,0 +1,2 @@
+f604310f9b47a51f8e0c5a8df1570e26537e8925a715617f33c9cc661411cc9c  docs/build/reports/2026-11-19-fp-results-p3-l2.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-19-fp-results-p3-l2.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)
