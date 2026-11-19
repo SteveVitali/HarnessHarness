@@ -154,3 +154,10 @@ Pre-existing normalized debt is tracked in `docs/build/BACKLOG.csv`; a row here 
 | DF-CAP6.1-3 | OPEN | REQ-XC-325 R-replay + SM-* runner check: no committed executor — honestly unexecuted | committed executor + executed record, or an operator-accepted waiver | CAP6.1 | CAP6.2 |
 | DF-CAP6.1-4 | OPEN | manifest/plan/register surface drift: register primary_kind vs plan skeleton (10 ids); inserts 309a–309w precede row 309 (forward-dep); annotated Depends cells (309r, R6.51); 313 Kind: skeleton stale; GATE-G28k criterion heading variant; DF-R6.50-1 lead token vs dated DONE; phantom DF-R6.45b-1/-2 | dated notes + cell normalization at round closure | CAP6.1 | CAP6.2 |
 | DF-CAP6.1-5 | OPEN | checker drift: check-compute-receipts crash on top-level-array record; gen-revisit-triggers ADR-0450/0451 unplaced; fp_e_emit.rs:189 panic clippy; stock-checker GATE-G30.md filename false positive; check-site REFUSED on phase-N-flip filenames (site unrendered post-flip); docs/adr/README.md stale vs adr-index regen | per-checker repair tickets or baselined diagnostics | CAP6.1 | CAP6.2 |
+
+| DF-CAP6.1-1 status update (2026-11-19) | DONE | 15 decision rows restated verbatim in LEDGER ## GATE DECISIONS; guard PASS/DISPATCH (CAP6.2, PR #418). |
+| DF-CAP6.1-2 status update (2026-11-19) | DONE | discharged via dated deviation `reports/round6/2026-11-19-fp-prereg-hash-drift.md`; frozen records untouched (CAP6.2, PR #418). |
+| DF-CAP6.1-3 status update (2026-11-19) | DONE | dispositioned `unexecuted{no_executor}` + waiver request riding GATE-G32 item — not inferred (CAP6.2, PR #418). |
+| DF-CAP6.1-4 status update (2026-11-19) | DONE | dated notes + cell normalization + 12 missing BUILD_INDEX landings backfilled (CAP6.2, PR #418). |
+| DF-CAP6.1-5 status update (2026-11-19) | DONE | checker repairs landed: clippy, compute-receipts guard, publication -flip filenames, ADR index regen, triggers sync, stock false-positive normalization (CAP6.2, PR #418). |
+| DF-R6.45l-1 status update (2026-11-19) | DONE | derivation machinery landed + smoke1 retroactive acceptance exact (R6.51, PR #413 — pending merge in Phase A). |
