@@ -27,14 +27,19 @@ BOUNDS_END = "<!-- bounds:end -->"
 BOUND_ITEM_RE = re.compile(r"^\s*\d+\.\s+(.*\S)\s*$", re.M)
 MD_BOUNDS_FORMAT = "markdown-bounds"
 
-# The seal (X-07): these schemas render declared presentation fixtures
-# only — no real first-pass outcome reaches a page before its results
-# row (REQ-XH-121). An input of a gated schema is admitted only when
-# the inputs.json entry AND the packet document each carry
-# ``fixture: true``; anything else is refused at load (exit 2).
+# The seal (X-07): these schemas carry real experimental outcome data —
+# no first-pass outcome reaches a page before its results row and gate
+# (REQ-XH-121). An input of a gated schema is admitted only as:
+#   (a) a declared presentation fixture — ``fixture: true`` in the
+#       inputs.json entry AND the packet document (the pre-freeze
+#       render path), or
+#   (b) a frozen first-pass record — ``frozen: true`` in the entry AND
+#       doc["freeze"]["state"] == "frozen", minted by the freeze emitter
+#       under the operator's flagged-review dispositions (R6.49).
+# Anything else is refused at load (exit 2).
 FIXTURE_GATED_SCHEMAS = frozenset({
     "hh-comparative-results/1", "hh-pilot-measure/1",
-    "comparative-quote/1"})
+    "comparative-quote/1", "hh-fp-l2/1", "hh-fp-l3/1"})
 
 
 def sha256_bytes(b):
@@ -68,14 +73,20 @@ class Input(object):
                 raise Refusal(
                     "input %r schema mismatch: declared %r, packet "
                     "carries %r" % (self.id, self.schema, declared))
-        if self.schema in FIXTURE_GATED_SCHEMAS and (
-                entry.get("fixture") is not True
-                or self.doc.get("fixture") is not True):
-            raise Refusal(
-                "input %r: %s admits declared fixtures only — the "
-                "inputs.json entry and the packet must each carry "
-                "fixture:true (the seal, X-07)"
-                % (self.id, self.schema))
+        if self.schema in FIXTURE_GATED_SCHEMAS:
+            fixture_ok = (entry.get("fixture") is True and
+                          self.doc.get("fixture") is True)
+            frozen_ok = (entry.get("frozen") is True and
+                         isinstance(self.doc.get("freeze"), dict) and
+                         self.doc["freeze"].get("state") == "frozen")
+            if not (fixture_ok or frozen_ok):
+                raise Refusal(
+                    "input %r: %s is sealed — admitted only as a declared "
+                    "presentation fixture (fixture:true in the inputs.json "
+                    "entry AND the document) or a frozen first-pass record "
+                    "(frozen:true in the entry AND freeze.state == "
+                    "'frozen' in the document — X-07)"
+                    % (self.id, self.schema))
         if entry.get("page") is not None:
             self.page = entry["page"]
 

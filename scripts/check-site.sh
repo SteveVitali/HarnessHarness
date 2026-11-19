@@ -454,8 +454,20 @@ try:
         root / "scripts" / "site" / "config" / "inputs.json", root)
     published_here = {"phase-1"} if profile == "internal" \
         else {d["phase"] for _r, d in records}
+    # the internal profile renders a phase when its declared input set
+    # is present — the same gate the renderer applies (X-07); the
+    # public profile still needs the pinning publication record.
+    _have = {i.id for i in _pub_inp}
+    _input_sets = {"phase-2": {"p2-fp", "p2-pilot", "p2-quote",
+                             "p2-index"},
+                   "phase-3": {"p3-l1", "p3-l2", "p3-l3"},
+                   "phase-4": {"p4-fp", "p3-l2"}}
+    if profile == "internal":
+        published_here |= {ph for ph, ids in _input_sets.items()
+                           if ids <= _have}
 except Exception:  # noqa: BLE001
     published_here = set()
+    _input_sets = {}
 
 bad = []
 if ev:
@@ -474,14 +486,16 @@ if ev:
             if rel in texts and want not in texts[rel] \
                     and "phase-1" in published_here:
                 bad.append("%s lacks card state %r" % (rel, want))
-    # phases 2–4: without a card or packet they render absent
+    # phases 2–4: without a card, a record pin or a live declared input
+    # set (internal), they render absent
     for n in (2, 3, 4):
         ph = "phase-%d" % n
         rel = "%s/index.html" % ph
         if rel not in htmls:
             bad.append("%s not rendered" % rel)
             continue
-        if 'class="absent"' not in htmls[rel]:
+        if 'class="absent"' not in htmls[rel] \
+                and ph not in published_here:
             bad.append("%s renders non-absent with no packet/card" % rel)
     # home channels: P2–P4 must be absent/withheld; P1 must not be
     home = htmls.get("index.html", "")
@@ -694,6 +708,49 @@ for where, t in claims_hay.items():
         if "$0.00" in ctx or "$0" in ctx.split("(")[0][-8:]:
             bad.append("%s: $/solve at 0 solves shows a dollar figure "
                        "instead of 'undefined (0 solves)'" % where)
+# REQ-XH-119/REQ-XD-222/REQ-XD-126 (R6.49): the first-pass and phase-4
+# mandatory labels — every non-absent, non-fixture first-pass page
+# carries them; a fixture page is a presentation fixture, not a
+# first-pass page (the seal, X-07). The packet side renders verbatim
+# through the provenance leg — the pages carry what the packets spell.
+SITE_REQUIRED = lex.get("site_required", {}).get("entries", [])
+for rel, t in texts.items():
+    h = htmls[rel]
+    if 'class="absent"' in h or "fixture" in t.lower():
+        continue
+    for req in SITE_REQUIRED:
+        name = req["name"]
+        for pref in req["pages"]:
+            if not rel.startswith(pref):
+                continue
+            lab = req.get("label")
+            if lab is not None and lab not in t:
+                bad.append("%s lacks required label %r (%s)"
+                           % (rel, lab, name))
+            any_of = req.get("any_of")
+            if any_of and not any(a in t for a in any_of):
+                bad.append("%s lacks required label — one of %r (%s)"
+                           % (rel, any_of, name))
+# REQ-XD-126/REQ-XH-122: 'parity-verified' never appears beside a
+# first-pass L2 surface except inside the REQ-XH-122 label's
+# 'not parity-verified' clause; a positive parity-verified rendering
+# needs the full frozen-H record (HIR digest, artifact digest, HH
+# commit, participant record, catalog digest, window).
+for rel, t in texts.items():
+    if 'class="absent"' in htmls[rel]:
+        continue
+    for m in re.finditer(r"(?i)parity-verified", t):
+        ctx = t[max(0, m.start() - 30):m.end() + 30]
+        if re.search(r"not\s+parity-verified", ctx):
+            continue
+        if not rel.startswith(("phase-3/", "phase-4/")):
+            continue
+        if not all(k in t for k in
+                   ("hir", "artifact", "commit", "participant",
+                    "catalog", "window")):
+            bad.append("%s: parity-verified claim without the full "
+                       "frozen-H record (REQ-XD-126)" % rel)
+            break
 if bad:
     for b in bad[:8]:
         fail("labels", b)
@@ -978,7 +1035,8 @@ for rel, b in tree.items():
 # R6.21: every phase-2 page is fixture content today — the label is
 # legal under the internal profile on all of them, nowhere else.
 FIXTURE_PAGES = tuple("site:" + rel for rel in tree
-                      if rel.startswith("phase-2/")) \
+                      if rel.startswith(("phase-2/", "phase-3/",
+                                         "phase-4/"))) \
     if profile == "internal" else ()
 for where, t in scan.items():
     hit = values.hygiene_scan(t)
