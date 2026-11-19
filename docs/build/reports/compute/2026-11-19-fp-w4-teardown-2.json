@@ -1,0 +1,403 @@
+{
+ "authorization": {
+  "ceiling_micros": 7988890,
+  "gate": "ADR-0452",
+  "quote_id": "pq-c05c7e05e074159d",
+  "readout_path": "docs/adr/ADR-0452-w4-scope-amendment.md",
+  "verbatim_sha256": "bd0b3e5df4b8e62502dbdb5bbe406cad6673e276a8e43311fc488ce0c3d88a6f"
+ },
+ "commands": [
+  {
+   "argv_redacted": [
+    "gcloud",
+    "auth",
+    "list",
+    "--format=value(account)"
+   ],
+   "ended_at": "2026-11-19T17:50:01Z",
+   "exit": 0,
+   "started_at": "2026-11-19T17:50:01Z",
+   "stderr_excerpt": "",
+   "stdout_excerpt": "14stevevitali@gmail.com\n",
+   "stdout_sha256": "664266223ad53c9a2e5c5b893f89cc7a92975b49c96485cff8ed26ecaa89e950"
+  },
+  {
+   "argv_redacted": [
+    "gcloud",
+    "compute",
+    "instances",
+    "list",
+    "--project",
+    "hh-fp-a1b2c3",
+    "--format",
+    "json"
+   ],
+   "ended_at": "2026-11-19T17:50:02Z",
+   "exit": 0,
+   "started_at": "2026-11-19T17:50:01Z",
+   "stderr_excerpt": "",
+   "stdout_excerpt": "[\n  {\n    \"canIpForward\": false,\n    \"cpuPlatform\": \"AMD Rome\",\n    \"creationTimestamp\": \"2026-11-19T00:15:04.642-08:00\",\n    \"deletionProtection\": false,\n    \"disks\": [\n      {\n        \"architecture\": \"X86_64\",\n        \"autoDelete\": true,\n        \"boot\": true,\n        \"deviceName\": \"persistent-disk-0\",\n        \"diskSizeGb\": \"300\",\n        \"guestOsFeatures\": [\n          {\n            \"type\": \"UEFI_COMPATIBLE\"\n          },\n          {\n            \"type\": \"VIRTIO_SCSI_MULTIQUEUE\"\n          },\n          {\n            \"type\": \"GVNIC\"\n          },\n          {\n            \"type\": \"SEV_CAPABLE\"\n          },\n          {\n            \"type\": \"SEV_LIVE_MIGRATABLE_V2\"\n          },\n          {\n            \"type\": \"SUSPEND_SAFE_FPR\"\n          }\n        ],\n        \"index\": 0,\n        \"interface\": \"SCSI\",\n        \"kind\": \"compute#attachedDisk\",\n        \"licenses\": [\n          \"https://www.googleapis.com/compute/v1/projects/debian-cloud/global/licenses/debian-12-bookworm\"\n        ],\n        \"mode\": \"READ_WRITE\",\n        \"source\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/zones/us-central1-a/disks/hh-fp-w4\",\n        \"type\": \"PERSISTENT\"\n      }\n    ],\n    \"fingerprint\": \"XgBjZjhJRxc=\",\n    \"id\": \"4440563254385905383\",\n    \"kind\": \"compute#instance\",\n    \"labelFingerprint\": \"btu17GpjeMw=\",\n    \"labels\": {\n      \"hh-phase\": \"fp\",\n      \"hh-ticket\": \"r6-52\",\n      \"hh-window\": \"w4\",\n      \"ttl\": \"window\"\n    },\n    \"lastStartTimestamp\": \"2026-11-19T00:15:17.715-08:00\",\n    \"machineType\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/zones/us-central1-a/machineTypes/e2-standard-8\",\n    \"metadata\": {\n      \"fingerprint\": \"20KexXbcqc4=\",\n      \"items\": [\n        {\n          \"key\": \"hh_deadman_minutes\",\n          \"value\": \"1365\"\n        },\n        {\n          \"key\": \"hh_packages\",\n          \"value\": \"podman=4.3.1+ds1-8+deb12u1+b3 crun=1.8.1-1+deb12u1 conmon=2.1.6+ds1-1 netavark=1.4.0-3 podman-compose=1.0.3-3\"\n        },\n        {\n          \"key\": \"startup-script\",\n          \"value\": \"#!/usr/bin/env bash\\n# startup.sh \u2014 in-guest bootstrap for a hh compute window VM\\n# (manifest 266/R6.13; spec \u00a73.9; ADR-0431/AR-15; REQ-XB-204/209/220).\\n#\\n# Passed to `instances create` as `--metadata-from-file startup-script=`.\\n# NO SECRETS: this file is recorded by sha256 in every provision receipt and\\n# leak-swept before use. The only inputs are instance metadata keys set by\\n# gce-backend.sh: `hh_packages` (name=version pins) and\\n# `hh_deadman_minutes` (D + 15 \u2014 REQ-XB-209's in-guest timer).\\nset -euo pipefail\\nset +x # belt: tracing never exposes metadata contents\\n\\nMETA=\\\"http://metadata.google.internal/computeMetadata/v1/instance/attributes\\\"\\nmh() { curl -fs -H \\\"Metadata-Flavor: Google\\\" \\\"$META/$1\\\"; }\\n\\nDEADMAN_MIN=\\\"$(mh hh_deadman_minutes)\\\"   # minutes until in-guest poweroff\\nPACKAGES=\\\"$(mh hh_packages)\\\"            # whitespace-sep name=version pins\\n\\n# \u2500\u2500 REQ-XB-220: disable unattended upgrades for the window \u2014 the package\\n# set must not move mid-run (a podman restart kills in-flight cells).\\nsystemctl disable --now unattended-upgrades.service 2>/dev/null || true\\nsystemctl disable --now apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true\\nsystemctl mask apt-daily.service apt-daily-upgrade.service 2>/dev/null || true\\n\\n# \u2500\u2500 pinned package set (podman, crun, conmon, netavark, compose frontend)\\nexport DEBIAN_FRONTEND=noninteractive\\napt-get update -y\\napt-get install -y --allow-downgrades $PACKAGES\\nmkdir -p /var/log/hh\\ndpkg-query -W -f='${Package}=${Version}\\\\n' \\\\\\n  | sort > /var/log/hh/dpkg-pins.txt\\n\\n# \u2500\u2500 rootful podman socket, group-restricted (never TCP-bound, never\\n# forwarded \u2014 REQ-XB-205). The `hh` group owns the local socket.\\ngroupadd -f hh\\nmkdir -p /etc/systemd/system/podman.socket.d\\ncat > /etc/systemd/system/podman.socket.d/10-hh.conf <<'UNIT'\\n[Socket]\\nSocketMode=0660\\nSocketGroup=hh\\nUNIT\\nsystemctl daemon-reload\\nsystemctl enable --now podman.socket\\n\\n# \u2500\u2500 REQ-XB-209: in-guest dead-man timer at D + 15 min \u2014 the second physical\\n# layer. Runs even ",
+   "stdout_sha256": "7a66bebcea41f5d946dde996b6582c6a788dbfcd689ff2b5df177dde0ddc9d9e"
+  },
+  {
+   "argv_redacted": [
+    "gcloud",
+    "compute",
+    "disks",
+    "list",
+    "--project",
+    "hh-fp-a1b2c3",
+    "--format",
+    "json"
+   ],
+   "ended_at": "2026-11-19T17:50:03Z",
+   "exit": 0,
+   "started_at": "2026-11-19T17:50:02Z",
+   "stderr_excerpt": "",
+   "stdout_excerpt": "[\n  {\n    \"architecture\": \"X86_64\",\n    \"creationTimestamp\": \"2026-11-19T00:15:04.661-08:00\",\n    \"enableConfidentialCompute\": false,\n    \"guestOsFeatures\": [\n      {\n        \"type\": \"UEFI_COMPATIBLE\"\n      },\n      {\n        \"type\": \"VIRTIO_SCSI_MULTIQUEUE\"\n      },\n      {\n        \"type\": \"GVNIC\"\n      },\n      {\n        \"type\": \"SEV_CAPABLE\"\n      },\n      {\n        \"type\": \"SEV_LIVE_MIGRATABLE_V2\"\n      },\n      {\n        \"type\": \"SUSPEND_SAFE_FPR\"\n      }\n    ],\n    \"id\": \"6047091910279106279\",\n    \"kind\": \"compute#disk\",\n    \"labelFingerprint\": \"42WmSpB8rSM=\",\n    \"lastAttachTimestamp\": \"2026-11-19T00:15:05.448-08:00\",\n    \"licenseCodes\": [\n      \"2147286739765738111\"\n    ],\n    \"licenses\": [\n      \"https://www.googleapis.com/compute/v1/projects/debian-cloud/global/licenses/debian-12-bookworm\"\n    ],\n    \"name\": \"hh-fp-w4\",\n    \"physicalBlockSizeBytes\": \"4096\",\n    \"satisfiesPzi\": true,\n    \"selfLink\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/zones/us-central1-a/disks/hh-fp-w4\",\n    \"sizeGb\": \"300\",\n    \"sourceImage\": \"https://www.googleapis.com/compute/v1/projects/debian-cloud/global/images/debian-12-bookworm-v20261014\",\n    \"sourceImageId\": \"3188631002576736407\",\n    \"status\": \"READY\",\n    \"type\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/zones/us-central1-a/diskTypes/pd-balanced\",\n    \"users\": [\n      \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/zones/us-central1-a/instances/hh-fp-w4\"\n    ],\n    \"zone\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/zones/us-central1-a\"\n  }\n]\n",
+   "stdout_sha256": "bf40bff63803efb6f73e8a1b517c7cd0a0c3f26c035e168bde37b0443aa0d47d"
+  },
+  {
+   "argv_redacted": [
+    "gcloud",
+    "compute",
+    "addresses",
+    "list",
+    "--project",
+    "hh-fp-a1b2c3",
+    "--format",
+    "json"
+   ],
+   "ended_at": "2026-11-19T17:50:04Z",
+   "exit": 0,
+   "started_at": "2026-11-19T17:50:03Z",
+   "stderr_excerpt": "",
+   "stdout_excerpt": "[]\n",
+   "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+  },
+  {
+   "argv_redacted": [
+    "gcloud",
+    "compute",
+    "snapshots",
+    "list",
+    "--project",
+    "hh-fp-a1b2c3",
+    "--format",
+    "json"
+   ],
+   "ended_at": "2026-11-19T17:50:05Z",
+   "exit": 0,
+   "started_at": "2026-11-19T17:50:04Z",
+   "stderr_excerpt": "",
+   "stdout_excerpt": "[]\n",
+   "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+  },
+  {
+   "argv_redacted": [
+    "gcloud",
+    "compute",
+    "images",
+    "list",
+    "--no-standard-images",
+    "--project",
+    "hh-fp-a1b2c3",
+    "--format",
+    "json"
+   ],
+   "ended_at": "2026-11-19T17:50:05Z",
+   "exit": 0,
+   "started_at": "2026-11-19T17:50:05Z",
+   "stderr_excerpt": "",
+   "stdout_excerpt": "[]\n",
+   "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+  },
+  {
+   "argv_redacted": [
+    "gcloud",
+    "compute",
+    "forwarding-rules",
+    "list",
+    "--project",
+    "hh-fp-a1b2c3",
+    "--format",
+    "json"
+   ],
+   "ended_at": "2026-11-19T17:50:06Z",
+   "exit": 0,
+   "started_at": "2026-11-19T17:50:05Z",
+   "stderr_excerpt": "",
+   "stdout_excerpt": "[]\n",
+   "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+  },
+  {
+   "argv_redacted": [
+    "gcloud",
+    "compute",
+    "routers",
+    "list",
+    "--project",
+    "hh-fp-a1b2c3",
+    "--format",
+    "json"
+   ],
+   "ended_at": "2026-11-19T17:50:07Z",
+   "exit": 0,
+   "started_at": "2026-11-19T17:50:06Z",
+   "stderr_excerpt": "",
+   "stdout_excerpt": "[]\n",
+   "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+  },
+  {
+   "argv_redacted": [
+    "gcloud",
+    "compute",
+    "firewall-rules",
+    "list",
+    "--project",
+    "hh-fp-a1b2c3",
+    "--format",
+    "json"
+   ],
+   "ended_at": "2026-11-19T17:50:08Z",
+   "exit": 0,
+   "started_at": "2026-11-19T17:50:07Z",
+   "stderr_excerpt": "",
+   "stdout_excerpt": "[\n  {\n    \"allowed\": [\n      {\n        \"IPProtocol\": \"icmp\"\n      }\n    ],\n    \"creationTimestamp\": \"2026-11-09T13:22:45.161-08:00\",\n    \"description\": \"Allow ICMP from anywhere\",\n    \"direction\": \"INGRESS\",\n    \"disabled\": false,\n    \"id\": \"1508537906319296330\",\n    \"kind\": \"compute#firewall\",\n    \"logConfig\": {\n      \"enable\": false\n    },\n    \"name\": \"default-allow-icmp\",\n    \"network\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/networks/default\",\n    \"priority\": 65534,\n    \"selfLink\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/firewalls/default-allow-icmp\",\n    \"sourceRanges\": [\n      \"0.0.0.0/0\"\n    ]\n  },\n  {\n    \"allowed\": [\n      {\n        \"IPProtocol\": \"tcp\",\n        \"ports\": [\n          \"0-65535\"\n        ]\n      },\n      {\n        \"IPProtocol\": \"udp\",\n        \"ports\": [\n          \"0-65535\"\n        ]\n      },\n      {\n        \"IPProtocol\": \"icmp\"\n      }\n    ],\n    \"creationTimestamp\": \"2026-11-09T13:22:45.146-08:00\",\n    \"description\": \"Allow internal traffic on the default network\",\n    \"direction\": \"INGRESS\",\n    \"disabled\": false,\n    \"id\": \"7440129260991252298\",\n    \"kind\": \"compute#firewall\",\n    \"logConfig\": {\n      \"enable\": false\n    },\n    \"name\": \"default-allow-internal\",\n    \"network\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/networks/default\",\n    \"priority\": 65534,\n    \"selfLink\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/firewalls/default-allow-internal\",\n    \"sourceRanges\": [\n      \"10.128.0.0/9\"\n    ]\n  },\n  {\n    \"allowed\": [\n      {\n        \"IPProtocol\": \"tcp\",\n        \"ports\": [\n          \"3389\"\n        ]\n      }\n    ],\n    \"creationTimestamp\": \"2026-11-09T13:22:45.156-08:00\",\n    \"description\": \"Allow RDP from anywhere\",\n    \"direction\": \"INGRESS\",\n    \"disabled\": false,\n    \"id\": \"8681670204500969290\",\n    \"kind\": \"compute#firewall\",\n    \"logConfig\": {\n      \"enable\": false\n    },\n    \"name\": \"default-allow-rdp\",\n    \"network\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/networks/default\",\n    \"priority\": 65534,\n    \"selfLink\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/firewalls/default-allow-rdp\",\n    \"sourceRanges\": [\n      \"0.0.0.0/0\"\n    ]\n  },\n  {\n    \"allowed\": [\n      {\n        \"IPProtocol\": \"tcp\",\n        \"ports\": [\n          \"22\"\n        ]\n      }\n    ],\n    \"creationTimestamp\": \"2026-11-09T13:22:45.152-08:00\",\n    \"description\": \"Allow SSH from anywhere\",\n    \"direction\": \"INGRESS\",\n    \"disabled\": false,\n    \"id\": \"8919409481991817034\",\n    \"kind\": \"compute#firewall\",\n    \"logConfig\": {\n      \"enable\": false\n    },\n    \"name\": \"default-allow-ssh\",\n    \"network\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/networks/default\",\n    \"priority\": 65534,\n    \"selfLink\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/firewalls/default-allow-ssh\",\n    \"sourceRanges\": [\n      \"0.0.0.0/0\"\n    ]\n  },\n  {\n    \"allowed\": [\n      {\n        \"IPProtocol\": \"tcp\",\n        \"ports\": [\n          \"22\"\n        ]\n      }\n    ],\n    \"creationTimestamp\": \"2026-11-09T13:23:49.245-08:00\",\n    \"description\": \"\",\n    \"direction\": \"INGRESS\",\n    \"disabled\": false,\n    \"id\": \"2261950971915503370\",\n    \"kind\": \"compute#firewall\",\n    \"logConfig\": {\n      \"enable\": false\n    },\n    \"name\": \"hh-iap-ssh\",\n    \"network\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/networks/hh-net\",\n    \"priority\": 1000,\n    \"selfLink\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/firewalls/hh-iap-ssh\",\n    \"sourceRanges\": [\n      \"35.235.240.0/20\"\n    ]\n  }\n]\n",
+   "stdout_sha256": "560d98d612317b281b4a9d782f4730a9e7f2f006f30b11dc026832a636d20fe3"
+  },
+  {
+   "argv_redacted": [
+    "gcloud",
+    "compute",
+    "nats",
+    "list",
+    "--project",
+    "hh-fp-a1b2c3",
+    "--region",
+    "us-central1",
+    "--format",
+    "json"
+   ],
+   "ended_at": "2026-11-19T17:50:09Z",
+   "exit": 2,
+   "started_at": "2026-11-19T17:50:08Z",
+   "stderr_excerpt": "ERROR: (gcloud.compute) Invalid choice: 'nats'.\nMaybe you meant:\n  gcloud compute accelerator-types\n  gcloud compute addresses\n  gcloud compute advice\n  gcloud compute backend-buckets\n  gcloud compute backend-services\n  gcloud compute commitments\n  gcloud compute composite-health-checks\n  gcloud compute config-ssh\n  gcloud compute connect-to-serial-port\n  gcloud compute copy-files\n  gcloud compute diagnose\n  gcloud compute disk-types\n  gcloud compute disks\n  gcloud compute external-vpn-gateways\n  gcloud compute firewall-policies\n  gcloud compute firewall-rules\n  gcloud compute forwarding-rules\n  gcloud compute future-reservations\n  gcloud compute global-vm-extension-policies\n  gcloud compute health-aggregation-policies\n  gcloud compute health-checks\n  gcloud compute health-sources\n  gcloud compute hosts\n  gcloud compute http-health-checks\n  gcloud compute https-health-checks\n  gcloud compute images\n  gcloud compute instance-groups\n  gcloud compute instance-templates\n  gcloud compute instances\n  gcloud compute instant-snapshot-groups\n  gcloud compute instant-snapshots\n  gcloud compute interconnects\n  gcloud compute machine-images\n  gcloud compute machine-types\n  gcloud compute migration\n  gcloud compute network-attachments\n  gcloud compute network-edge-security-services\n  gcloud compute network-endpoint-groups\n  gcloud compute network-firewall-policies\n  gcloud compute network-profiles\n  gcloud compute networks\n  gcloud compute operations\n  gcloud compute org-security-policies\n  gcloud compute os-config\n  gcloud compute os-login\n  gcloud compute packet-mirrorings\n  gcloud compute preview-features\n  gcloud compute project-info\n  gcloud compute project-zonal-metadata\n  gcloud compute public-advertised-prefixes\n  gcloud compute public-delegated-prefixes\n  gcloud compute regions\n  gcloud compute reservations\n  gcloud compute reset-windows-password\n  gcloud compute resource-policies\n  gcloud compute rollout-plans\n  gcloud compute rollouts\n  gcloud compute routers\n  gcloud compute routes\n  gcloud compute scp\n  gcloud compute security-policies\n  gcloud compute service-attachments\n  gcloud compute shared-vpc\n  gcloud compute sign-url\n  gcloud compute snapshot-settings\n  gcloud compute snapshots\n  gcloud compute sole-tenancy\n  gcloud compute ssh\n  gcloud compute ssl-certificates\n  gcloud compute ssl-policies\n  gcloud compute start-iap-tunnel\n  gcloud compute storage-pool-types\n  gcloud compute storage-pools\n  gcloud compute target-grpc-proxies\n  gcloud compute target-http-proxies\n  gcloud compute target-https-proxies\n  gcloud compute target-instances\n  gcloud compute target-pools\n  gcloud compute target-ssl-proxies\n  gcloud compute target-tcp-proxies\n  gcloud compute target-vpn-gateways\n  gcloud compute tpus\n  gcloud compute url-maps\n  gcloud compute vpn-gateways\n  gcloud compute vpn-tunnels\n  gcloud compute zone-vm-extension-policies\n  gcloud compute zones\n\nTo search the help text of gcloud commands, run:\n  gcloud help -- SEARCH_TERMS\n",
+   "stdout_excerpt": "",
+   "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "argv_redacted": [
+    "gcloud",
+    "projects",
+    "describe",
+    "hh-fp-a1b2c3",
+    "--format",
+    "value(lifecycleState)"
+   ],
+   "ended_at": "2026-11-19T17:50:34Z",
+   "exit": 0,
+   "started_at": "2026-11-19T17:50:34Z",
+   "stderr_excerpt": "",
+   "stdout_excerpt": "ACTIVE\n",
+   "stdout_sha256": "883d3bff9a26459c06c2dae4b4993c3f6bf4059f8abefb81bef9985f280237ff"
+  },
+  {
+   "argv_redacted": [
+    "gcloud",
+    "projects",
+    "delete",
+    "hh-fp-a1b2c3",
+    "--quiet"
+   ],
+   "ended_at": "2026-11-19T17:50:38Z",
+   "exit": 0,
+   "started_at": "2026-11-19T17:50:35Z",
+   "stderr_excerpt": "Deleted [https://cloudresourcemanager.googleapis.com/v1/projects/hh-fp-a1b2c3].\n\nYou can undo this operation for a limited period by running the command below.\n    $ gcloud projects undelete hh-fp-a1b2c3\n\nSee https://cloud.google.com/resource-manager/docs/creating-managing-projects for information on shutting down projects.\n",
+   "stdout_excerpt": "",
+   "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "argv_redacted": [
+    "gcloud",
+    "projects",
+    "describe",
+    "hh-fp-a1b2c3",
+    "--format",
+    "value(lifecycleState)"
+   ],
+   "ended_at": "2026-11-19T17:50:46Z",
+   "exit": 0,
+   "started_at": "2026-11-19T17:50:46Z",
+   "stderr_excerpt": "",
+   "stdout_excerpt": "DELETE_REQUESTED\n",
+   "stdout_sha256": "908bfea55114e8b4bd634673f3b5b02f14b9a0e40ad291cd9a7b5bacea7af13a"
+  },
+  {
+   "argv_redacted": [
+    "gcloud",
+    "projects",
+    "describe",
+    "hh-fp-a1b2c3",
+    "--format",
+    "json"
+   ],
+   "ended_at": "2026-11-19T17:50:47Z",
+   "exit": 0,
+   "started_at": "2026-11-19T17:50:46Z",
+   "stderr_excerpt": "",
+   "stdout_excerpt": "{\n  \"createTime\": \"2026-11-09T21:21:53.431Z\",\n  \"lifecycleState\": \"DELETE_REQUESTED\",\n  \"name\": \"hh-fp-a1b2c3\",\n  \"projectId\": \"hh-fp-a1b2c3\",\n  \"projectNumber\": \"290612983212\"\n}\n",
+   "stdout_sha256": "9987b0aa6de61b501f4812c5ce8907ab11fa4071a75e9362741ec9dadf68d055"
+  }
+ ],
+ "cost_record": {
+  "path": "docs/build/reports/compute/2026-11-19-fp-w4-cost.json",
+  "sha256": "11aca12dfd8dd4abf1caf6fde7473122c52a4e6b93cb2c799c7dae8d8014ab82"
+ },
+ "declaration": {
+  "path": "scripts/gce-backend/declarations/fp-w4-r652.json",
+  "sha256": "f6c07a8a2b4b8b2b33f28bfc992814ddc3d3131afd6726972092fbed9658da5f"
+ },
+ "h_r": {
+  "declared_hours": 6,
+  "elapsed_hours": 0.17,
+  "exceeded": false,
+  "requires_dated_df_row": false
+ },
+ "harvest": {
+  "entries": 28062,
+  "manifest": "docs/build/reports/compute/harvest/fp-w4/MANIFEST.sha256",
+  "note": "run-root-w4 tar (~703 MB) kept in the retained stage per the .gitignore large-tar rule; MANIFEST.sha256 checksums every member",
+  "tarball_bytes": 702780604
+ },
+ "kind": "teardown",
+ "lifecycle": {
+  "creation_timestamp": "2026-11-19T08:15:04Z",
+  "deletion_operation_end": "2026-11-19T17:50:38Z",
+  "last_stop_timestamp": null,
+  "post_describe_observed": "2026-11-19T17:50:47Z",
+  "project_created": "2026-11-09T21:21:53.431Z",
+  "project_delete_requested": "2026-11-19T17:50:38Z"
+ },
+ "phase": "fp",
+ "post_state": {
+  "addresses": 0,
+  "disks": 0,
+  "firewalls": 5,
+  "forwarding": 0,
+  "images": 0,
+  "instances": 0,
+  "nats": 0,
+  "routers": 0,
+  "snapshots": 0
+ },
+ "provided": {
+  "HF_WRITE_TOKEN": "yes",
+  "OLLAMA_API_KEY": "yes",
+  "gcloud_auth": "yes"
+ },
+ "recipe": {
+  "git_head": "1af57a20b616d331fff50698a9ef2b90ec4d0365",
+  "path": "scripts/gce-backend.sh",
+  "sha256": "7a415c041c6660f6e1f1fa7814eff0f62c721e64ed67d2a4acbeeb32ae138590"
+ },
+ "recorded_at": "2026-11-19T17:52:00Z",
+ "resources": {
+  "creation_timestamp": "2026-11-19T08:15:04Z",
+  "deletion_operation_end": "2026-11-19T17:50:38Z",
+  "disks": [
+   {
+    "created": "2026-11-19T08:15:04Z",
+    "deleted": "2026-11-19T17:50:38Z",
+    "name": "hh-fp-w4",
+    "size_gib": 300,
+    "type": "pd-balanced"
+   }
+  ],
+  "external_ipv4": "present",
+  "instance_id": 4440563254385905383,
+  "instance_name": "hh-fp-w4",
+  "machine_type": "e2-standard-8",
+  "project_id": "hh-fp-a1b2c3",
+  "project_number": 290612983212,
+  "zone": "us-central1-a"
+ },
+ "schema": "hh-compute-receipt/1",
+ "settlement": {
+  "last_model_call_utc_hour": "2026-11-19T17:00:00Z"
+ },
+ "steps": [
+  {
+   "at": "2026-11-19T17:41:30Z",
+   "n": 1,
+   "name": "stop_admissions",
+   "result": "driver exited cleanly \u2014 w4-window.json written, proxy.sentinel + proxy-session.json.end closed, all slot tokens revoked"
+  },
+  {
+   "at": "2026-11-19T17:47:00Z",
+   "n": 2,
+   "name": "harvest",
+   "result": "MANIFEST.sha256 (28,062 entries) + run-root-w4.tar.gz (702,780,604 B) + journald + serial + usage captured; tar verified locally (31,291 members)"
+  },
+  {
+   "at": "2026-11-19T17:49:00Z",
+   "n": 3,
+   "name": "serial_and_usage",
+   "result": "captured"
+  },
+  {
+   "at": "2026-11-19T17:49:30Z",
+   "n": 4,
+   "name": "inventory",
+   "result": "recorded \u2014 1 instance, 1 disk, 0 other billable classes"
+  },
+  {
+   "at": "2026-11-19T17:50:38Z",
+   "n": 5,
+   "name": "project_delete",
+   "result": "DELETE_REQUESTED \u2014 projects delete removes instance + disk + firewall residue"
+  },
+  {
+   "at": "2026-11-19T17:50:46Z",
+   "n": 6,
+   "name": "reinventory",
+   "result": "post-describe DELETE_REQUESTED verified (json read 17:50:47Z)"
+  },
+  {
+   "at": "2026-11-19T17:50:38Z",
+   "n": 7,
+   "name": "delete_instances",
+   "result": "n/a \u2014 folded into project delete (phase_close: true)"
+  },
+  {
+   "at": "2026-11-19T17:52:00Z",
+   "n": 8,
+   "name": "helpers",
+   "result": "n/a{none}"
+  },
+  {
+   "at": "2026-11-19T17:52:00Z",
+   "n": 9,
+   "name": "receipt_cost",
+   "result": "receipt written; cost record generated in the same step-9 transaction"
+  }
+ ],
+ "ticket": "R6.52",
+ "verification": {
+  "firewall_residue": "non-billable \u2014 the 4 default + hh-iap-ssh rules; deleted with the project",
+  "inventory": {
+   "addresses": 0,
+   "disks": 1,
+   "firewalls": 5,
+   "forwarding": 0,
+   "images": 0,
+   "instances": 1,
+   "nats": 0,
+   "routers": 0,
+   "snapshots": 0
+  },
+  "project_lifecycle": "ACTIVE \u2192 DELETE_REQUESTED (verified by projects describe --format json at 2026-11-19T17:50:47Z)",
+  "window": "hh-fp-window/1 ended 2026-11-19T17:40:12Z \u2014 120 slot_results, 0 withheld, native_lane_hold false"
+ },
+ "window": "w4"
+}

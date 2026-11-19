@@ -3,7 +3,7 @@
   "ceiling_micros": 7988890,
   "gate": "ADR-0452",
   "model_line": "authorized",
-  "quote_id": "pq-4f15fc7015dc1db1",
+  "quote_id": "pq-c05c7e05e074159d",
   "readout_path": "docs/adr/ADR-0452-w4-scope-amendment.md",
   "verbatim_sha256": "bd0b3e5df4b8e62502dbdb5bbe406cad6673e276a8e43311fc488ce0c3d88a6f"
  },
@@ -54,12 +54,12 @@
  "packages": {
   "compose_frontend": {
    "name": "podman-compose",
-   "version": "1.0.6-2"
+   "version": "1.0.3-3"
   },
-  "conmon": "2.1.6+ds1-1+deb12u1",
+  "conmon": "2.1.6+ds1-1",
   "crun": "1.8.1-1+deb12u1",
-  "netavark": "1.4.0-4",
-  "podman": "4.3.1+ds1-8+deb12u1"
+  "netavark": "1.4.0-3",
+  "podman": "4.3.1+ds1-8+deb12u1+b3"
  },
  "phase": "fp",
  "phase_close": true,

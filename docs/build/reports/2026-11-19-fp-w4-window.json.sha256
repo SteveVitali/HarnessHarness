@@ -1,0 +1,2 @@
+4f26fed3fde78a524bf86b5f821c74538877db0b89704d5eea8d5d0ccf954128  docs/build/reports/2026-11-19-fp-w4-window.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-19-fp-w4-window.json.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)

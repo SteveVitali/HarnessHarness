@@ -1,0 +1,84 @@
+{
+  "authorization": {
+    "ceiling_micros": 7988890,
+    "gate": "ADR-0452",
+    "quote_id": "pq-c05c7e05e074159d",
+    "readout_path": "docs/adr/ADR-0452-w4-scope-amendment.md",
+    "verbatim_sha256": "bd0b3e5df4b8e62502dbdb5bbe406cad6673e276a8e43311fc488ce0c3d88a6f"
+  },
+  "commands": [
+    {
+      "argv_redacted": [
+        "auth",
+        "list",
+        "--format=value(account)"
+      ],
+      "ended_at": "2026-11-19T08:26:13Z",
+      "exit": 0,
+      "started_at": "2026-11-19T08:26:10Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "14stevevitali@gmail.com\n",
+      "stdout_sha256": "664266223ad53c9a2e5c5b893f89cc7a92975b49c96485cff8ed26ecaa89e950"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "ssh",
+        "hh-fp-w4",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "--tunnel-through-iap",
+        "--command",
+        "df -B1 --output=avail /var | tail -1"
+      ],
+      "ended_at": "2026-11-19T08:26:21Z",
+      "exit": 0,
+      "started_at": "2026-11-19T08:26:13Z",
+      "stderr_excerpt": "WARNING: \n\nTo increase the performance of the tunnel, consider installing NumPy. For instructions,\nplease see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth\n\n",
+      "stdout_excerpt": "301541150720\n",
+      "stdout_sha256": "be52429ad3b12bb0185654f63db149f1018e37fc7304114a4a3586cc559d5285"
+    }
+  ],
+  "declaration": {
+    "path": "scripts/gce-backend/declarations/fp-w4-r652.json",
+    "sha256": "9c37020bd5a6cd10bcc83f3d8884cb9b4045a511f4e35bacc9e2e3c1f47e5b36"
+  },
+  "kind": "prepull",
+  "phase": "fp",
+  "prepull": {
+    "diskwatch": {
+      "below_floor": false,
+      "floor_gib": 20,
+      "free_gib": 280.8
+    },
+    "images": []
+  },
+  "provided": {
+    "OLLAMA_API_KEY": "yes",
+    "gcloud_auth": "yes"
+  },
+  "recipe": {
+    "git_head": "b47a911673188f76d8ecdbc1ca1a05190cb144ad",
+    "path": "scripts/gce-backend.sh",
+    "sha256": "7a415c041c6660f6e1f1fa7814eff0f62c721e64ed67d2a4acbeeb32ae138590"
+  },
+  "recorded_at": "2026-11-19T08:26:21Z",
+  "resources": {
+    "creation_timestamp": null,
+    "deletion_operation_end": null,
+    "disks": [],
+    "external_ipv4": "absent",
+    "instance_id": null,
+    "instance_name": null,
+    "machine_type": "e2-standard-8",
+    "project_id": "hh-fp-a1b2c3",
+    "project_number": null,
+    "zone": "us-central1-a"
+  },
+  "schema": "hh-compute-receipt/1",
+  "ticket": "R6.52",
+  "verification": null,
+  "window": "w4"
+}

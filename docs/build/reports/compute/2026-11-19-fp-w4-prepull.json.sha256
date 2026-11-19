@@ -1,0 +1,2 @@
+0826c55a1674e2d4fc0bfe72b2f7fa8a677e276a91288bfdb597b629fa6c66ee  docs/build/reports/compute/2026-11-19-fp-w4-prepull.json
+# recompute: shasum -a 256 -c docs/build/reports/compute/2026-11-19-fp-w4-prepull.json.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)

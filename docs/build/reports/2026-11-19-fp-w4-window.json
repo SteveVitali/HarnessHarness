@@ -1,0 +1,2064 @@
+{
+ "arms": [
+  "mini-swe-agent",
+  "hh_native",
+  "v5"
+ ],
+ "checkpoint": {
+  "consumed_micros": 4103989,
+  "drops": [
+   "v5"
+  ],
+  "label": "w4-round-2",
+  "projection": {
+   "remaining_cost_micros": 25330320,
+   "remaining_wall_ms": 32175540,
+   "room_ms": 36202186
+  },
+  "protected_pair_fits": true,
+  "recorded_at": "2026-11-19T14:26:37Z",
+  "schema": "hh-fp-checkpoint/1"
+ },
+ "concurrency": 4,
+ "dead_man_epoch": 1795156200.0,
+ "drop_order": [
+  "v5",
+  "claude-code",
+  "pi"
+ ],
+ "ended_at": "2026-11-19T17:40:12Z",
+ "gate": "FP-E",
+ "lane_probe": {
+  "calls": [
+   {
+    "cost_micros": 0,
+    "disposition": "pass",
+    "probe_id": "lane-probe-high",
+    "receipt_ref": "sha256:c3d1dceaffb47ba18f73f7ff9a081e4f4cbf7ec0fbfe181faf6092568e99f893",
+    "route": "/v1/chat/completions",
+    "surface": "openai.chat"
+   }
+  ],
+  "disposition": "pass",
+  "evidence_label": "live-executed",
+  "gate": "FP-E",
+  "plan": {
+   "calls": 1,
+   "cap_micros": 250000
+  },
+  "precedes": "first_hh_native_slot",
+  "recorded_at": "2026-11-19T11:23:07Z",
+  "schema": "hh-lane-probe/1",
+  "slot": {
+   "slice_micros": 250000,
+   "token_ref": "slot:w4-lane-probe"
+  },
+  "stage": "lane-probe",
+  "window": "W4"
+ },
+ "native_lane_hold": false,
+ "not_run": {
+  "claude-code": "not_run{admission:AG3}",
+  "pi": "not_run{admission:AG3}"
+ },
+ "run_id": "fp-w4-main",
+ "schedule_rows": [
+  {
+   "members": [
+    "w4-mini-swe-agent-largest-eigenval-r1",
+    "w4-hh_native-largest-eigenval-r1",
+    "w4-v5-largest-eigenval-r1"
+   ],
+   "order_key": "061dc79ea8eeb233f6a0210cc47a5fa6f7a6af8882d3d9bda6ed3093d0a512e1",
+   "replicate": 1,
+   "round": 1,
+   "task": "largest-eigenval"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-sanitize-git-repo-r1",
+    "w4-hh_native-sanitize-git-repo-r1",
+    "w4-v5-sanitize-git-repo-r1"
+   ],
+   "order_key": "0d20825b20cb3dafe4c91dbc1e032806f880c792b77112be926c41c5c96ab2b6",
+   "replicate": 1,
+   "round": 1,
+   "task": "sanitize-git-repo"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-build-cython-ext-r1",
+    "w4-hh_native-build-cython-ext-r1",
+    "w4-v5-build-cython-ext-r1"
+   ],
+   "order_key": "1cb51dc79ceada7256f33105f028a7239b1e6730a8df9bd1a39817c632e3eb6d",
+   "replicate": 1,
+   "round": 1,
+   "task": "build-cython-ext"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-write-compressor-r1",
+    "w4-hh_native-write-compressor-r1",
+    "w4-v5-write-compressor-r1"
+   ],
+   "order_key": "5a4b654a964bad9fcd34baf40ce1c22c2f6746bdd3813c7ade5c18d3008c5942",
+   "replicate": 1,
+   "round": 1,
+   "task": "write-compressor"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-fix-code-vulnerability-r1",
+    "w4-hh_native-fix-code-vulnerability-r1",
+    "w4-v5-fix-code-vulnerability-r1"
+   ],
+   "order_key": "605623a68a8adfd9c56005393cfb817f343cebd1f5ace0fc23ecf3bb5fa46618",
+   "replicate": 1,
+   "round": 1,
+   "task": "fix-code-vulnerability"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-regex-log-r1",
+    "w4-hh_native-regex-log-r1",
+    "w4-v5-regex-log-r1"
+   ],
+   "order_key": "78fdb7e09229f70b333edce8299d6c16838b180a1f9ead9e3942aa5bc3150fa9",
+   "replicate": 1,
+   "round": 1,
+   "task": "regex-log"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-headless-terminal-r1",
+    "w4-hh_native-headless-terminal-r1",
+    "w4-v5-headless-terminal-r1"
+   ],
+   "order_key": "bde3d306ab9613b5fbb3f74e4c41e949dfba78986b9596e08d1734cb9fc64d78",
+   "replicate": 1,
+   "round": 1,
+   "task": "headless-terminal"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-gcode-to-text-r1",
+    "w4-hh_native-gcode-to-text-r1",
+    "w4-v5-gcode-to-text-r1"
+   ],
+   "order_key": "c255f43ee206be5bd3dc4f33f2e0487a39f4cc8e922aaa5970a3136ba3aa3e15",
+   "replicate": 1,
+   "round": 1,
+   "task": "gcode-to-text"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-overfull-hbox-r1",
+    "w4-hh_native-overfull-hbox-r1",
+    "w4-v5-overfull-hbox-r1"
+   ],
+   "order_key": "c2697084506333e9055159e2daec2b9ac2bfe929fb24f11492b870d57052294c",
+   "replicate": 1,
+   "round": 1,
+   "task": "overfull-hbox"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-multi-source-data-merger-r1",
+    "w4-hh_native-multi-source-data-merger-r1",
+    "w4-v5-multi-source-data-merger-r1"
+   ],
+   "order_key": "e6d1cf4fb254f5e50beafcf517081a01e5a9fdb6f7901c6fa72881a07afc0620",
+   "replicate": 1,
+   "round": 1,
+   "task": "multi-source-data-merger"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-overfull-hbox-r2",
+    "w4-hh_native-overfull-hbox-r2",
+    "w4-v5-overfull-hbox-r2"
+   ],
+   "order_key": "2dfb3eb72b36c005492b8088c6d7b8cde0e2a3e8d04f9e812fe7285d343c6396",
+   "replicate": 2,
+   "round": 2,
+   "task": "overfull-hbox"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-multi-source-data-merger-r2",
+    "w4-hh_native-multi-source-data-merger-r2",
+    "w4-v5-multi-source-data-merger-r2"
+   ],
+   "order_key": "32d497e7ca0e52f29eb08233db20d51b36c57a609105df1564cb3175f61ede63",
+   "replicate": 2,
+   "round": 2,
+   "task": "multi-source-data-merger"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-regex-log-r2",
+    "w4-hh_native-regex-log-r2",
+    "w4-v5-regex-log-r2"
+   ],
+   "order_key": "345243e977acf33e25d4637dc3086c87bc56682d76a6075c4274b692f8de1f96",
+   "replicate": 2,
+   "round": 2,
+   "task": "regex-log"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-build-cython-ext-r2",
+    "w4-hh_native-build-cython-ext-r2",
+    "w4-v5-build-cython-ext-r2"
+   ],
+   "order_key": "36d12c38e9663cfbc62f338f2798584fb5f094b167213f6bcee7267231e7c80e",
+   "replicate": 2,
+   "round": 2,
+   "task": "build-cython-ext"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-headless-terminal-r2",
+    "w4-hh_native-headless-terminal-r2",
+    "w4-v5-headless-terminal-r2"
+   ],
+   "order_key": "3f456c50433f6b26232b8cc680b32020d79a3b31e45f7cb863f203ed0a0338d4",
+   "replicate": 2,
+   "round": 2,
+   "task": "headless-terminal"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-largest-eigenval-r2",
+    "w4-hh_native-largest-eigenval-r2",
+    "w4-v5-largest-eigenval-r2"
+   ],
+   "order_key": "53c77b7bb5f2b8bca4c5a741269dadc77614c7cb9745a92a0e652465d02d6bd7",
+   "replicate": 2,
+   "round": 2,
+   "task": "largest-eigenval"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-sanitize-git-repo-r2",
+    "w4-hh_native-sanitize-git-repo-r2",
+    "w4-v5-sanitize-git-repo-r2"
+   ],
+   "order_key": "6111eddcb38ec4c7a12dd3a2991853662a181bb8fca74f6d54aeff69e942a70a",
+   "replicate": 2,
+   "round": 2,
+   "task": "sanitize-git-repo"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-fix-code-vulnerability-r2",
+    "w4-hh_native-fix-code-vulnerability-r2",
+    "w4-v5-fix-code-vulnerability-r2"
+   ],
+   "order_key": "7f5613ac9f214424d82df3fa967938f760162257a25fceb5a1f69996d9b744e3",
+   "replicate": 2,
+   "round": 2,
+   "task": "fix-code-vulnerability"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-gcode-to-text-r2",
+    "w4-hh_native-gcode-to-text-r2",
+    "w4-v5-gcode-to-text-r2"
+   ],
+   "order_key": "a3b37da964bce79483d242ae836f6c39fa64ee30b73c266fe13032f1302dfe15",
+   "replicate": 2,
+   "round": 2,
+   "task": "gcode-to-text"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-write-compressor-r2",
+    "w4-hh_native-write-compressor-r2",
+    "w4-v5-write-compressor-r2"
+   ],
+   "order_key": "e3957fee351812b04e641f67d7ac2db922364e1a2d4d0bb3a81dee20092d48ad",
+   "replicate": 2,
+   "round": 2,
+   "task": "write-compressor"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-overfull-hbox-r3",
+    "w4-hh_native-overfull-hbox-r3",
+    "w4-v5-overfull-hbox-r3"
+   ],
+   "order_key": "1366c85d7fedadac8504153d3252da6b6ea86c4b3ee4d26495fc864feba5ed76",
+   "replicate": 3,
+   "round": 3,
+   "task": "overfull-hbox"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-write-compressor-r3",
+    "w4-hh_native-write-compressor-r3",
+    "w4-v5-write-compressor-r3"
+   ],
+   "order_key": "1a85a6922d9e25c56f773e1323b08e2f76783cff4e71d5df59ba1ecb5ae4f63d",
+   "replicate": 3,
+   "round": 3,
+   "task": "write-compressor"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-build-cython-ext-r3",
+    "w4-hh_native-build-cython-ext-r3",
+    "w4-v5-build-cython-ext-r3"
+   ],
+   "order_key": "5e789cdb5b08c110b2b452761df478fb602d696588711daf344ae61c1b3028f4",
+   "replicate": 3,
+   "round": 3,
+   "task": "build-cython-ext"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-largest-eigenval-r3",
+    "w4-hh_native-largest-eigenval-r3",
+    "w4-v5-largest-eigenval-r3"
+   ],
+   "order_key": "69ba84fdddb4fe0d3b06626a0c275f7a196302fc8c59e14660fed506c2d8f1ae",
+   "replicate": 3,
+   "round": 3,
+   "task": "largest-eigenval"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-gcode-to-text-r3",
+    "w4-hh_native-gcode-to-text-r3",
+    "w4-v5-gcode-to-text-r3"
+   ],
+   "order_key": "6ba3bf55c97135f90eed8a5355ebf3ecf5da61def24e2a101280c2dcc72b5894",
+   "replicate": 3,
+   "round": 3,
+   "task": "gcode-to-text"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-sanitize-git-repo-r3",
+    "w4-hh_native-sanitize-git-repo-r3",
+    "w4-v5-sanitize-git-repo-r3"
+   ],
+   "order_key": "6f8cdbe95cfa62fc90492adbe1a5b2d1ea013df7ab98a1e6c6b726debf72b6e5",
+   "replicate": 3,
+   "round": 3,
+   "task": "sanitize-git-repo"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-headless-terminal-r3",
+    "w4-hh_native-headless-terminal-r3",
+    "w4-v5-headless-terminal-r3"
+   ],
+   "order_key": "717dd35213debcb0edbc3d1a5c95fe90fe1686299e324cb88df13e2fbaa27b0c",
+   "replicate": 3,
+   "round": 3,
+   "task": "headless-terminal"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-regex-log-r3",
+    "w4-hh_native-regex-log-r3",
+    "w4-v5-regex-log-r3"
+   ],
+   "order_key": "7d9843d8ed520c4649f1e36a14d0b6b983532562c908b1e5329861697a3f2707",
+   "replicate": 3,
+   "round": 3,
+   "task": "regex-log"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-multi-source-data-merger-r3",
+    "w4-hh_native-multi-source-data-merger-r3",
+    "w4-v5-multi-source-data-merger-r3"
+   ],
+   "order_key": "857ffc1440f3ae29bb5e0d22474bb0f86009bf5a2f0c41c57fcd3062fa8fc4fd",
+   "replicate": 3,
+   "round": 3,
+   "task": "multi-source-data-merger"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-fix-code-vulnerability-r3",
+    "w4-hh_native-fix-code-vulnerability-r3",
+    "w4-v5-fix-code-vulnerability-r3"
+   ],
+   "order_key": "8f31087dc13a11781f71cbec704d7ae2854cd8059c633df1c0a91b0ac86f2dce",
+   "replicate": 3,
+   "round": 3,
+   "task": "fix-code-vulnerability"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-build-cython-ext-r4",
+    "w4-hh_native-build-cython-ext-r4",
+    "w4-v5-build-cython-ext-r4"
+   ],
+   "order_key": "0074469b74740a535651bc0a85a8682da0e57f2056f245a707aa3323329ba04c",
+   "replicate": 4,
+   "round": 4,
+   "task": "build-cython-ext"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-fix-code-vulnerability-r4",
+    "w4-hh_native-fix-code-vulnerability-r4",
+    "w4-v5-fix-code-vulnerability-r4"
+   ],
+   "order_key": "039c50583b6f0932230ff8ed11b753b90bf6138323c13bec8e77ed37cf946b33",
+   "replicate": 4,
+   "round": 4,
+   "task": "fix-code-vulnerability"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-largest-eigenval-r4",
+    "w4-hh_native-largest-eigenval-r4",
+    "w4-v5-largest-eigenval-r4"
+   ],
+   "order_key": "2842c87612e328ba1530b4e17f6b833a34c21eb51bcd4e4d9722ad9d3997eb49",
+   "replicate": 4,
+   "round": 4,
+   "task": "largest-eigenval"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-headless-terminal-r4",
+    "w4-hh_native-headless-terminal-r4",
+    "w4-v5-headless-terminal-r4"
+   ],
+   "order_key": "4caa1e5a94169b53fffa74c9bafdba2bbd8e36cfc4851caf5a123ad05952daad",
+   "replicate": 4,
+   "round": 4,
+   "task": "headless-terminal"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-overfull-hbox-r4",
+    "w4-hh_native-overfull-hbox-r4",
+    "w4-v5-overfull-hbox-r4"
+   ],
+   "order_key": "78500fb5544b9719035f83f0996f81992cad7131b710484373b43697d883134b",
+   "replicate": 4,
+   "round": 4,
+   "task": "overfull-hbox"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-regex-log-r4",
+    "w4-hh_native-regex-log-r4",
+    "w4-v5-regex-log-r4"
+   ],
+   "order_key": "9d2c511682988486676e2511ff96414d9799b6a98e0f2f1d740092a655ef2f7c",
+   "replicate": 4,
+   "round": 4,
+   "task": "regex-log"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-multi-source-data-merger-r4",
+    "w4-hh_native-multi-source-data-merger-r4",
+    "w4-v5-multi-source-data-merger-r4"
+   ],
+   "order_key": "9f8014fa98aa91a38e547dd83cf1e27bffe8b275d8420dd1882a87756a9a2915",
+   "replicate": 4,
+   "round": 4,
+   "task": "multi-source-data-merger"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-sanitize-git-repo-r4",
+    "w4-hh_native-sanitize-git-repo-r4",
+    "w4-v5-sanitize-git-repo-r4"
+   ],
+   "order_key": "b265e1a82f9e7099ae6a3124ff5ab85d1217b7612d7a06b9a7d494ac9402dc90",
+   "replicate": 4,
+   "round": 4,
+   "task": "sanitize-git-repo"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-gcode-to-text-r4",
+    "w4-hh_native-gcode-to-text-r4",
+    "w4-v5-gcode-to-text-r4"
+   ],
+   "order_key": "df429a0549513d7067cdd40ab4a4d81b9da2546c241ae902e14bf158bd33fac0",
+   "replicate": 4,
+   "round": 4,
+   "task": "gcode-to-text"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-write-compressor-r4",
+    "w4-hh_native-write-compressor-r4",
+    "w4-v5-write-compressor-r4"
+   ],
+   "order_key": "e7b1a0e0efb49cbc4ab3b0f8f84db8b2a0fa349a8734680362f24329a888f0a8",
+   "replicate": 4,
+   "round": 4,
+   "task": "write-compressor"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-multi-source-data-merger-r5",
+    "w4-hh_native-multi-source-data-merger-r5",
+    "w4-v5-multi-source-data-merger-r5"
+   ],
+   "order_key": "21e25a11febe1d00a0fb4da8672ee32f6641568dec204e806e73de02b1bb8197",
+   "replicate": 5,
+   "round": 5,
+   "task": "multi-source-data-merger"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-largest-eigenval-r5",
+    "w4-hh_native-largest-eigenval-r5",
+    "w4-v5-largest-eigenval-r5"
+   ],
+   "order_key": "24aac6fcc9db7898f4be4be050b58366ede0c4a46be194f3198bdb566f8ebea2",
+   "replicate": 5,
+   "round": 5,
+   "task": "largest-eigenval"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-fix-code-vulnerability-r5",
+    "w4-hh_native-fix-code-vulnerability-r5",
+    "w4-v5-fix-code-vulnerability-r5"
+   ],
+   "order_key": "262045361943dbdf0d822ebff30a66c781a17c2441aefda5897fa758f603096c",
+   "replicate": 5,
+   "round": 5,
+   "task": "fix-code-vulnerability"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-build-cython-ext-r5",
+    "w4-hh_native-build-cython-ext-r5",
+    "w4-v5-build-cython-ext-r5"
+   ],
+   "order_key": "641473b9d617f9e487892a8d839d720dd2a9ceac13504a3d48575b1606f8500e",
+   "replicate": 5,
+   "round": 5,
+   "task": "build-cython-ext"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-sanitize-git-repo-r5",
+    "w4-hh_native-sanitize-git-repo-r5",
+    "w4-v5-sanitize-git-repo-r5"
+   ],
+   "order_key": "c7c1b056d49fe1ec1192b3485df844aa399724c971b82e4fd1215b1178684392",
+   "replicate": 5,
+   "round": 5,
+   "task": "sanitize-git-repo"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-overfull-hbox-r5",
+    "w4-hh_native-overfull-hbox-r5",
+    "w4-v5-overfull-hbox-r5"
+   ],
+   "order_key": "d5284219a00c347cb91c5156b09906af3ec1df48be085f6460adfae968746f05",
+   "replicate": 5,
+   "round": 5,
+   "task": "overfull-hbox"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-headless-terminal-r5",
+    "w4-hh_native-headless-terminal-r5",
+    "w4-v5-headless-terminal-r5"
+   ],
+   "order_key": "df7a235ffe3e69c48e3f74edb9f9d734c030762ed4f161e6815292c70281339d",
+   "replicate": 5,
+   "round": 5,
+   "task": "headless-terminal"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-regex-log-r5",
+    "w4-hh_native-regex-log-r5",
+    "w4-v5-regex-log-r5"
+   ],
+   "order_key": "ea47dbc8c9e6d8844f563b1f9237588ba27293756db559eb8ddafa0051534104",
+   "replicate": 5,
+   "round": 5,
+   "task": "regex-log"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-gcode-to-text-r5",
+    "w4-hh_native-gcode-to-text-r5",
+    "w4-v5-gcode-to-text-r5"
+   ],
+   "order_key": "f77e8b9ecef1c5f4e3ce0c9604616af166854a91c1592223e864a845085f404e",
+   "replicate": 5,
+   "round": 5,
+   "task": "gcode-to-text"
+  },
+  {
+   "members": [
+    "w4-mini-swe-agent-write-compressor-r5",
+    "w4-hh_native-write-compressor-r5",
+    "w4-v5-write-compressor-r5"
+   ],
+   "order_key": "f9b3bf4962b0bf926eea03da05c92718e525b94b9d975dbbc7c8befbd4fac7f3",
+   "replicate": 5,
+   "round": 5,
+   "task": "write-compressor"
+  }
+ ],
+ "schema": "hh-fp-window/1",
+ "seed": "fp-w4-schedule-r6.33-2026-11-10",
+ "slot_results": {
+  "w4-hh_native-build-cython-ext-r1": {
+   "arm": "hh_native",
+   "cost_micros": 11645,
+   "rc": 0,
+   "replicate": 1,
+   "slot_id": "w4-hh_native-build-cython-ext-r1",
+   "task": "build-cython-ext",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 255,
+    "stderr_tail": "Error: can only create exec sessions on running containers: container state improper\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 346959
+  },
+  "w4-hh_native-build-cython-ext-r2": {
+   "arm": "hh_native",
+   "cost_micros": 573941,
+   "rc": 0,
+   "replicate": 2,
+   "slot_id": "w4-hh_native-build-cython-ext-r2",
+   "task": "build-cython-ext",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 1866896
+  },
+  "w4-hh_native-build-cython-ext-r3": {
+   "arm": "hh_native",
+   "cost_micros": 3705,
+   "rc": 0,
+   "replicate": 3,
+   "slot_id": "w4-hh_native-build-cython-ext-r3",
+   "task": "build-cython-ext",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 236546
+  },
+  "w4-hh_native-build-cython-ext-r4": {
+   "arm": "hh_native",
+   "cost_micros": 7922,
+   "rc": 1,
+   "replicate": 4,
+   "slot_id": "w4-hh_native-build-cython-ext-r4",
+   "task": "build-cython-ext",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 2374212
+  },
+  "w4-hh_native-build-cython-ext-r5": {
+   "arm": "hh_native",
+   "cost_micros": 5116,
+   "rc": 0,
+   "replicate": 5,
+   "slot_id": "w4-hh_native-build-cython-ext-r5",
+   "task": "build-cython-ext",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 263311
+  },
+  "w4-hh_native-fix-code-vulnerability-r1": {
+   "arm": "hh_native",
+   "cost_micros": 3130,
+   "rc": 0,
+   "replicate": 1,
+   "slot_id": "w4-hh_native-fix-code-vulnerability-r1",
+   "task": "fix-code-vulnerability",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 120240
+  },
+  "w4-hh_native-fix-code-vulnerability-r2": {
+   "arm": "hh_native",
+   "cost_micros": 4759,
+   "rc": 0,
+   "replicate": 2,
+   "slot_id": "w4-hh_native-fix-code-vulnerability-r2",
+   "task": "fix-code-vulnerability",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 104568
+  },
+  "w4-hh_native-fix-code-vulnerability-r3": {
+   "arm": "hh_native",
+   "cost_micros": 8652,
+   "rc": 0,
+   "replicate": 3,
+   "slot_id": "w4-hh_native-fix-code-vulnerability-r3",
+   "task": "fix-code-vulnerability",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 63037
+  },
+  "w4-hh_native-fix-code-vulnerability-r4": {
+   "arm": "hh_native",
+   "cost_micros": 4208,
+   "rc": 0,
+   "replicate": 4,
+   "slot_id": "w4-hh_native-fix-code-vulnerability-r4",
+   "task": "fix-code-vulnerability",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 48006
+  },
+  "w4-hh_native-fix-code-vulnerability-r5": {
+   "arm": "hh_native",
+   "cost_micros": 7336,
+   "rc": 0,
+   "replicate": 5,
+   "slot_id": "w4-hh_native-fix-code-vulnerability-r5",
+   "task": "fix-code-vulnerability",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 138013
+  },
+  "w4-hh_native-gcode-to-text-r1": {
+   "arm": "hh_native",
+   "cost_micros": 579592,
+   "rc": 0,
+   "replicate": 1,
+   "slot_id": "w4-hh_native-gcode-to-text-r1",
+   "task": "gcode-to-text",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 1585967
+  },
+  "w4-hh_native-gcode-to-text-r2": {
+   "arm": "hh_native",
+   "cost_micros": 151582,
+   "rc": 0,
+   "replicate": 2,
+   "slot_id": "w4-hh_native-gcode-to-text-r2",
+   "task": "gcode-to-text",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 1083898
+  },
+  "w4-hh_native-gcode-to-text-r3": {
+   "arm": "hh_native",
+   "cost_micros": 79897,
+   "rc": 1,
+   "replicate": 3,
+   "slot_id": "w4-hh_native-gcode-to-text-r3",
+   "task": "gcode-to-text",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 3126874
+  },
+  "w4-hh_native-gcode-to-text-r4": {
+   "arm": "hh_native",
+   "cost_micros": 150706,
+   "rc": 0,
+   "replicate": 4,
+   "slot_id": "w4-hh_native-gcode-to-text-r4",
+   "task": "gcode-to-text",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 1046376
+  },
+  "w4-hh_native-gcode-to-text-r5": {
+   "arm": "hh_native",
+   "cost_micros": 23573,
+   "rc": 0,
+   "replicate": 5,
+   "slot_id": "w4-hh_native-gcode-to-text-r5",
+   "task": "gcode-to-text",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 474826
+  },
+  "w4-hh_native-headless-terminal-r1": {
+   "arm": "hh_native",
+   "cost_micros": 93844,
+   "rc": 0,
+   "replicate": 1,
+   "slot_id": "w4-hh_native-headless-terminal-r1",
+   "task": "headless-terminal",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 508470
+  },
+  "w4-hh_native-headless-terminal-r2": {
+   "arm": "hh_native",
+   "cost_micros": 31656,
+   "rc": 0,
+   "replicate": 2,
+   "slot_id": "w4-hh_native-headless-terminal-r2",
+   "task": "headless-terminal",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 652600
+  },
+  "w4-hh_native-headless-terminal-r3": {
+   "arm": "hh_native",
+   "cost_micros": 69597,
+   "rc": 0,
+   "replicate": 3,
+   "slot_id": "w4-hh_native-headless-terminal-r3",
+   "task": "headless-terminal",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 1357583
+  },
+  "w4-hh_native-headless-terminal-r4": {
+   "arm": "hh_native",
+   "cost_micros": 148550,
+   "rc": 0,
+   "replicate": 4,
+   "slot_id": "w4-hh_native-headless-terminal-r4",
+   "task": "headless-terminal",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 958920
+  },
+  "w4-hh_native-headless-terminal-r5": {
+   "arm": "hh_native",
+   "cost_micros": 110780,
+   "rc": 0,
+   "replicate": 5,
+   "slot_id": "w4-hh_native-headless-terminal-r5",
+   "task": "headless-terminal",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 1199838
+  },
+  "w4-hh_native-largest-eigenval-r1": {
+   "arm": "hh_native",
+   "cost_micros": 494067,
+   "rc": 0,
+   "replicate": 1,
+   "slot_id": "w4-hh_native-largest-eigenval-r1",
+   "task": "largest-eigenval",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 1541700
+  },
+  "w4-hh_native-largest-eigenval-r2": {
+   "arm": "hh_native",
+   "cost_micros": 595684,
+   "rc": 0,
+   "replicate": 2,
+   "slot_id": "w4-hh_native-largest-eigenval-r2",
+   "task": "largest-eigenval",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 1787530
+  },
+  "w4-hh_native-largest-eigenval-r3": {
+   "arm": "hh_native",
+   "cost_micros": 0,
+   "rc": 0,
+   "replicate": 3,
+   "slot_id": "w4-hh_native-largest-eigenval-r3",
+   "task": "largest-eigenval",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 123084
+  },
+  "w4-hh_native-largest-eigenval-r4": {
+   "arm": "hh_native",
+   "cost_micros": 10860,
+   "rc": 0,
+   "replicate": 4,
+   "slot_id": "w4-hh_native-largest-eigenval-r4",
+   "task": "largest-eigenval",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 274408
+  },
+  "w4-hh_native-largest-eigenval-r5": {
+   "arm": "hh_native",
+   "cost_micros": 280701,
+   "rc": 0,
+   "replicate": 5,
+   "slot_id": "w4-hh_native-largest-eigenval-r5",
+   "task": "largest-eigenval",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 1480989
+  },
+  "w4-hh_native-multi-source-data-merger-r1": {
+   "arm": "hh_native",
+   "cost_micros": 6093,
+   "rc": 0,
+   "replicate": 1,
+   "slot_id": "w4-hh_native-multi-source-data-merger-r1",
+   "task": "multi-source-data-merger",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 72418
+  },
+  "w4-hh_native-multi-source-data-merger-r2": {
+   "arm": "hh_native",
+   "cost_micros": 5365,
+   "rc": 0,
+   "replicate": 2,
+   "slot_id": "w4-hh_native-multi-source-data-merger-r2",
+   "task": "multi-source-data-merger",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 64339
+  },
+  "w4-hh_native-multi-source-data-merger-r3": {
+   "arm": "hh_native",
+   "cost_micros": 4531,
+   "rc": 0,
+   "replicate": 3,
+   "slot_id": "w4-hh_native-multi-source-data-merger-r3",
+   "task": "multi-source-data-merger",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 46004
+  },
+  "w4-hh_native-multi-source-data-merger-r4": {
+   "arm": "hh_native",
+   "cost_micros": 4684,
+   "rc": 0,
+   "replicate": 4,
+   "slot_id": "w4-hh_native-multi-source-data-merger-r4",
+   "task": "multi-source-data-merger",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 87100
+  },
+  "w4-hh_native-multi-source-data-merger-r5": {
+   "arm": "hh_native",
+   "cost_micros": 247,
+   "rc": 0,
+   "replicate": 5,
+   "slot_id": "w4-hh_native-multi-source-data-merger-r5",
+   "task": "multi-source-data-merger",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 170016
+  },
+  "w4-hh_native-overfull-hbox-r1": {
+   "arm": "hh_native",
+   "cost_micros": 157760,
+   "rc": 1,
+   "replicate": 1,
+   "slot_id": "w4-hh_native-overfull-hbox-r1",
+   "task": "overfull-hbox",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 1995599
+  },
+  "w4-hh_native-overfull-hbox-r2": {
+   "arm": "hh_native",
+   "cost_micros": 42187,
+   "rc": 0,
+   "replicate": 2,
+   "slot_id": "w4-hh_native-overfull-hbox-r2",
+   "task": "overfull-hbox",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 654619
+  },
+  "w4-hh_native-overfull-hbox-r3": {
+   "arm": "hh_native",
+   "cost_micros": 2969,
+   "rc": 0,
+   "replicate": 3,
+   "slot_id": "w4-hh_native-overfull-hbox-r3",
+   "task": "overfull-hbox",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 233080
+  },
+  "w4-hh_native-overfull-hbox-r4": {
+   "arm": "hh_native",
+   "cost_micros": 107255,
+   "rc": 1,
+   "replicate": 4,
+   "slot_id": "w4-hh_native-overfull-hbox-r4",
+   "task": "overfull-hbox",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 3671663
+  },
+  "w4-hh_native-overfull-hbox-r5": {
+   "arm": "hh_native",
+   "cost_micros": 34551,
+   "rc": 0,
+   "replicate": 5,
+   "slot_id": "w4-hh_native-overfull-hbox-r5",
+   "task": "overfull-hbox",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 383137
+  },
+  "w4-hh_native-regex-log-r1": {
+   "arm": "hh_native",
+   "cost_micros": 122828,
+   "rc": 0,
+   "replicate": 1,
+   "slot_id": "w4-hh_native-regex-log-r1",
+   "task": "regex-log",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 552346
+  },
+  "w4-hh_native-regex-log-r2": {
+   "arm": "hh_native",
+   "cost_micros": 15468,
+   "rc": 0,
+   "replicate": 2,
+   "slot_id": "w4-hh_native-regex-log-r2",
+   "task": "regex-log",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 188505
+  },
+  "w4-hh_native-regex-log-r3": {
+   "arm": "hh_native",
+   "cost_micros": 16644,
+   "rc": 0,
+   "replicate": 3,
+   "slot_id": "w4-hh_native-regex-log-r3",
+   "task": "regex-log",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 310030
+  },
+  "w4-hh_native-regex-log-r4": {
+   "arm": "hh_native",
+   "cost_micros": 28530,
+   "rc": 0,
+   "replicate": 4,
+   "slot_id": "w4-hh_native-regex-log-r4",
+   "task": "regex-log",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 422948
+  },
+  "w4-hh_native-regex-log-r5": {
+   "arm": "hh_native",
+   "cost_micros": 112520,
+   "rc": 0,
+   "replicate": 5,
+   "slot_id": "w4-hh_native-regex-log-r5",
+   "task": "regex-log",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 771260
+  },
+  "w4-hh_native-sanitize-git-repo-r1": {
+   "arm": "hh_native",
+   "cost_micros": 21803,
+   "rc": 0,
+   "replicate": 1,
+   "slot_id": "w4-hh_native-sanitize-git-repo-r1",
+   "task": "sanitize-git-repo",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 264247
+  },
+  "w4-hh_native-sanitize-git-repo-r2": {
+   "arm": "hh_native",
+   "cost_micros": 28861,
+   "rc": 0,
+   "replicate": 2,
+   "slot_id": "w4-hh_native-sanitize-git-repo-r2",
+   "task": "sanitize-git-repo",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 304486
+  },
+  "w4-hh_native-sanitize-git-repo-r3": {
+   "arm": "hh_native",
+   "cost_micros": 19378,
+   "rc": 0,
+   "replicate": 3,
+   "slot_id": "w4-hh_native-sanitize-git-repo-r3",
+   "task": "sanitize-git-repo",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 198326
+  },
+  "w4-hh_native-sanitize-git-repo-r4": {
+   "arm": "hh_native",
+   "cost_micros": 16010,
+   "rc": 0,
+   "replicate": 4,
+   "slot_id": "w4-hh_native-sanitize-git-repo-r4",
+   "task": "sanitize-git-repo",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 172510
+  },
+  "w4-hh_native-sanitize-git-repo-r5": {
+   "arm": "hh_native",
+   "cost_micros": 0,
+   "rc": 0,
+   "replicate": 5,
+   "slot_id": "w4-hh_native-sanitize-git-repo-r5",
+   "task": "sanitize-git-repo",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 124011
+  },
+  "w4-hh_native-write-compressor-r1": {
+   "arm": "hh_native",
+   "cost_micros": 169,
+   "rc": 0,
+   "replicate": 1,
+   "slot_id": "w4-hh_native-write-compressor-r1",
+   "task": "write-compressor",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 218244
+  },
+  "w4-hh_native-write-compressor-r2": {
+   "arm": "hh_native",
+   "cost_micros": 14353,
+   "rc": 0,
+   "replicate": 2,
+   "slot_id": "w4-hh_native-write-compressor-r2",
+   "task": "write-compressor",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 386627
+  },
+  "w4-hh_native-write-compressor-r3": {
+   "arm": "hh_native",
+   "cost_micros": 0,
+   "rc": 0,
+   "replicate": 3,
+   "slot_id": "w4-hh_native-write-compressor-r3",
+   "task": "write-compressor",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 124012
+  },
+  "w4-hh_native-write-compressor-r4": {
+   "arm": "hh_native",
+   "cost_micros": 165,
+   "rc": 0,
+   "replicate": 4,
+   "slot_id": "w4-hh_native-write-compressor-r4",
+   "task": "write-compressor",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 126012
+  },
+  "w4-hh_native-write-compressor-r5": {
+   "arm": "hh_native",
+   "cost_micros": 170,
+   "rc": 0,
+   "replicate": 5,
+   "slot_id": "w4-hh_native-write-compressor-r5",
+   "task": "write-compressor",
+   "verifier": {
+    "disposition": "recorded",
+    "returncode": 127,
+    "stderr_tail": "bash: /tests/test.sh: No such file or directory\n",
+    "stdout_tail": ""
+   },
+   "wall_ms": 126008
+  },
+  "w4-mini-swe-agent-build-cython-ext-r1": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 11027,
+   "rc": 0,
+   "replicate": 1,
+   "slot_id": "w4-mini-swe-agent-build-cython-ext-r1",
+   "task": "build-cython-ext",
+   "wall_ms": 916315
+  },
+  "w4-mini-swe-agent-build-cython-ext-r2": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 104974,
+   "rc": 0,
+   "replicate": 2,
+   "slot_id": "w4-mini-swe-agent-build-cython-ext-r2",
+   "task": "build-cython-ext",
+   "wall_ms": 918579
+  },
+  "w4-mini-swe-agent-build-cython-ext-r3": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 17179,
+   "rc": 0,
+   "replicate": 3,
+   "slot_id": "w4-mini-swe-agent-build-cython-ext-r3",
+   "task": "build-cython-ext",
+   "wall_ms": 918663
+  },
+  "w4-mini-swe-agent-build-cython-ext-r4": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 59092,
+   "rc": 0,
+   "replicate": 4,
+   "slot_id": "w4-mini-swe-agent-build-cython-ext-r4",
+   "task": "build-cython-ext",
+   "wall_ms": 920475
+  },
+  "w4-mini-swe-agent-build-cython-ext-r5": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 56754,
+   "rc": 0,
+   "replicate": 5,
+   "slot_id": "w4-mini-swe-agent-build-cython-ext-r5",
+   "task": "build-cython-ext",
+   "wall_ms": 917606
+  },
+  "w4-mini-swe-agent-fix-code-vulnerability-r1": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 5351,
+   "rc": 0,
+   "replicate": 1,
+   "slot_id": "w4-mini-swe-agent-fix-code-vulnerability-r1",
+   "task": "fix-code-vulnerability",
+   "wall_ms": 154997
+  },
+  "w4-mini-swe-agent-fix-code-vulnerability-r2": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 5238,
+   "rc": 0,
+   "replicate": 2,
+   "slot_id": "w4-mini-swe-agent-fix-code-vulnerability-r2",
+   "task": "fix-code-vulnerability",
+   "wall_ms": 125489
+  },
+  "w4-mini-swe-agent-fix-code-vulnerability-r3": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 3594,
+   "rc": 0,
+   "replicate": 3,
+   "slot_id": "w4-mini-swe-agent-fix-code-vulnerability-r3",
+   "task": "fix-code-vulnerability",
+   "wall_ms": 66588
+  },
+  "w4-mini-swe-agent-fix-code-vulnerability-r4": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 8417,
+   "rc": 0,
+   "replicate": 4,
+   "slot_id": "w4-mini-swe-agent-fix-code-vulnerability-r4",
+   "task": "fix-code-vulnerability",
+   "wall_ms": 99601
+  },
+  "w4-mini-swe-agent-fix-code-vulnerability-r5": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 4211,
+   "rc": 0,
+   "replicate": 5,
+   "slot_id": "w4-mini-swe-agent-fix-code-vulnerability-r5",
+   "task": "fix-code-vulnerability",
+   "wall_ms": 143398
+  },
+  "w4-mini-swe-agent-gcode-to-text-r1": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 99926,
+   "rc": 0,
+   "replicate": 1,
+   "slot_id": "w4-mini-swe-agent-gcode-to-text-r1",
+   "task": "gcode-to-text",
+   "wall_ms": 915492
+  },
+  "w4-mini-swe-agent-gcode-to-text-r2": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 129679,
+   "rc": 0,
+   "replicate": 2,
+   "slot_id": "w4-mini-swe-agent-gcode-to-text-r2",
+   "task": "gcode-to-text",
+   "wall_ms": 915952
+  },
+  "w4-mini-swe-agent-gcode-to-text-r3": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 73929,
+   "rc": 0,
+   "replicate": 3,
+   "slot_id": "w4-mini-swe-agent-gcode-to-text-r3",
+   "task": "gcode-to-text",
+   "wall_ms": 914693
+  },
+  "w4-mini-swe-agent-gcode-to-text-r4": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 148448,
+   "rc": 0,
+   "replicate": 4,
+   "slot_id": "w4-mini-swe-agent-gcode-to-text-r4",
+   "task": "gcode-to-text",
+   "wall_ms": 914585
+  },
+  "w4-mini-swe-agent-gcode-to-text-r5": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 88494,
+   "rc": 0,
+   "replicate": 5,
+   "slot_id": "w4-mini-swe-agent-gcode-to-text-r5",
+   "task": "gcode-to-text",
+   "wall_ms": 914663
+  },
+  "w4-mini-swe-agent-headless-terminal-r1": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 42947,
+   "rc": 0,
+   "replicate": 1,
+   "slot_id": "w4-mini-swe-agent-headless-terminal-r1",
+   "task": "headless-terminal",
+   "wall_ms": 516767
+  },
+  "w4-mini-swe-agent-headless-terminal-r2": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 84356,
+   "rc": 0,
+   "replicate": 2,
+   "slot_id": "w4-mini-swe-agent-headless-terminal-r2",
+   "task": "headless-terminal",
+   "wall_ms": 931485
+  },
+  "w4-mini-swe-agent-headless-terminal-r3": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 80167,
+   "rc": 0,
+   "replicate": 3,
+   "slot_id": "w4-mini-swe-agent-headless-terminal-r3",
+   "task": "headless-terminal",
+   "wall_ms": 932421
+  },
+  "w4-mini-swe-agent-headless-terminal-r4": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 86558,
+   "rc": 0,
+   "replicate": 4,
+   "slot_id": "w4-mini-swe-agent-headless-terminal-r4",
+   "task": "headless-terminal",
+   "wall_ms": 820497
+  },
+  "w4-mini-swe-agent-headless-terminal-r5": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 50270,
+   "rc": 0,
+   "replicate": 5,
+   "slot_id": "w4-mini-swe-agent-headless-terminal-r5",
+   "task": "headless-terminal",
+   "wall_ms": 855915
+  },
+  "w4-mini-swe-agent-largest-eigenval-r1": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 193008,
+   "rc": 0,
+   "replicate": 1,
+   "slot_id": "w4-mini-swe-agent-largest-eigenval-r1",
+   "task": "largest-eigenval",
+   "wall_ms": 914355
+  },
+  "w4-mini-swe-agent-largest-eigenval-r2": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 134476,
+   "rc": 0,
+   "replicate": 2,
+   "slot_id": "w4-mini-swe-agent-largest-eigenval-r2",
+   "task": "largest-eigenval",
+   "wall_ms": 913836
+  },
+  "w4-mini-swe-agent-largest-eigenval-r3": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 78059,
+   "rc": 0,
+   "replicate": 3,
+   "slot_id": "w4-mini-swe-agent-largest-eigenval-r3",
+   "task": "largest-eigenval",
+   "wall_ms": 914437
+  },
+  "w4-mini-swe-agent-largest-eigenval-r4": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 126574,
+   "rc": 0,
+   "replicate": 4,
+   "slot_id": "w4-mini-swe-agent-largest-eigenval-r4",
+   "task": "largest-eigenval",
+   "wall_ms": 915614
+  },
+  "w4-mini-swe-agent-largest-eigenval-r5": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 186092,
+   "rc": 0,
+   "replicate": 5,
+   "slot_id": "w4-mini-swe-agent-largest-eigenval-r5",
+   "task": "largest-eigenval",
+   "wall_ms": 914593
+  },
+  "w4-mini-swe-agent-multi-source-data-merger-r1": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 10081,
+   "rc": 0,
+   "replicate": 1,
+   "slot_id": "w4-mini-swe-agent-multi-source-data-merger-r1",
+   "task": "multi-source-data-merger",
+   "wall_ms": 111256
+  },
+  "w4-mini-swe-agent-multi-source-data-merger-r2": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 17711,
+   "rc": 0,
+   "replicate": 2,
+   "slot_id": "w4-mini-swe-agent-multi-source-data-merger-r2",
+   "task": "multi-source-data-merger",
+   "wall_ms": 214396
+  },
+  "w4-mini-swe-agent-multi-source-data-merger-r3": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 3535,
+   "rc": 0,
+   "replicate": 3,
+   "slot_id": "w4-mini-swe-agent-multi-source-data-merger-r3",
+   "task": "multi-source-data-merger",
+   "wall_ms": 63084
+  },
+  "w4-mini-swe-agent-multi-source-data-merger-r4": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 7826,
+   "rc": 0,
+   "replicate": 4,
+   "slot_id": "w4-mini-swe-agent-multi-source-data-merger-r4",
+   "task": "multi-source-data-merger",
+   "wall_ms": 154114
+  },
+  "w4-mini-swe-agent-multi-source-data-merger-r5": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 7517,
+   "rc": 0,
+   "replicate": 5,
+   "slot_id": "w4-mini-swe-agent-multi-source-data-merger-r5",
+   "task": "multi-source-data-merger",
+   "wall_ms": 343256
+  },
+  "w4-mini-swe-agent-overfull-hbox-r1": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 14674,
+   "rc": 0,
+   "replicate": 1,
+   "slot_id": "w4-mini-swe-agent-overfull-hbox-r1",
+   "task": "overfull-hbox",
+   "wall_ms": 801224
+  },
+  "w4-mini-swe-agent-overfull-hbox-r2": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 26624,
+   "rc": 0,
+   "replicate": 2,
+   "slot_id": "w4-mini-swe-agent-overfull-hbox-r2",
+   "task": "overfull-hbox",
+   "wall_ms": 993533
+  },
+  "w4-mini-swe-agent-overfull-hbox-r3": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 9717,
+   "rc": 0,
+   "replicate": 3,
+   "slot_id": "w4-mini-swe-agent-overfull-hbox-r3",
+   "task": "overfull-hbox",
+   "wall_ms": 807344
+  },
+  "w4-mini-swe-agent-overfull-hbox-r4": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 42398,
+   "rc": 0,
+   "replicate": 4,
+   "slot_id": "w4-mini-swe-agent-overfull-hbox-r4",
+   "task": "overfull-hbox",
+   "wall_ms": 805029
+  },
+  "w4-mini-swe-agent-overfull-hbox-r5": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 24174,
+   "rc": 0,
+   "replicate": 5,
+   "slot_id": "w4-mini-swe-agent-overfull-hbox-r5",
+   "task": "overfull-hbox",
+   "wall_ms": 803118
+  },
+  "w4-mini-swe-agent-regex-log-r1": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 13432,
+   "rc": 0,
+   "replicate": 1,
+   "slot_id": "w4-mini-swe-agent-regex-log-r1",
+   "task": "regex-log",
+   "wall_ms": 659382
+  },
+  "w4-mini-swe-agent-regex-log-r2": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 14848,
+   "rc": 0,
+   "replicate": 2,
+   "slot_id": "w4-mini-swe-agent-regex-log-r2",
+   "task": "regex-log",
+   "wall_ms": 307679
+  },
+  "w4-mini-swe-agent-regex-log-r3": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 34111,
+   "rc": 0,
+   "replicate": 3,
+   "slot_id": "w4-mini-swe-agent-regex-log-r3",
+   "task": "regex-log",
+   "wall_ms": 327075
+  },
+  "w4-mini-swe-agent-regex-log-r4": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 18954,
+   "rc": 0,
+   "replicate": 4,
+   "slot_id": "w4-mini-swe-agent-regex-log-r4",
+   "task": "regex-log",
+   "wall_ms": 342035
+  },
+  "w4-mini-swe-agent-regex-log-r5": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 14062,
+   "rc": 0,
+   "replicate": 5,
+   "slot_id": "w4-mini-swe-agent-regex-log-r5",
+   "task": "regex-log",
+   "wall_ms": 232023
+  },
+  "w4-mini-swe-agent-sanitize-git-repo-r1": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 22311,
+   "rc": 0,
+   "replicate": 1,
+   "slot_id": "w4-mini-swe-agent-sanitize-git-repo-r1",
+   "task": "sanitize-git-repo",
+   "wall_ms": 277008
+  },
+  "w4-mini-swe-agent-sanitize-git-repo-r2": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 68015,
+   "rc": 0,
+   "replicate": 2,
+   "slot_id": "w4-mini-swe-agent-sanitize-git-repo-r2",
+   "task": "sanitize-git-repo",
+   "wall_ms": 741485
+  },
+  "w4-mini-swe-agent-sanitize-git-repo-r3": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 44760,
+   "rc": 0,
+   "replicate": 3,
+   "slot_id": "w4-mini-swe-agent-sanitize-git-repo-r3",
+   "task": "sanitize-git-repo",
+   "wall_ms": 755529
+  },
+  "w4-mini-swe-agent-sanitize-git-repo-r4": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 27858,
+   "rc": 0,
+   "replicate": 4,
+   "slot_id": "w4-mini-swe-agent-sanitize-git-repo-r4",
+   "task": "sanitize-git-repo",
+   "wall_ms": 237731
+  },
+  "w4-mini-swe-agent-sanitize-git-repo-r5": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 19107,
+   "rc": 0,
+   "replicate": 5,
+   "slot_id": "w4-mini-swe-agent-sanitize-git-repo-r5",
+   "task": "sanitize-git-repo",
+   "wall_ms": 392539
+  },
+  "w4-mini-swe-agent-write-compressor-r1": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 127835,
+   "rc": 0,
+   "replicate": 1,
+   "slot_id": "w4-mini-swe-agent-write-compressor-r1",
+   "task": "write-compressor",
+   "wall_ms": 1012374
+  },
+  "w4-mini-swe-agent-write-compressor-r2": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 28596,
+   "rc": 0,
+   "replicate": 2,
+   "slot_id": "w4-mini-swe-agent-write-compressor-r2",
+   "task": "write-compressor",
+   "wall_ms": 921618
+  },
+  "w4-mini-swe-agent-write-compressor-r3": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 53080,
+   "rc": 0,
+   "replicate": 3,
+   "slot_id": "w4-mini-swe-agent-write-compressor-r3",
+   "task": "write-compressor",
+   "wall_ms": 637637
+  },
+  "w4-mini-swe-agent-write-compressor-r4": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 36162,
+   "rc": 0,
+   "replicate": 4,
+   "slot_id": "w4-mini-swe-agent-write-compressor-r4",
+   "task": "write-compressor",
+   "wall_ms": 496096
+  },
+  "w4-mini-swe-agent-write-compressor-r5": {
+   "arm": "mini-swe-agent",
+   "cost_micros": 44433,
+   "rc": 0,
+   "replicate": 5,
+   "slot_id": "w4-mini-swe-agent-write-compressor-r5",
+   "task": "write-compressor",
+   "wall_ms": 554377
+  },
+  "w4-v5-build-cython-ext-r1": {
+   "arm": "v5",
+   "cost_micros": 0,
+   "rc": 1,
+   "replicate": 1,
+   "slot_id": "w4-v5-build-cython-ext-r1",
+   "task": "build-cython-ext",
+   "verifier": {
+    "disposition": "verifier_unavailable{env_closed_or_unmounted}"
+   },
+   "wall_ms": 2000
+  },
+  "w4-v5-build-cython-ext-r2": {
+   "arm": "v5",
+   "cost_micros": 0,
+   "rc": 1,
+   "replicate": 2,
+   "slot_id": "w4-v5-build-cython-ext-r2",
+   "task": "build-cython-ext",
+   "verifier": {
+    "disposition": "verifier_unavailable{env_closed_or_unmounted}"
+   },
+   "wall_ms": 2000
+  },
+  "w4-v5-fix-code-vulnerability-r1": {
+   "arm": "v5",
+   "cost_micros": 0,
+   "rc": 1,
+   "replicate": 1,
+   "slot_id": "w4-v5-fix-code-vulnerability-r1",
+   "task": "fix-code-vulnerability",
+   "verifier": {
+    "disposition": "verifier_unavailable{env_closed_or_unmounted}"
+   },
+   "wall_ms": 2000
+  },
+  "w4-v5-fix-code-vulnerability-r2": {
+   "arm": "v5",
+   "cost_micros": 0,
+   "rc": 1,
+   "replicate": 2,
+   "slot_id": "w4-v5-fix-code-vulnerability-r2",
+   "task": "fix-code-vulnerability",
+   "verifier": {
+    "disposition": "verifier_unavailable{env_closed_or_unmounted}"
+   },
+   "wall_ms": 2000
+  },
+  "w4-v5-gcode-to-text-r1": {
+   "arm": "v5",
+   "cost_micros": 0,
+   "rc": 1,
+   "replicate": 1,
+   "slot_id": "w4-v5-gcode-to-text-r1",
+   "task": "gcode-to-text",
+   "verifier": {
+    "disposition": "verifier_unavailable{env_closed_or_unmounted}"
+   },
+   "wall_ms": 2000
+  },
+  "w4-v5-gcode-to-text-r2": {
+   "arm": "v5",
+   "cost_micros": 0,
+   "rc": 1,
+   "replicate": 2,
+   "slot_id": "w4-v5-gcode-to-text-r2",
+   "task": "gcode-to-text",
+   "verifier": {
+    "disposition": "verifier_unavailable{env_closed_or_unmounted}"
+   },
+   "wall_ms": 1147
+  },
+  "w4-v5-headless-terminal-r1": {
+   "arm": "v5",
+   "cost_micros": 0,
+   "rc": 1,
+   "replicate": 1,
+   "slot_id": "w4-v5-headless-terminal-r1",
+   "task": "headless-terminal",
+   "verifier": {
+    "disposition": "verifier_unavailable{env_closed_or_unmounted}"
+   },
+   "wall_ms": 2000
+  },
+  "w4-v5-headless-terminal-r2": {
+   "arm": "v5",
+   "cost_micros": 0,
+   "rc": 1,
+   "replicate": 2,
+   "slot_id": "w4-v5-headless-terminal-r2",
+   "task": "headless-terminal",
+   "verifier": {
+    "disposition": "verifier_unavailable{env_closed_or_unmounted}"
+   },
+   "wall_ms": 2000
+  },
+  "w4-v5-largest-eigenval-r1": {
+   "arm": "v5",
+   "cost_micros": 0,
+   "rc": 1,
+   "replicate": 1,
+   "slot_id": "w4-v5-largest-eigenval-r1",
+   "task": "largest-eigenval",
+   "verifier": {
+    "disposition": "verifier_unavailable{env_closed_or_unmounted}"
+   },
+   "wall_ms": 2000
+  },
+  "w4-v5-largest-eigenval-r2": {
+   "arm": "v5",
+   "cost_micros": 0,
+   "rc": 1,
+   "replicate": 2,
+   "slot_id": "w4-v5-largest-eigenval-r2",
+   "task": "largest-eigenval",
+   "verifier": {
+    "disposition": "verifier_unavailable{env_closed_or_unmounted}"
+   },
+   "wall_ms": 2000
+  },
+  "w4-v5-multi-source-data-merger-r1": {
+   "arm": "v5",
+   "cost_micros": 0,
+   "rc": 1,
+   "replicate": 1,
+   "slot_id": "w4-v5-multi-source-data-merger-r1",
+   "task": "multi-source-data-merger",
+   "verifier": {
+    "disposition": "verifier_unavailable{env_closed_or_unmounted}"
+   },
+   "wall_ms": 2000
+  },
+  "w4-v5-multi-source-data-merger-r2": {
+   "arm": "v5",
+   "cost_micros": 0,
+   "rc": 1,
+   "replicate": 2,
+   "slot_id": "w4-v5-multi-source-data-merger-r2",
+   "task": "multi-source-data-merger",
+   "verifier": {
+    "disposition": "verifier_unavailable{env_closed_or_unmounted}"
+   },
+   "wall_ms": 2000
+  },
+  "w4-v5-overfull-hbox-r1": {
+   "arm": "v5",
+   "cost_micros": 0,
+   "rc": 1,
+   "replicate": 1,
+   "slot_id": "w4-v5-overfull-hbox-r1",
+   "task": "overfull-hbox",
+   "verifier": {
+    "disposition": "verifier_unavailable{env_closed_or_unmounted}"
+   },
+   "wall_ms": 2000
+  },
+  "w4-v5-overfull-hbox-r2": {
+   "arm": "v5",
+   "cost_micros": 0,
+   "rc": 1,
+   "replicate": 2,
+   "slot_id": "w4-v5-overfull-hbox-r2",
+   "task": "overfull-hbox",
+   "verifier": {
+    "disposition": "verifier_unavailable{env_closed_or_unmounted}"
+   },
+   "wall_ms": 2000
+  },
+  "w4-v5-regex-log-r1": {
+   "arm": "v5",
+   "cost_micros": 0,
+   "rc": 1,
+   "replicate": 1,
+   "slot_id": "w4-v5-regex-log-r1",
+   "task": "regex-log",
+   "verifier": {
+    "disposition": "verifier_unavailable{env_closed_or_unmounted}"
+   },
+   "wall_ms": 2000
+  },
+  "w4-v5-regex-log-r2": {
+   "arm": "v5",
+   "cost_micros": 0,
+   "rc": 1,
+   "replicate": 2,
+   "slot_id": "w4-v5-regex-log-r2",
+   "task": "regex-log",
+   "verifier": {
+    "disposition": "verifier_unavailable{env_closed_or_unmounted}"
+   },
+   "wall_ms": 2000
+  },
+  "w4-v5-sanitize-git-repo-r1": {
+   "arm": "v5",
+   "cost_micros": 0,
+   "rc": 1,
+   "replicate": 1,
+   "slot_id": "w4-v5-sanitize-git-repo-r1",
+   "task": "sanitize-git-repo",
+   "verifier": {
+    "disposition": "verifier_unavailable{env_closed_or_unmounted}"
+   },
+   "wall_ms": 2000
+  },
+  "w4-v5-sanitize-git-repo-r2": {
+   "arm": "v5",
+   "cost_micros": 0,
+   "rc": 1,
+   "replicate": 2,
+   "slot_id": "w4-v5-sanitize-git-repo-r2",
+   "task": "sanitize-git-repo",
+   "verifier": {
+    "disposition": "verifier_unavailable{env_closed_or_unmounted}"
+   },
+   "wall_ms": 2000
+  },
+  "w4-v5-write-compressor-r1": {
+   "arm": "v5",
+   "cost_micros": 0,
+   "rc": 1,
+   "replicate": 1,
+   "slot_id": "w4-v5-write-compressor-r1",
+   "task": "write-compressor",
+   "verifier": {
+    "disposition": "verifier_unavailable{env_closed_or_unmounted}"
+   },
+   "wall_ms": 2000
+  },
+  "w4-v5-write-compressor-r2": {
+   "arm": "v5",
+   "cost_micros": 0,
+   "rc": 1,
+   "replicate": 2,
+   "slot_id": "w4-v5-write-compressor-r2",
+   "task": "write-compressor",
+   "verifier": {
+    "disposition": "verifier_unavailable{env_closed_or_unmounted}"
+   },
+   "wall_ms": 5216
+  }
+ },
+ "started_at": "2026-11-19T11:23:06Z",
+ "window": "W4",
+ "withheld": []
+}
