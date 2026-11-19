@@ -1,0 +1,36 @@
+{
+ "bound_micros": 100000000,
+ "dead_man": "the declaration's own bounds stand \u2014 D 22.5 h max-run STOP + in-guest 1365 min timer + h_r 6 h residual horizon; if the window cannot complete inside the bound the driver withholds verbatim and teardown runs",
+ "operator_verbatim": "I authorize up to $100 ceiling. Proceed",
+ "phase": "fp",
+ "prior_authorization": {
+  "amendment": "amend the compute pool to run W4's admissible arms (protected pair + V5), record Pi/CC not_run{admission}",
+  "gate": "ADR-0452",
+  "readout_path": "docs/adr/ADR-0452-w4-scope-amendment.md",
+  "verbatim_sha256": "bd0b3e5df4b8e62502dbdb5bbe406cad6673e276a8e43311fc488ce0c3d88a6f"
+ },
+ "projection_micros": {
+  "compute": {
+   "ceiling": 7988890,
+   "source": "docs/build/reports/2026-11-19-fp-w4-quote.json pq-4f15fc7015dc1db1 (D 22.5h dead-man + 1h restart + disk + egress)"
+  },
+  "model": {
+   "ceiling": 64188120,
+   "expected": 43068050,
+   "source": "docs/build/reports/2026-11-19-fp-e-comparative-quote.json fp_e_full row: n_trials 150 (mini-swe-agent 50 + hh_native 50 + v5 50)"
+  },
+  "total_ceiling_shape": 72177010
+ },
+ "recorded_at": "2026-11-19T08:11:14Z",
+ "recorded_before_first_metered_call": true,
+ "schema": "hh-fp-spend-bound/1",
+ "scope": [
+  "provision GCE instance per scripts/gce-backend/declarations/fp-w4-r652.json",
+  "lane probe + composed k=5 schedule: 10 held tasks x 5 replicates x 3 arms (150 admitted slots)",
+  "harvest + teardown (phase_close: project delete) + archive upload + settlement",
+  "pi + claude-code: not_run{admission:AG3} verbatim \u2014 recorded, never executed"
+ ],
+ "stage": "r6.52c-execution",
+ "ticket": "R6.52",
+ "window": "w4"
+}
