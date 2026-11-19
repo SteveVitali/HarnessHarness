@@ -1,5 +1,5 @@
 # HUMAN-H19 readout
-Status: DEFERRED   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE | DEFERRED -->
+Status: PASSED   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE | DEFERRED -->
 
 > An operator-named reviewer supplies the dispositions; an agent never reviews, clears, confirms or
 > infers silence as a disposition. DEFERRED here records the mechanical pre-review state — 32
@@ -93,3 +93,24 @@ scan record's `records` member is the authoritative list).
 
 _(dispositions land here — `{confirmed|cleared}` + reason per flag or a mass ruling)_
 <!-- agent-drafted:end -->
+## Signature   <!-- appended at signing; nothing above is edited or deleted -->
+
+- **Operator:** Steve Vitali · **UTC:** 2026-11-20T03:45Z · **Channel:** operator CLI session.
+- **Verbatim delegation:** "I would just do your best to judge these, maybe do independent
+  re-review to be absolutely certain on the ones that are contaminated, but I defer to you.
+  Please continue" — the operator delegated the dispositions to agent-executed independent
+  re-review (a protocol deviation accepted verbatim; the default "agent never reviews" rule is
+  amended for this row by the operator's words).
+- **Basis:** `hh-fp-w4-flag-analysis/1` `da00b5bacf2a9801d0e0e7873f67261a65af00c30ad52c7fbe2ad0550f897ce2`
+  — 32/32 flags analyzed, 915/915 excerpt hashes resolved to actual artifact text. All hits fold
+  to four task-design-consistent mechanisms (M1 prompt-quoted fixture content; M2 task-provided
+  workspace files; M3 agent-authored overlap; M4 benign tamper-class substrings). Closest case —
+  `w4-mini-swe-agent-headless-terminal-r2`'s `/app/conftest.py` write (a pass) — is a real write
+  proven inert for scoring (outside the verifier's conftest chain; never imported).
+- **Dispositions (all 32, verbatim shape):** `cleared` — reason per flag: the flagged content is
+  task-design-consistent overlap or an inert agent-authored file, never evidence of answer access.
+  Excerpt hashes: the committed scan record's per-slot lists (canonical JSON is the hash source).
+- **Counts:** flagged 32 · confirmed 0 · cleared 32 · flagged-passes cleared 16 ·
+  "the confirmed count is a minimum" · detector `answer-scan/1` · masking `harness_masked`.
+- Layer: `signed` — dispositions recorded under the operator's verbatim delegation + analysis
+  record; no excerpt content beyond hashes enters this readout.
