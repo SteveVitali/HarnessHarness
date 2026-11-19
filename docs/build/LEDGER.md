@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket: DOC6.1
-lastCompleted:   GATE-G32
+nextTicket: (round-6 complete)
+lastCompleted:   DOC6.1
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -28,13 +28,13 @@ dispatchTarget:  subagent
 buildWorktree:   /Users/stevenvitali/MetaHarness-harnessharness
 buildBranchBase: codex/harnessharness-evidence
 pinnedBaseSha:   001490c14a6568972d16a663bb04c07a4255d30d
-chainTip:        codex/harnessharness-cap6.3
+chainTip:        codex/harnessharness-doc6.1
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           6
 harness:         devin-cli/swe-2-high/subagent
-updatedAt:       2026-11-19T07:00Z
+updatedAt:       2026-11-19T07:25Z
 ```
 
 ## OPEN FINDINGS
@@ -1359,6 +1359,7 @@ updatedAt:       2026-11-19T07:00Z
 
 ## PHASE LOG — Round 6
 
+- 2026-11-19T07:25Z · **DOC6.1 done — documentation refresh (manifest 325; offline, $0)** — branch `codex/harnessharness-doc6.1` (PR #421) · base `codex/harnessharness-cap6.3`. refresh-repo-docs + agent-docs run: reader surfaces (README/status/evidence/reference/architecture/results) reconciled to the landed round (H17 public dataset a11591e9, flip records, G32 sums, landed binaries — withhelds verbatim, card states unchanged); AGENTS.md hierarchy gains R6 machinery rows + Round-7 entry points. Checkers: living-docs 554 · position 14/14 ×2 · examples/trace/contributing all green ×2 modes · site 15/15 ×2 · run-examples EX-01–04 · quickstart green · agent-docs detector 0 issues; stale fixed 4, gaps filled 2, verified 6, report-only 24. I-3 repair landed PR #420 (check-ci-gating 82/78 allowlisted). **Round-6 chain complete — all 325 manifest rows landed.** nextTicket → (round-6 complete) · engineered (offline, $0.00) · devin-cli/swe-2-high/subagent
 - 2026-11-19T07:00Z · **GATE-G32 done — Round-6 ACCEPTED (manifest 324)** — verbatim rulings: deviations+waivers accepted ("I'm okay with these deviations and want to proceed with them" — XC-325 waived, Ws1 over-ceiling + two-fold variance accepted, AR-08/10 waived); I-3 "Fix with allowlist"; disk retention RETAIN ("don't delete evidence if it's our only copy of it and we might need it later"). All signature rows dispositioned, none unsigned. nextTicket → DOC6.1 (final ticket) · devin-cli/swe-2-high/coordinator
 - 2026-11-19T06:05Z · **CAP6.3 done — spec reconciliation + integration plan (manifest 323; offline, $0)** — branch `codex/harnessharness-cap6.3` (PR #419) · base `codex/harnessharness-cap6.2`. 85 landed rows tagged in-spec/implied/ticket-added (no new ids); ADR parity 19/21 + 7 intervention + 2 record ADRs; **real gap: AR-08/AR-10 never minted** → R6A-2 mint-or-waive rides G32; spec sha256 re-verified frozen. Merge dry-run 13/13 clean onto main; stack CI read: #407–#413 pass, #414–#418 FAIL on check-ci-gating docs/build literals (diagnosed, repair = maintainer decision I-3). Integration order Phase A 407→408→409→410→411→413→412; Phase B holds 414–419 pending I-3. G32 staging verbatim: XC-325 waiver, Ws1 over-ceiling, two-fold variance, disk-retention, merge ordering, AR-08/10. nextTicket → GATE-G32 · engineered (offline, $0.00) · devin-cli/swe-2-high/subagent
 - 2026-11-19T05:40Z · **CAP6.2 done — round closure (manifest 322; offline, $0)** — branch `codex/harnessharness-cap6.2` (PR #418) · base `codex/harnessharness-cap6.1`. DF-CAP6.1-1/4/5 CLOSED (decision rows restated verbatim in GATE DECISIONS — guard now PASS/DISPATCH; register normalization + 12 missing BUILD_INDEX landings backfilled; checker repairs incl. flip filenames, compute-receipts guard, clippy, ADR index, triggers); DF-CAP6.1-2 discharged via dated deviation (frozen records untouched); DF-CAP6.1-3 deferred→G32 waiver list (XC-325 unexecuted, honest). Closure: 410/456 engineering-closed; spend $4.52 model billed + $27,367,214µ compute estimated = $31.887214 ≤ $110; compute-open empty; DELETE_REQUESTED 02:01:58Z verified. Carried to G32: base-stack CI red (#414–#416), operator-disk retention decision, waiver list (XC-325, Ws1 estimate-over-ceiling, two-fold variance). chainTip → codex/harnessharness-cap6.2 · nextTicket → CAP6.3 · engineered (offline, $0.00) · devin-cli/swe-2-high/subagent
