@@ -1287,6 +1287,255 @@ pub fn w4_audit_packet(
     ]))
 }
 
+// ── the dated computed audit addendum ────────────────────────────────
+
+/// One sampled slot's computed L1.1 replay result — the leg fold's
+/// verdict vocabulary is the requirement's:
+/// `pass` / `diverged{step,class}` / `unavailable{evidence}`. The fold
+/// (the bin's `emit-audit-addendum`) builds these from the retained
+/// proxy receipts + drive events; the emitter never invents one.
+pub struct W4AuditLeg {
+    /// The sampled slot id — must be a member of the seeded sample.
+    pub slot_id: String,
+    /// Model calls in the receipt-bound recording.
+    pub recorded_calls: i64,
+    /// Calls that returned `verdict: exact` under `hh-l1-canon/1`.
+    pub calls_exact: i64,
+    /// The typed per-slot verdict spelling.
+    pub verdict: String,
+    /// First-divergence detail where the leg diverged —
+    /// `{k, class, first_diff_path}`; absent on pass/unavailable.
+    pub first_divergence: Option<Json>,
+    /// The typed terminal class — `completed` where the trajectory
+    /// ends at the submit marker, `replay_exhausted{…}` where the
+    /// recording truncates (`client_gone`) and H's one further request
+    /// is refused at the sequence boundary.
+    pub terminal: String,
+    /// The H drive's `hh-l1-drive-report/1` run id.
+    pub h_run_id: String,
+    /// `retained:` citations `(path, sha256)` pinning the leg's
+    /// evidence members.
+    pub evidence: Vec<(String, String)>,
+}
+
+/// `w4_audit_computed_packet(...)` — the dated addendum that computes
+/// the replay leg the R6.53 packet left `not_computed`. The seed,
+/// population, guard and seeded-sample members bind byte-identically;
+/// `audit.state` is `computed` with per-slot typed verdicts, the frozen
+/// H identity, the replay machinery declaration and first-divergence
+/// detail where a leg diverged. `amends` cites the frozen packet — it
+/// stays append-only history; the L2 verdict is preserved, never
+/// moved by this record.
+#[allow(clippy::too_many_arguments)] // the arity is the record's member set — the packet's shape is the signature's.
+pub fn w4_audit_computed_packet(
+    w4_o_ids: &BTreeSet<String>,
+    w2_corpus_ids: &BTreeSet<String>,
+    seed: u64,
+    supersedes_rel: &str,
+    w4_window_sha256: &str,
+    sources: Json,
+    h_identity: &str,
+    frozen_sha256: &str,
+    legs: &[W4AuditLeg],
+) -> Result<Json, crate::fp_results::AuditError> {
+    let sample = audit_sample(
+        &w4_o_ids.iter().cloned().collect::<Vec<_>>(),
+        seed,
+        AUDIT_SAMPLE_N,
+    );
+    for id in &sample {
+        if w2_corpus_ids.contains(id) || !w4_o_ids.contains(id) {
+            return Err(crate::fp_results::AuditError::NotW4O { id: id.clone() });
+        }
+    }
+    // The leg set covers the sample exactly — no substitution, no drop.
+    for leg in legs {
+        if !sample.contains(&leg.slot_id) {
+            return Err(crate::fp_results::AuditError::LegOutsideSample {
+                id: leg.slot_id.clone(),
+            });
+        }
+    }
+    for id in &sample {
+        if !legs.iter().any(|l| &l.slot_id == id) {
+            return Err(crate::fp_results::AuditError::SampleMissingLeg { id: id.clone() });
+        }
+    }
+    let n_calls: i64 = legs.iter().map(|l| l.recorded_calls).sum();
+    let n_exact: i64 = legs.iter().map(|l| l.calls_exact).sum();
+    let n_pass = legs.iter().filter(|l| l.verdict == "pass").count();
+    let n_unavailable = legs
+        .iter()
+        .filter(|l| l.verdict.starts_with("unavailable"))
+        .count();
+    let first_diverged = legs.iter().find(|l| l.verdict.starts_with("diverged"));
+    let verdict = if let Some(l) = first_diverged {
+        // First-divergence-fails: a genuine mismatch is a typed
+        // divergence and fails the audit leg — never softened.
+        format!(
+            "diverged{{slot {} — {}; the audit leg fails}}",
+            l.slot_id, l.verdict
+        )
+    } else if n_unavailable > 0 {
+        format!(
+            "unavailable{{{n_unavailable} sampled slot(s) — typed leg evidence unavailability}}"
+        )
+    } else {
+        format!(
+            "pass{{{} sampled slots — {n_exact}/{n_calls} recorded calls verdict:exact}}",
+            legs.len()
+        )
+    };
+    let leg_rows: Vec<Json> = legs
+        .iter()
+        .map(|l| {
+            let mut row: Vec<(String, Json)> = vec![
+                ("slot_id".into(), Json::str(&l.slot_id)),
+                ("recorded_calls".into(), Json::Int(l.recorded_calls)),
+                ("calls_exact".into(), Json::Int(l.calls_exact)),
+                ("verdict".into(), Json::str(&l.verdict)),
+                ("terminal".into(), Json::str(&l.terminal)),
+                ("h_run_id".into(), Json::str(&l.h_run_id)),
+            ];
+            if let Some(d) = &l.first_divergence {
+                row.push(("first_divergence".into(), d.clone()));
+            }
+            row.push((
+                "evidence".into(),
+                Json::Arr(
+                    l.evidence
+                        .iter()
+                        .map(|(p, s)| Json::obj([("path", Json::str(p)), ("sha256", Json::str(s))]))
+                        .collect(),
+                ),
+            ));
+            Json::Obj(row.into_iter().collect())
+        })
+        .collect();
+    Ok(Json::obj([
+        ("schema", Json::str(L2_AUDIT_SCHEMA)),
+        ("audit_of", Json::str("P3-L2")),
+        ("req", Json::str("REQ-XD-119")),
+        ("seed", Json::Int(seed as i64)),
+        (
+            "population",
+            Json::str("w4_o_recordings_only — every other recording class refuses"),
+        ),
+        ("population_n", Json::Int(w4_o_ids.len() as i64)),
+        (
+            "planned_sample",
+            Json::str("10% of the 50 planned pairs → 5 O-side recordings"),
+        ),
+        ("sampled_n", Json::Int(sample.len() as i64)),
+        (
+            "sampled",
+            Json::Arr(sample.iter().map(Json::str).collect()),
+        ),
+        (
+            "sample_rule",
+            Json::str(
+                "sha256(fp-w4-l2-audit|<seed>|<slot_id>) ascending, first 5 — \
+                 deterministic, recomputable",
+            ),
+        ),
+        (
+            "guard",
+            Json::obj([
+                (
+                    "rule",
+                    Json::str(
+                        "a W2-corpus recording (or any non-W4-O id) in the sample refuses at decode",
+                    ),
+                ),
+                ("result", Json::str("sample all-W4-O")),
+            ]),
+        ),
+        (
+            "audit",
+            Json::obj([
+                ("state", Json::str("computed")),
+                (
+                    "result",
+                    Json::str(format!(
+                        "{n_pass}/{} sampled slots pass — {n_exact}/{n_calls} recorded \
+                         calls verdict:exact under hh-l1-canon/1 strict sequence keying",
+                        legs.len()
+                    )),
+                ),
+                (
+                    "mode",
+                    Json::str(
+                        "l1.1_obs_replay — the frozen H drove hh_l1_drive --mode \
+                         obs_replay --mswea-pack against a strict hh-model-proxy \
+                         replay endpoint (zero provider access, zero metered spend); \
+                         SharedObsReplayExecutor served the O-side raw-observation \
+                         queue positionally — the recorded environment-probe raw \
+                         first, the receipt-folded tool raws after, the ADR-0450 \
+                         reconstructed echo_literal terminal raw where the recording \
+                         ends at the submit marker; the proxy compared each \
+                         canonicalized request body to the recording's call at the \
+                         same sequence position",
+                    ),
+                ),
+                ("h_identity", Json::str(h_identity)),
+                (
+                    "h_binary_set",
+                    Json::str("docs/build/reports/compute/2026-11-18-fp-ws1-l1-conformance.json"),
+                ),
+                ("first_divergence_fails", Json::Bool(true)),
+                ("legs", Json::Arr(leg_rows)),
+            ]),
+        ),
+        ("verdict", Json::str(verdict)),
+        (
+            "label",
+            Json::str(
+                "the audit is replay-mode machinery evidence over receipt-bound W4 O \
+                 recordings — `verdict: exact` proves the frozen H renders the \
+                 recorded request corpus byte-identically under the strict \
+                 canonicalizer; it is not live-provider evidence and not an \
+                 equivalence claim; never samples a W2 corpus recording",
+            ),
+        ),
+        ("supersedes", Json::str(format!("docs/build/reports/{supersedes_rel}"))),
+        (
+            "supersession",
+            Json::obj([
+                ("basis", Json::str(ADR_0452_PATH)),
+                (
+                    "w4_window",
+                    Json::obj([
+                        ("path", Json::str(W4_WINDOW_PATH)),
+                        ("sha256", Json::str(w4_window_sha256)),
+                    ]),
+                ),
+            ]),
+        ),
+        (
+            "amends",
+            Json::obj([
+                (
+                    "path",
+                    Json::str("docs/build/reports/2026-11-19-fp-w4-l2-audit-frozen.json"),
+                ),
+                ("sha256", Json::str(frozen_sha256)),
+                (
+                    "note",
+                    Json::str(
+                        "the frozen record stays append-only — this dated addendum \
+                         computes the replay leg it left \
+                         not_computed{o_recording_replay_not_executed}; the recorded \
+                         L2 verdict is preserved, not changed by this record",
+                    ),
+                ),
+            ]),
+        ),
+        ("sources", sources),
+        ("recorded_at", Json::str(RECORDED_AT)),
+        ("ticket", Json::str("R6.54a")),
+    ]))
+}
+
 // ── the superseding L3 report ────────────────────────────────────────
 
 fn dist(vals: &[i64]) -> Json {

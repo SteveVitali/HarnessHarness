@@ -14,6 +14,8 @@
 //! fp-w4-results emit-packets <repo-root> — the committed-inputs packets only (byte-stable anywhere)
 //! fp-w4-results freeze       <repo-root> — mint the hh-flagged-review/1 record + the frozen
 //!                              site-facing copies (refuses on unreviewed flags)
+//! fp-w4-results emit-audit-addendum <repo-root> — the dated computed `hh-fp-l2-audit/1`
+//!                              addendum over the retained L1.1 replay legs (`audit_legs`)
 //! ```
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -765,6 +767,290 @@ fn packets(repo: &Path, m: &[(String, String)]) -> Vec<(String, Json)> {
     out
 }
 
+// ── the computed audit addendum (R6.54a) ─────────────────────────────
+
+/// Fold one retained L1.1 replay leg into its `W4AuditLeg` row. The leg
+/// dir carries the receipt-bound recording, the staged raw queue, the
+/// strict proxy's blob pool (the `hh.model_proxy.receipt/1` receipts
+/// hold the `replay{k, verdict, first_diff_path}` verdicts) and the
+/// drive's `hh-l1-drive-report/1` + event fold. Missing evidence folds
+/// to a typed `unavailable{…}` leg — never a substitution, never a
+/// silent skip.
+fn audit_leg(legs_root: &Path, slot_id: &str, retained_prefix: &str) -> W4AuditLeg {
+    let leg_dir = legs_root.join("legs").join(slot_id);
+    let cite = |rel: &str| -> (String, String) {
+        (
+            format!("{retained_prefix}legs/{slot_id}/{rel}"),
+            sha256_file(&leg_dir.join(rel)),
+        )
+    };
+    let unavailable = |slot_id: &str, reason: String| -> W4AuditLeg {
+        W4AuditLeg {
+            slot_id: slot_id.to_string(),
+            recorded_calls: 0,
+            calls_exact: 0,
+            verdict: format!("unavailable{{{reason}}}"),
+            first_divergence: None,
+            terminal: "unavailable".into(),
+            h_run_id: String::new(),
+            evidence: Vec::new(),
+        }
+    };
+    let rec_p = leg_dir.join("recording.json");
+    if !rec_p.exists() {
+        return unavailable(slot_id, "evidence:recording_missing".into());
+    }
+    let rec = load_file(&rec_p);
+    let recorded_calls = rec
+        .get("calls")
+        .and_then(Json::as_arr)
+        .map(|a| a.len() as i64)
+        .unwrap_or(0);
+    // Receipt fold — every receipt doc in the proxy blob pool carries
+    // proxy.schema="hh.model_proxy.receipt/1" and (for replay mode) the
+    // `replay` verdict member.
+    let mut positions: BTreeMap<i64, (String, Option<String>)> = BTreeMap::new();
+    let mut exhausted = false;
+    let mut bad: Vec<String> = Vec::new();
+    let blobs = leg_dir.join("proxy").join("blobs");
+    let Ok(entries) = std::fs::read_dir(&blobs) else {
+        return unavailable(slot_id, "evidence:proxy_blobs_missing".into());
+    };
+    for e in entries.flatten() {
+        let Ok(text) = std::fs::read_to_string(e.path()) else {
+            continue;
+        };
+        let Ok(d) = hharness_wire::json::parse(&text) else {
+            continue;
+        };
+        if jstr(&d, "schema").as_deref() != Some("hh.model_proxy.receipt/1")
+            && jget(&d, "proxy")
+                .and_then(|p| p.get("schema"))
+                .and_then(Json::as_str)
+                != Some("hh.model_proxy.receipt/1")
+        {
+            continue;
+        }
+        let proxy = jget(&d, "proxy").cloned().unwrap_or(Json::obj([]));
+        let Some(replay) = jget(&proxy, "replay") else {
+            continue;
+        };
+        let verdict = jstr(replay, "verdict").unwrap_or_default();
+        let k = jget(replay, "k").and_then(Json::as_int);
+        match verdict.as_str() {
+            "exact" | "diverged" => {
+                let path = jstr(replay, "first_diff_path");
+                positions.insert(k.unwrap_or(-1), (verdict, path));
+            }
+            "exhausted" => exhausted = true,
+            other => bad.push(other.to_string()),
+        }
+    }
+    if positions.is_empty() && !exhausted {
+        return unavailable(
+            slot_id,
+            if bad.is_empty() {
+                "evidence:no_receipts".into()
+            } else {
+                format!("evidence:unexpected_replay_verdict{{{}}}", bad.join(","))
+            },
+        );
+    }
+    if !bad.is_empty() {
+        return unavailable(
+            slot_id,
+            format!("evidence:unexpected_replay_verdict{{{}}}", bad.join(",")),
+        );
+    }
+    let calls_exact = positions.values().filter(|(v, _)| v == "exact").count() as i64;
+    let first_div = positions
+        .iter()
+        .find(|(_, (v, _))| v == "diverged")
+        .map(|(k, (_, p))| (*k, p.clone()));
+    let (verdict, first_divergence) = if let Some((k, path)) = first_div {
+        (
+            format!(
+                "diverged{{step={k}, class=upstream-bound {}}}",
+                path.as_deref().unwrap_or("(no first_diff_path)")
+            ),
+            Some(Json::obj([
+                ("k", Json::Int(k)),
+                ("class", Json::str("upstream-bound")),
+                ("first_diff_path", Json::str(path.as_deref().unwrap_or(""))),
+            ])),
+        )
+    } else if calls_exact == recorded_calls && recorded_calls > 0 {
+        ("pass".to_string(), None)
+    } else {
+        return unavailable(
+            slot_id,
+            format!(
+                "evidence:receipt_sequence_incomplete{{exact={calls_exact} recorded={recorded_calls}}}"
+            ),
+        );
+    };
+    // Terminal — the drive's finished outcome plus the proxy's
+    // boundary refusal.
+    let drive_events = leg_dir.join("drive").join("events.json");
+    let mut outcome = String::new();
+    if let Ok(text) = std::fs::read_to_string(&drive_events) {
+        if let Ok(Json::Arr(evs)) = hharness_wire::json::parse(&text) {
+            for ev in &evs {
+                if jstr(ev, "class").as_deref() == Some("lifecycle.run.finished") {
+                    let p = jget(ev, "payload").cloned().unwrap_or(Json::obj([]));
+                    outcome = format!(
+                        "{}/{}",
+                        jstr(&p, "status").unwrap_or_default(),
+                        jstr(&p, "outcome_class").unwrap_or_default()
+                    );
+                }
+            }
+        }
+    }
+    let terminal = if exhausted {
+        format!(
+            "replay_exhausted{{at sequence position {recorded_calls} — the O \
+             trajectory's recorded truncation boundary (client_gone); H's one \
+             further request is refused typed; drive outcome {outcome}}}"
+        )
+    } else {
+        format!("completed{{{outcome} — the submit-marker boundary}}")
+    };
+    let drive_json = leg_dir.join("drive").join("drive.json");
+    let h_run_id = std::fs::read_to_string(&drive_json)
+        .ok()
+        .and_then(|t| hharness_wire::json::parse(&t).ok())
+        .and_then(|d| jstr(&d, "run_id"))
+        .unwrap_or_default();
+    let mut evidence: Vec<(String, String)> = Vec::new();
+    for rel in [
+        "instruction.txt",
+        "raws.json",
+        "recording.json",
+        "replay-decl.json",
+    ] {
+        evidence.push(cite(rel));
+    }
+    // the proxy WAL — one run dir per leg
+    if let Ok(runs) = std::fs::read_dir(leg_dir.join("proxy").join("runs")) {
+        for r in runs.flatten() {
+            let wal = r.path().join("events.wal");
+            if wal.exists() {
+                let rel = format!("proxy/runs/{}/events.wal", r.file_name().to_string_lossy());
+                evidence.push(cite(&rel));
+            }
+        }
+    }
+    evidence.push(cite("drive/events.json"));
+    W4AuditLeg {
+        slot_id: slot_id.to_string(),
+        recorded_calls,
+        calls_exact,
+        verdict,
+        first_divergence,
+        terminal,
+        h_run_id,
+        evidence,
+    }
+}
+
+fn load_file(p: &Path) -> Json {
+    let text = std::fs::read_to_string(p).unwrap_or_else(|e| panic!("read {}: {e}", p.display()));
+    match hharness_wire::json::parse(&text) {
+        Ok(j) => j,
+        Err(_) => project_integral(
+            hharness_wire::json::parse_preserve(&text)
+                .unwrap_or_else(|e| panic!("parse {}: {e}", p.display())),
+        ),
+    }
+}
+
+/// `emit-audit-addendum` — the dated `hh-fp-l2-audit/1` computed
+/// addendum over the retained L1.1 legs (manifest `audit_legs`). The
+/// seed/sample/supersession members re-derive byte-identically from the
+/// same inputs the base packet used; the base packet's `sources`
+/// member is carried verbatim.
+fn emit_audit_addendum(repo: &Path, m: &[(String, String)]) {
+    let rel_of = |name: &str| -> String {
+        m.iter()
+            .find(|(k, _)| k == name)
+            .map(|(_, v)| v.clone())
+            .unwrap_or_else(|| panic!("manifest member {name} required"))
+    };
+    let legs_val = rel_of("audit_legs");
+    let legs_root = expand(&legs_val);
+    let retained_prefix = if let Some((_, root)) = m.iter().find(|(k, _)| k == "retained_root") {
+        let root = root.trim_end_matches('/');
+        legs_val
+            .trim_end_matches('/')
+            .strip_prefix(&format!("{root}/"))
+            .map(|rel| format!("retained:{rel}/"))
+            .unwrap_or_else(|| format!("retained:{legs_val}/"))
+    } else {
+        format!("retained:{legs_val}/")
+    };
+    let window = load(repo, &rel_of("w4_window"));
+    let w4_sha = sha256_file(&repo.join(rel_of("w4_window")));
+    let sr = window
+        .get("slot_results")
+        .and_then(Json::as_obj)
+        .cloned()
+        .unwrap_or_default();
+    let w4_o_ids: BTreeSet<String> = sr
+        .iter()
+        .filter(|(_, s)| s.get("arm").and_then(Json::as_str) == Some("mini-swe-agent"))
+        .map(|(k, _)| k.clone())
+        .collect();
+    let w2_corpus_ids: BTreeSet<String> = (1..=28)
+        .map(|i| format!("l10-ws1-corpus-{i:02}-a"))
+        .chain((1..=28).map(|i| format!("l10-ws1-corpus-{i:02}-b")))
+        .collect();
+    let base = load(repo, "docs/build/reports/2026-11-19-fp-w4-l2-audit.json");
+    let sources = jget(&base, "sources").cloned().unwrap_or(Json::Arr(vec![]));
+    let base_sample: Vec<String> = base
+        .get("sampled")
+        .and_then(Json::as_arr)
+        .map(|a| {
+            a.iter()
+                .filter_map(|j| j.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default();
+    let rederived = audit_sample(&w4_o_ids.iter().cloned().collect::<Vec<_>>(), AUDIT_SEED, 5);
+    if rederived != base_sample {
+        panic!("audit sample drift — re-derived {rederived:?} vs committed {base_sample:?}");
+    }
+    let frozen_sha =
+        sha256_file(&repo.join("docs/build/reports/2026-11-19-fp-w4-l2-audit-frozen.json"));
+    let gl1 = load(repo, &rel_of("gl1"));
+    let h_identity = jget(&gl1, "h_identity")
+        .and_then(|h| h.get("digest"))
+        .and_then(Json::as_str)
+        .unwrap_or_default()
+        .to_string();
+    let legs: Vec<W4AuditLeg> = rederived
+        .iter()
+        .map(|id| audit_leg(&legs_root, id, &retained_prefix))
+        .collect();
+    let pkt = w4_audit_computed_packet(
+        &w4_o_ids,
+        &w2_corpus_ids,
+        AUDIT_SEED,
+        "2026-11-19-fp-l2-audit-frozen.json",
+        &w4_sha,
+        sources,
+        &h_identity,
+        &frozen_sha,
+        &legs,
+    )
+    .unwrap_or_else(|e| panic!("audit addendum refused: {e:?}"));
+    write_record(
+        repo,
+        "docs/build/reports/2026-11-19-fp-w4-l2-audit-addendum.json",
+        &pkt,
+    );
+}
+
 /// `typed_arm_row` is module-private in fp_w4 — the bin wraps it via
 /// the public re-export (`typed_arm_row_pub` is the module's own
 /// `#[doc(hidden)]` shim).
@@ -893,6 +1179,11 @@ fn main() {
         for (rel, j) in packets(&repo, &m) {
             write_record(&repo, &rel, &j);
         }
+        return;
+    }
+
+    if cmd == "emit-audit-addendum" {
+        emit_audit_addendum(&repo, &m);
         return;
     }
 

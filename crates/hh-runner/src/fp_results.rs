@@ -1182,6 +1182,19 @@ pub enum AuditError {
         /// The refused id.
         id: String,
     },
+    /// A computed leg's slot id is not a member of the seeded sample —
+    /// the addendum binds to the sample, never substitutes.
+    LegOutsideSample {
+        /// The refused leg's slot id.
+        id: String,
+    },
+    /// A sampled slot has no leg row — coverage is exact or the packet
+    /// refuses (a missing leg folds as `unavailable{evidence}` upstream,
+    /// never dropped).
+    SampleMissingLeg {
+        /// The unserved sampled id.
+        id: String,
+    },
 }
 
 /// `l2_audit_packet(sample, w4_ids, w2_ids)` — the L1-on-L2 audit.

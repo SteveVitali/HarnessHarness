@@ -15,3 +15,8 @@ w4_settlement_2=docs/build/reports/2026-11-19-fp-w4-settlement-2.json
 # retained store (the R6.52c W4 harvest — the outcomes fold, the
 # answer scan, and the freeze legs read these).
 retained_root=~/hh-retained/w4/harvest
+# retained L1.1 replay legs for the dated computed audit addendum
+# (R6.54a; `emit-audit-addendum` only — the other subcommands do not
+# read it). Each legs/<slot_id>/ dir pins the receipt-bound recording,
+# the staged raw queue, the strict proxy receipts and the drive fold.
+audit_legs=~/hh-retained/w4/harvest/l1-audit

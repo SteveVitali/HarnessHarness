@@ -38,6 +38,7 @@ records=(
   2026-11-19-fp-w4-results-p3-l2-frozen
   2026-11-19-fp-w4-l2-audit-frozen
   2026-11-19-fp-w4-l3-frozen
+  2026-11-19-fp-w4-l2-audit-addendum
 )
 
 # 1 — every emitted record's sha256 sidecar verifies.
@@ -85,7 +86,8 @@ for f in \
     docs/build/reports/2026-11-19-fp-w4-outcomes.json \
     docs/build/reports/2026-11-19-fp-w4-answer-scan.json \
     docs/build/reports/2026-11-19-fp-w4-flagged-review-input.json \
-    docs/build/reports/2026-11-19-fp-w4-flag-analysis.json; do
+    docs/build/reports/2026-11-19-fp-w4-flag-analysis.json \
+    docs/build/reports/2026-11-19-fp-w4-l2-audit-frozen.json; do
   mkdir -p "$SCRATCH/$(dirname "$f")"
   cp "$REPO/$f" "$SCRATCH/$f"
 done
@@ -137,6 +139,20 @@ if [ -d "$HOME/hh-retained/w4/harvest/run-root-w4" ]; then
       "$REPO/docs/build/reports/$r.json" \
       "$SCRATCH/docs/build/reports/$r.json"
   done
+  # R6.54a — the computed audit addendum re-emits byte-identically
+  # where the retained L1.1 legs resolve (the manifest's audit_legs
+  # path; absent → recorded skip, never a pass).
+  if [ -d "$HOME/hh-retained/w4/harvest/l1-audit/legs" ]; then
+    leg "reemit-audit-addendum" bash -c \
+      "cd '$REPO' && ./target/debug/fp_w4_results emit-audit-addendum '$SCRATCH'"
+    leg "byte-identical:2026-11-19-fp-w4-l2-audit-addendum" cmp -s \
+      "$REPO/docs/build/reports/2026-11-19-fp-w4-l2-audit-addendum.json" \
+      "$SCRATCH/docs/build/reports/2026-11-19-fp-w4-l2-audit-addendum.json"
+  else
+    echo "fp-w4-results: audit-addendum re-emit SKIPPED —" \
+      "~/hh-retained/w4/harvest/l1-audit absent (the committed" \
+      "addendum still verifies via leg 1)"
+  fi
 else
   echo "fp-w4-results: retained legs SKIPPED — ~/hh-retained/w4/harvest absent" \
     "(the outcomes + scan + review-input records' recompute requires the" \
