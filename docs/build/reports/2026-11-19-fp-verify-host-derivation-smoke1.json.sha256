@@ -1,0 +1,2 @@
+24b6f384e5f71db9569fb29958d3d8dee73452d5c48b4f44fb982d2ac3afe403  docs/build/reports/2026-11-19-fp-verify-host-derivation-smoke1.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-19-fp-verify-host-derivation-smoke1.json.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)

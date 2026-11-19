@@ -1,7 +1,8 @@
 # fp-e-emit emit inputs — committed, repo-relative records only.
 trials=docs/build/reports/2026-11-19-fp-ws1-trials.json
 pp0=docs/build/reports/2026-11-19-fp-ws1-pp0-evidence.json
-gl1=docs/build/reports/compute/2026-11-18-fp-ws1-l1-conformance.json
+gl1=docs/build/reports/l1/2026-11-18-fp-ws1-l1-conformance.json
+gl1_readout=docs/build/readouts/GATE-G29.md
 prereg=docs/build/reports/2026-11-10-fp-prereg.json
 readiness=docs/build/reports/2026-11-10-fp-fps-readiness.json
 w4_decl=scripts/gce-backend/declarations/fp-w4-fp-e.json
