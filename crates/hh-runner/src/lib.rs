@@ -42,6 +42,7 @@ pub mod fp_partition;
 pub mod fp_prereg;
 pub mod fp_results;
 pub mod fp_seal;
+pub mod fp_w4;
 pub mod fp_ws1;
 pub mod harbor;
 pub mod holds;

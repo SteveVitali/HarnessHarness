@@ -1,0 +1,2 @@
+907f38d350dd0034b77fbdb6b6ed6cbad071b136209fba11c49bfd2215a42d88  docs/build/reports/2026-11-19-fp-w4-answer-scan.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-19-fp-w4-answer-scan.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)

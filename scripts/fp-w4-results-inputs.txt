@@ -1,0 +1,17 @@
+# fp-w4-results emit inputs — the R6.53 executed-W4 re-fold (manifest
+# 325b). The committed repo-relative records plus the retained W4
+# harvest root (the same manifest idiom as fp-results-inputs.txt;
+# retained paths are read-only and cited by sha256 inside the records).
+# `emit-packets` reads only the committed members; `emit`/`freeze`
+# additionally read the retained harvest.
+w4_window=docs/build/reports/2026-11-19-fp-w4-window.json
+fp_e=docs/build/reports/2026-11-19-fp-e.json
+gl1=docs/build/reports/compute/2026-11-18-fp-ws1-l1-conformance.json
+prereg=docs/build/reports/2026-11-10-fp-prereg.json
+resurrect_window=docs/build/reports/2026-11-19-fp-w4-resurrect-window.json
+w4_r652c_quote=docs/build/reports/2026-11-19-fp-w4-r652c-quote.json
+w4_r652c_spend_bound=docs/build/reports/2026-11-19-fp-w4-r652c-spend-bound.json
+w4_settlement_2=docs/build/reports/2026-11-19-fp-w4-settlement-2.json
+# retained store (the R6.52c W4 harvest — the outcomes fold, the
+# answer scan, and the freeze legs read these).
+retained_root=~/hh-retained/w4/harvest

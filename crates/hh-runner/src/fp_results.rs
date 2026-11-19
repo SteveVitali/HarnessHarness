@@ -681,7 +681,7 @@ pub struct FamilyMember {
     pub computed: Option<(i64, i64)>,
 }
 
-fn family_row(m: &FamilyMember) -> Json {
+pub fn family_row(m: &FamilyMember) -> Json {
     let mut row: Vec<(&str, Json)> = Vec::new();
     row.push(("member", Json::str(&m.member)));
     row.push(("status", Json::str(&m.status)));
