@@ -38,8 +38,8 @@ Readiness first — each route names its current state before you invest:
   [phase-1 execution-surface replay record](docs/results/phase1-execution-surface-replay.md)
   is an internal record, not outside-verified; the
   [results site](https://stevevitali.github.io/HarnessHarness/)
-  renders the same pinned record — internal record, not
-  outside-verified;
+  renders that pinned record and the first-pass phase-3/4 pages —
+  internal record, not outside-verified;
   [evidence and readiness](docs/evidence.md) explains what its
   receipt does and does not prove.
 - **Learn offline** — *available with scoped evidence*: four versioned

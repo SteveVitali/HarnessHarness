@@ -111,8 +111,11 @@ control-strategy comparisons.
 Hosted participants connect through `hh-hosting/1`, which exchanges records
 and declares observable capabilities. The hosting boundary distinguishes what
 an external participant actually exposes from what the native runtime can
-observe. Plugins use a separate `plugin_abi/1` boundary through the variant
-host and helper process.
+observe. The committed experiment apparatus runs declared windows through
+`hh-runner` slot workers, mediates provider calls through `hh-model-proxy`,
+and confines cell egress through an allowlist-mediated relay (`hh-cell-relay`);
+[reference](reference.md#binaries) lists those binaries. Plugins use a
+separate `plugin_abi/1` boundary through the variant host and helper process.
 
 ## Where the code lives
 

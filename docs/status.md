@@ -124,6 +124,47 @@ agrees with the `tb` verdicts on 14 of 16 first-attempt tasks.
 [phase-1 execution-surface replay record](results/phase1-execution-surface-replay.md)
 carries the account as an internal record — not outside-verified.
 
+## Round-6 experiments program
+
+*Update 2026-11-19 (GATE-G32):* the round-6 experiments first pass —
+the frozen experiments supplement's ≤ $100 pass — closed and was
+accepted as recorded:
+[GATE-G32](build/readouts/GATE-G32.md) PASSED
+(2026-11-19T07:00Z) with engineering 410/456 requirements closed and
+satisfied (0 MISSING; 46 PARTIAL — 34 routed to named later-pass
+scope, 5 discharged, 4 scope-ended at GATE-G30's recorded
+`re-scope{end-first-pass-early}`, 1 unexecuted REQ-XC-325 waived by
+the operator, 2 aliases). Recorded spend is **$31.887214 ≤ $100** —
+$4.52 model billed (provider console and API agree) plus $27,367,214 µ$
+compute *estimated* (GCP billing `unavailable{no_billing_export}`),
+under the Σ-authorized ≤ $90 envelope.
+
+The first-pass phases published under
+[GATE-G31](build/readouts/GATE-G31.md) (`PASSED — publish`,
+presented scope): every phase-3/4 outcome is a typed `withheld{…}`
+verbatim — `window_deadline`, `budget`, `admission:AG3`,
+`protected_pair_truncated{k<5,R<5}` — so no comparative, parity, or
+efficacy claim exists; the [evidence cards](evidence.md) carry the
+per-surface states at "internal record; not outside-verified". The
+dataset `SteveVitali/harnessharness-archive` flipped to public at
+pinned revision `a11591e9…` under [HUMAN-H17](build/readouts/HUMAN-H17.md)
+after both committed scans — sanitized derivatives only, transcripts
+links-only. REQ-XC-325's R-replay runner check stays
+`unexecuted{no_executor}` under the operator's recorded waiver — a
+waiver, not an execution.
+
+Every round-6 deferral row carries a dated DONE disposition
+(including DF-R6.50-1 discharged by the HUMAN-H17 flip records and
+DF-CAP6.1-1…5 discharged at CAP6.2). Owed scope that GATE-G32 routed
+verbatim — the `withheld{…}` arms, `protected_pair_truncated` claims,
+and BL-50's round-5 publication/value-observation decision — stays
+owed under the recorded owner and trigger in
+[LATER_PASS_ROUTING](build/reports/round6/LATER_PASS_ROUTING.md);
+nothing here promotes a withheld outcome. The stacked PR chain merges
+under `mergePolicy: OPERATOR` only; the recorded #414–#418 stack-CI
+red span awaits its operator-ruled "Fix with allowlist" repair
+(GATE-G32 item I-3) before Phase-B merges.
+
 ## How to read the evidence
 
 Per-surface gate states — what is available with scoped evidence, not

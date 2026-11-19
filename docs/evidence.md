@@ -289,21 +289,27 @@ behind it, its limits, and the access or exit route.
   [phase-1-2026-11-09.json](results/publication/phase-1-2026-11-09.json)
   (`inputs_digest` `sha256:15f819883d372ebe…`,
   [GATE-G22](build/readouts/GATE-G22.md)), phases 3–4 pinned by
-  [phase-3-2026-11-19.json](results/publication/phase-3-2026-11-19.json)
+  [phase-3-2026-11-19-flip.json](results/publication/phase-3-2026-11-19-flip.json)
   and
-  [phase-4-2026-11-19.json](results/publication/phase-4-2026-11-19.json)
+  [phase-4-2026-11-19-flip.json](results/publication/phase-4-2026-11-19-flip.json)
+  — the superseding records, carrying `dataset.visibility: public`
+  at pinned revision `a11591e9…`
   ([GATE-G31](build/readouts/GATE-G31.md) `PASSED — publish`,
-  presented scope); `check-site.sh` (every profile and `--head`)
-  verifies the rendered claims and provenance.
+  presented scope; [HUMAN-H17](build/readouts/HUMAN-H17.md) flip
+  executed 2026-11-19T04:23Z); `check-site.sh` (every profile and
+  `--head`) verifies the rendered claims and provenance.
 - **Limits:** internal record; not outside-verified — public
   visibility upgrades nothing (no capability or evidence label is
-  earned by the deploy). Deployment follows only the operator's
-  merge to `main` through `pages.yml`; the served site is read
-  back, never assumed.
+  earned by the deploy, and the public dataset earns none either).
+  Deployment follows only the operator's merge to `main` through
+  `pages.yml`; the served site is read back, never assumed.
 - **Access:** <https://stevevitali.github.io/HarnessHarness/> —
   a phase without a publication record stays publication-gate
-  pending; the dataset stays private (transcripts links-only,
-  HUMAN-H17 pending).
+  pending; the dataset
+  `SteveVitali/harnessharness-archive` is public at the pinned
+  revision (sanitized derivatives only — the public file list
+  carries no `raw_receipts` or `store_segment` role); transcripts link to it under
+  GATE-G31's "(b) links only" option, no in-site viewer.
 
 ### Card — HIR parity, first pass [hir-parity]
 
@@ -317,8 +323,9 @@ behind it, its limits, and the access or exit route.
   and the L3 descriptive trace shape under the same typed
   withhold.
 - **Evidence:** the committed
-  [`hh-site-publication/1` record](results/publication/phase-3-2026-11-19.json)
-  pins the phase-3 input set and references the
+  [`hh-site-publication/1` record](results/publication/phase-3-2026-11-19-flip.json)
+  (the superseding flip record) pins the phase-3 input set and
+  references the
   [GATE-G31 readout](build/readouts/GATE-G31.md); the page renders
   the frozen packets' members verbatim with per-member provenance.
 - **Limits:** internal record; not outside-verified — the L2/L3
@@ -336,8 +343,9 @@ behind it, its limits, and the access or exit route.
   `withheld{window_deadline}:protected_pair_truncated{k<5,R<5}`
   (hh_native `withheld{window_deadline}`, v5 `withheld{budget}`).
 - **Evidence:** the committed
-  [`hh-site-publication/1` record](results/publication/phase-4-2026-11-19.json)
-  pins the phase-4 input set and references the
+  [`hh-site-publication/1` record](results/publication/phase-4-2026-11-19-flip.json)
+  (the superseding flip record) pins the phase-4 input set and
+  references the
   [GATE-G31 readout](build/readouts/GATE-G31.md); the page renders
   the frozen packet's members verbatim with per-member
   provenance.
