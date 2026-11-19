@@ -192,15 +192,16 @@ pub fn compare_drives(
             ));
         }
         // downstream diagnostic — never gated.
-        match match_requests(canon, surface, &ro.body, &rh.body) {
-            Ok(MatchVerdict::Diverged { first_diff_path }) => out.push(div(
+        if let Ok(MatchVerdict::Diverged { first_diff_path }) =
+            match_requests(canon, surface, &ro.body, &rh.body)
+        {
+            out.push(div(
                 "downstream",
                 Some(turn),
                 first_diff_path,
                 "downstream bytes differ (diagnostic only)",
                 false,
-            )),
-            _ => {}
+            ));
         }
     }
     // trajectory levels — gated only on a full-length prefix.
@@ -525,6 +526,10 @@ pub fn conformance_record(
                     (
                         "divergences",
                         Json::Int(s.l1_1.divergences.iter().filter(|d| d.gated).count() as i64),
+                    ),
+                    (
+                        "reported",
+                        Json::Int(s.l1_1.divergences.iter().filter(|d| !d.gated).count() as i64),
                     ),
                 ]),
             ),

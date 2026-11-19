@@ -18,7 +18,7 @@ use std::time::Instant;
 use hharness_env::egress_allowlist::{
     admit_allowlist_mediated, cell_env_projection, scan_hosts_in_text, Allowlist, AllowlistFreeze,
     ImageFamily, MediatedCell, MediatedDecl, RelayPair, WithheldHost, EGRESS_RELAY_PORT,
-    EGRESS_SOCK_PATH, MODEL_SOCK_PATH,
+    EGRESS_SOCK_PATH, MODEL_RELAY_PORT_MIN, MODEL_SOCK_PATH,
 };
 use hharness_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
 use hharness_gateway::recording::{RecordedCall, RecordedReleased, RecordedResponse, Recording};
@@ -39,7 +39,7 @@ use hharness_wire::sha256::sha256_hex;
 
 fn usage() -> ! {
     eprintln!(
-        "usage:\n  hh-w1 freeze --protocol <id> --epoch <n> --family <debian|ubuntu> --out <f> [--verify-extra a,b] [--withheld h=reason,...]\n  hh-w1 task-images --repo <ns> --tasks <csv> --out <f>\n  hh-w1 binary-set --bins <dir> --window <w> --out <dir>\n  hh-w1 image-export --role <bundle|layer_export|binary_set> --name <n> --image <name@sha256:..> --window <w> --out <dir> [--full]\n  hh-w1 image-build --kind <bundle|layer> --containerfile <f> --context <d> --tag <t> --out <dir>\n  hh-w1 observe --task <id> --mini-argv <tpl> --instruction <f> --responses <n> --out <dir>\n  hh-w1 o-run --task <id> --r <n> --cfg <f> --out <f>\n  hh-w1 h-run --task <id> --profile <pub|allow> --r <n> --cfg <f> --out <f>\n  hh-w1 prove --cfg <f> --tasks <csv> --r <n> --observe <mode> --out <dir> [--live-evidence-ref <ref>]\n  hh-w1 fault --cfg <f> --task <id> --out <f>\n  hh-w1 census --manifest <f> --work <dir> --out <f>\n  hh-w1 probe-run --cfg <f> --task <id> --out <f>\n  hh-w1 label-packet --packet <f> --ref <record-path>\n  hh-w1 index --artifacts <f> --out <f>\n  hh-w1 render-policy --freeze <f> --phase <setup|agent|verify> --out <f> [--model-port <n>] [--slot-token <t>] [--family <debian|ubuntu>]\n  hh-w1 scan-hosts [--files <a,b,…> | --list <f>]"
+        "usage:\n  hh-w1 freeze --protocol <id> --epoch <n> --family <debian|ubuntu> --out <f> [--verify-extra a,b] [--withheld h=reason,...]\n  hh-w1 task-images --repo <ns> --tasks <csv> --out <f>\n  hh-w1 binary-set --bins <dir> --window <w> --out <dir>\n  hh-w1 image-export --role <bundle|layer_export|binary_set> --name <n> --image <name@sha256:..> --window <w> --out <dir> [--full]\n  hh-w1 image-build --kind <bundle|layer> --containerfile <f> --context <d> --tag <t> --out <dir>\n  hh-w1 observe --task <id> --mini-argv <tpl> --instruction <f> --responses <n> --out <dir>\n  hh-w1 o-run --task <id> --r <n> --cfg <f> --out <f>\n  hh-w1 h-run --task <id> --profile <pub|allow> --r <n> --cfg <f> --out <f>\n  hh-w1 prove --cfg <f> --tasks <csv> --r <n> --observe <mode> --out <dir> [--live-evidence-ref <ref>]\n  hh-w1 fault --cfg <f> --task <id> --out <f>\n  hh-w1 census --manifest <f> --work <dir> --out <f>\n  hh-w1 corpus-manifest --fixtures-dir <dir> --recordings-dir <dir> --census-tasks <csv> --out <f>\n  hh-w1 corpus-check --corpus <f> --tasks <csv> [--out <f>]\n  hh-w1 l1-fold --spec <f> --out <dir>\n  hh-w1 probe-run --cfg <f> --task <id> --out <f>\n  hh-w1 label-packet --packet <f> --ref <record-path>\n  hh-w1 index --artifacts <f> --out <f>\n  hh-w1 render-policy --freeze <f> --phase <setup|agent|verify> --out <f> [--model-port <n>] [--slot-token <t>] [--family <debian|ubuntu>]\n  hh-w1 scan-hosts [--files <a,b,…> | --list <f>]"
     );
     std::process::exit(2)
 }
@@ -119,6 +119,8 @@ struct Cfg {
     egress_port: u16,
     workdir_default: String,
     slot_token: String,
+    node_dist_dir: String,
+    python_dist_dir: String,
 }
 
 fn load_cfg(path: &str) -> Result<Cfg, String> {
@@ -152,11 +154,20 @@ fn load_cfg(path: &str) -> Result<Cfg, String> {
             "ubuntu" => ImageFamily::Ubuntu,
             _ => ImageFamily::Debian,
         },
-        model_port: n("model_port", 8080) as u16,
+        model_port: n("model_port", MODEL_RELAY_PORT_MIN as u64) as u16,
         egress_port: n("egress_port", 3128) as u16,
         workdir_default: jstr(&j, "workdir_default").unwrap_or("/app").to_string(),
         slot_token: jstr(&j, "slot_token")
             .unwrap_or("hh-w1-slot-token")
+            .to_string(),
+        // Host-side node runtime tree copied into arms that declare
+        // `runtime.node` (pi, claude-code) — the layer images carry no
+        // runtime, so provisioning materializes the declared version.
+        node_dist_dir: jstr(&j, "node_dist_dir")
+            .unwrap_or("/opt/ws1/node")
+            .to_string(),
+        python_dist_dir: jstr(&j, "python_dist_dir")
+            .unwrap_or("/opt/ws1/python")
             .to_string(),
     })
 }
@@ -337,7 +348,7 @@ fn cmd_render_policy(args: &[String]) -> Result<String, String> {
     let model_port: u16 = arg(args, "--model-port")
         .map(|s| s.parse::<u16>().map_err(|_| "--model-port int".to_string()))
         .transpose()?
-        .unwrap_or(8080);
+        .unwrap_or(MODEL_RELAY_PORT_MIN);
     let slot_token = arg(args, "--slot-token").unwrap_or_else(|| "hh-w1-slot-token".to_string());
     let family = match arg(args, "--family").as_deref().unwrap_or("debian") {
         "ubuntu" => ImageFamily::Ubuntu,
@@ -596,7 +607,7 @@ fn cmd_image_export(args: &[String]) -> Result<String, String> {
         .map_err(|e| format!("run_export: {e}"))?;
     write_json(&out.join("carried-export.json"), &rec)?;
     let bytes = if plan.shape == ExportShape::BlobsPlusConfig {
-        dir_bytes(&Path::new(&plan.out_path).to_path_buf())
+        dir_bytes(Path::new(&plan.out_path))
     } else {
         std::fs::read(&plan.out_path).map_err(|e| e.to_string())?
     };
@@ -607,9 +618,9 @@ fn cmd_image_export(args: &[String]) -> Result<String, String> {
     Ok(Json::obj([("image_id", Json::str(&plan.identity.1))]).to_canonical_string())
 }
 
-fn dir_bytes(root: &PathBuf) -> Vec<u8> {
+fn dir_bytes(root: &std::path::Path) -> Vec<u8> {
     let mut all = Vec::new();
-    let mut stack = vec![root.clone()];
+    let mut stack = vec![root.to_path_buf()];
     while let Some(d) = stack.pop() {
         if let Ok(rd) = std::fs::read_dir(&d) {
             for e in rd.flatten() {
@@ -810,7 +821,7 @@ fn cmd_observe(args: &[String]) -> Result<String, String> {
             "recording_sha256",
             Json::str(format!(
                 "sha256:{}",
-                sha256_hex(&&rec_j.to_canonical_string().into_bytes())
+                sha256_hex(&rec_j.to_canonical_string().into_bytes())
             )),
         ),
     ])
@@ -946,7 +957,11 @@ fn o_run(cfg: &Cfg, task: &str, r: u32, work: &Path) -> Result<SurfaceOutcome, S
 struct DriveCell<'a> {
     backend: &'a PodmanBackend,
     env: Vec<(String, String)>,
-    agent_argv: Vec<String>,
+    /// A distinct env for the verifier phase (hosted-arm cells: the
+    /// agent's closed render carries the slot token — it never enters
+    /// the verify phase's environment).
+    verify_env: Option<Vec<(String, String)>>,
+    _agent_argv: Vec<String>,
     verifier_argv: Vec<String>,
     policy_dst: Option<PathBuf>,
     agent_policy: Option<Json>,
@@ -996,8 +1011,6 @@ impl CellOps for DriveCell<'_> {
         {
             let layer = if spec.argv == self.verifier_argv {
                 vp
-            } else if spec.argv == self.agent_argv {
-                ap
             } else {
                 ap
             };
@@ -1007,11 +1020,15 @@ impl CellOps for DriveCell<'_> {
         // exec's own in-cell tree dies by its `HH_EXEC_TAG` environ
         // marker (never a cmdline pattern the phase may not carry),
         // death is /proc-confirmed, and the lapsed streams are kept.
+        let env = match (&self.verify_env, spec.argv == self.verifier_argv) {
+            (Some(ve), true) => ve,
+            _ => &self.env,
+        };
         hharness_runner::cell::exec_guarded(
             self.backend,
             &spec.argv,
             &spec.cwd,
-            &self.env,
+            env,
             spec.deadline_ms,
         )
     }
@@ -1284,7 +1301,8 @@ fn h_run_once(
     let mut dc = DriveCell {
         backend: &backend,
         env,
-        agent_argv: agent_argv.clone(),
+        verify_env: None,
+        _agent_argv: agent_argv.clone(),
         verifier_argv: verifier_argv.clone(),
         policy_dst,
         agent_policy,
@@ -1435,6 +1453,516 @@ fn h_run(
     }
     o.wall_ms = t0.elapsed().as_millis() as u64;
     Ok(o)
+}
+
+// ── the hosted-arm cell drive (Ws1 PP0/corpus/L1; R6.45q) ────────────────
+//
+// `arm_run_once` — one hosted-arm slot in a mediated cell. The drive is
+// `h_run_once`'s mediated topology verbatim (admit_allowlist_mediated →
+// sealed phase layers → egress-mediator spawn → the relay pair →
+// run_cell + deadlines + collect_denied), with the hosted differences:
+// the agent argv/env/files come from `render::render` (RenderUse::
+// HostedArm — the closed env carries the slot token, never argv), the
+// image is the arm's layer image (`--image`, the R6.32b carried-export
+// digest loaded at LOAD), `oracle_participant` is false (no /solution
+// copy-in), the `/logs/agent` ST4 copy-out captures the trajectory, and
+// the host-side `model.sock` is answered by a unix→TCP forwarder to the
+// session proxy's `--model-upstream` loopback listen (the Wc stub's
+// shape, piping) — never a dead socket.
+//
+// The rendered env is the agent phase's environment verbatim; the
+// verify phase gets only the proxy-routing subset (the slot token never
+// enters a verifier environment). Egress binds the declared
+// `EGRESS_RELAY_PORT` (3128) — `closed_env`'s proxy hints are
+// authoritative.
+
+/// The slot-side parameters of one hosted-arm run (the session grant's
+/// members the render folds into `SlotInputs` + the upstream wiring).
+struct ArmSlot<'a> {
+    slot_id: &'a str,
+    slot_token: &'a str,
+    model_upstream_port: u16,
+    slot_slice_micros: u64,
+}
+
+fn arm_run_once(
+    cfg: &Cfg,
+    task: &str,
+    image: &str,
+    admission: &Json,
+    slot: &Path,
+    arm: &ArmSlot<'_>,
+) -> Result<(Json, Vec<String>), String> {
+    let staging = stage_task(cfg, task, slot)?;
+    let collect = slot.join("collect");
+    let work = slot.join("work");
+    let _ = std::fs::create_dir_all(&work);
+    let instruction = std::fs::read(Path::new(&cfg.tasks_dir).join(task).join("instruction.md"))
+        .map_err(|e| format!("instruction: {e}"))?;
+    let home = image_env(image, "HOME").unwrap_or_else(|| "/root".to_string());
+    let user = image_env(image, "USER").unwrap_or_else(|| "root".to_string());
+    let decl = hharness_runner::task_toml::load_task_decl(
+        &std::path::Path::new(&cfg.tasks_dir).join(task),
+    )?;
+    let (agent_ms, agent_src) = hharness_runner::task_toml::resolve_deadline_ms(
+        decl.agent_timeout_sec,
+        cfg.agent_deadline_ms,
+    );
+    let (verify_ms, verify_src) = hharness_runner::task_toml::resolve_deadline_ms(
+        decl.verifier_timeout_sec,
+        cfg.verify_deadline_ms,
+    );
+    let slot_inputs = hharness_runner::render::SlotInputs {
+        slot_token: arm.slot_token.to_string(),
+        model_port: cfg.model_port,
+        instruction: instruction.clone(),
+        home,
+        user,
+        agent_wall_timeout_s: agent_ms / 1000,
+        proxy_budget_ceiling_usd_micros: arm.slot_slice_micros,
+        slot_id: arm.slot_id.to_string(),
+    };
+    let rc = hharness_runner::render::render(
+        admission,
+        &slot_inputs,
+        hharness_runner::render::RenderUse::HostedArm,
+    )
+    .map_err(|e| e.to_string())?;
+    let render_rec = hharness_runner::render::rendered_record(&rc, admission, &slot_inputs)
+        .map_err(|e| e.to_string())?;
+    let _ = write_json(&slot.join("hh-harness-render.json"), &render_rec);
+
+    let agent_argv = rc.argv.clone();
+    let verifier_argv = vec!["bash".to_string(), "/tests/test.sh".to_string()];
+
+    // Mediated topology — verbatim from h_run_once's mediated arm.
+    let mut rec_env = EnvironmentRecord {
+        class: EnvironmentClass::LocalContainer,
+        image: ImageRef::Tag(image.to_string()),
+        build_context: None,
+        platform: "linux/amd64".to_string(),
+        provisioning: ProvisioningRecipe::default(),
+        containment_policy_ref: ("w1".to_string(), "v0".to_string()),
+        limits: hharness_containment::policy::ResourceLimits::default(),
+        nondeterminism: vec![],
+        unpinned: BTreeSet::new(),
+        image_attestation: None,
+        ext: BTreeMap::new(),
+        canary_channels: vec![],
+    };
+    let mut pol = hharness_containment::policy::kernel_default(0);
+    let frz = freeze(cfg)?;
+    let list = frz.list.clone();
+    let model_sock = slot.join("model.sock");
+    let egress_sock = slot.join("egress.sock");
+    let cell_decl = MediatedCell {
+        socket_mounts: BTreeMap::from([
+            ("model".to_string(), model_sock.display().to_string()),
+            ("egress".to_string(), egress_sock.display().to_string()),
+        ]),
+        relay_bin: cfg.relay_bin.clone(),
+        pairs: vec![
+            RelayPair {
+                name: "model".to_string(),
+                port: cfg.model_port,
+            },
+            RelayPair {
+                name: "egress".to_string(),
+                port: EGRESS_RELAY_PORT,
+            },
+        ],
+    };
+    let mdecl = MediatedDecl {
+        family: cfg.family,
+        allowlist: list,
+        protocol_id: frz.protocol_id.clone(),
+        epoch: frz.epoch,
+        cell: cell_decl,
+        model_port: cfg.model_port,
+        slot_token: arm.slot_token.to_string(),
+    };
+    admit_allowlist_mediated(&mut rec_env, &mut pol, &mdecl, 0).map_err(|e| e.to_string())?;
+    let sched = mediated_phase_schedule(&pol, &rec_env)?;
+    let agent_policy = Some(phase_layer(&sched, "agent")?);
+    let verify_policy = Some(phase_layer(&sched, "verify")?);
+    let verify_version_id = verify_policy
+        .as_ref()
+        .and_then(|p| p.get("version_id"))
+        .and_then(Json::as_str)
+        .map(str::to_string);
+    let policy_file = slot.join("policy.json");
+    std::fs::write(
+        &policy_file,
+        agent_policy.as_ref().unwrap().to_canonical_string(),
+    )
+    .map_err(|e| e.to_string())?;
+    let policy_dst = Some(policy_file.clone());
+    // The host-side model socket answered by a unix→TCP forwarder to
+    // the session proxy (the stub's socket-file contract, piping —
+    // each accepted conn streams to 127.0.0.1:<upstream>).
+    let fwd_script = format!(
+        "import socket,threading\n\
+         s=socket.socket(socket.AF_UNIX)\n\
+         s.bind({:?})\n\
+         s.listen(64)\n\
+         def pump(a,b):\n\
+         \ttry:\n\
+         \t\twhile True:\n\
+         \t\t\td=a.recv(65536)\n\
+         \t\t\tif not d: break\n\
+         \t\t\tb.sendall(d)\n\
+         \texcept OSError: pass\n\
+         \ttry: b.shutdown(socket.SHUT_WR)\n\
+         \texcept OSError: pass\n\
+         def serve(c):\n\
+         \tu=socket.socket()\n\
+         \tu.connect(('127.0.0.1',{}))\n\
+         \tthreading.Thread(target=pump,args=(c,u),daemon=True).start()\n\
+         \tpump(u,c)\n\
+         while True:\n\
+         \tc,_=s.accept()\n\
+         \tthreading.Thread(target=serve,args=(c,),daemon=True).start()\n",
+        model_sock.display().to_string(),
+        arm.model_upstream_port
+    );
+    let _fwd = Command::new("python3")
+        .args(["-c", &fwd_script])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
+    let store_root = slot.join("mediator-store");
+    let run_id = format!("ws1-{}", arm.slot_id);
+    let med = Command::new(&cfg.mediator_bin)
+        .args([
+            "--store-root".to_string(),
+            store_root.display().to_string(),
+            "--socket".to_string(),
+            egress_sock.display().to_string(),
+            "--policy".to_string(),
+            policy_file.display().to_string(),
+            "--env-handle".to_string(),
+            format!("env-{run_id}"),
+            "--effect-id".to_string(),
+            format!("eff-{run_id}"),
+            "--participant".to_string(),
+            arm.slot_id.to_string(),
+            "--run-id".to_string(),
+            run_id.clone(),
+        ])
+        .stdout(Stdio::from(
+            std::fs::File::create(slot.join("mediator.log")).map_err(|e| e.to_string())?,
+        ))
+        .stderr(Stdio::from(
+            std::fs::File::create(slot.join("mediator.err")).map_err(|e| e.to_string())?,
+        ))
+        .spawn()
+        .map_err(|e| format!("mediator spawn: {e}"))?;
+    let guard = MediatorGuard { child: med };
+    let sock_deadline = Instant::now() + std::time::Duration::from_secs(10);
+    while !egress_sock.exists() {
+        if Instant::now() > sock_deadline {
+            return Err(format!(
+                "mediator egress socket {} never bound",
+                egress_sock.display()
+            ));
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    // The verify phase's env: the proxy-routing subset only — the
+    // slot token and key channels never enter a verifier exec.
+    let proxy = format!("http://127.0.0.1:{EGRESS_RELAY_PORT}");
+    let verify_env: Vec<(String, String)> = vec![
+        ("http_proxy".into(), proxy.clone()),
+        ("https_proxy".into(), proxy.clone()),
+        ("HTTP_PROXY".into(), proxy.clone()),
+        ("HTTPS_PROXY".into(), proxy),
+        ("no_proxy".into(), "127.0.0.1,localhost".into()),
+        ("NO_PROXY".into(), "127.0.0.1,localhost".into()),
+        ("HOME".into(), slot_inputs.home.clone()),
+        ("USER".into(), slot_inputs.user.clone()),
+    ];
+    let backend = PodmanBackend {
+        container: format!("hh-ws1-{}", arm.slot_id),
+        image: image.to_string(),
+        workspace: work.display().to_string(),
+        network: false,
+        extra_args: vec![],
+        cell: CellSpec {
+            workdir: None,
+            cpus: decl.cpus.clone(),
+            memory_mb: decl.memory_mb,
+        },
+        mounts: vec![
+            SocketMount {
+                name: "model".to_string(),
+                host_path: model_sock.display().to_string(),
+            },
+            SocketMount {
+                name: "egress".to_string(),
+                host_path: egress_sock.display().to_string(),
+            },
+        ],
+        relay: Some(RelaySpec {
+            host_bin: cfg.relay_bin.clone(),
+            pairs: vec![
+                ("model".to_string(), cfg.model_port),
+                ("egress".to_string(), EGRESS_RELAY_PORT),
+            ],
+        }),
+    };
+    backend.create().map_err(|e| e.to_string())?;
+    backend.start().map_err(|e| e.to_string())?;
+    // Slot-invariant rendered files + the adapter's setup exec land
+    // before the agent phase (provisioning, never phase-owned paths).
+    for f in &rc.files {
+        if let Some(parent) = std::path::Path::new(&f.path).parent() {
+            let _ = hharness_runner::cell::exec_guarded(
+                &backend,
+                &[
+                    "/bin/mkdir".to_string(),
+                    "-p".to_string(),
+                    parent.to_string_lossy().to_string(),
+                ],
+                "/",
+                &[],
+                Some(60_000),
+            )
+            .map_err(|e| format!("render-file mkdir: {e}"))?;
+        }
+        let tmp = slot.join(format!("render-file-{}", f.path.replace('/', "_")));
+        std::fs::write(&tmp, &f.bytes).map_err(|e| e.to_string())?;
+        backend
+            .cp_in(&tmp.display().to_string(), &f.path)
+            .map_err(|e| e.to_string())?;
+    }
+    if let Some(sa) = &rc.setup_argv {
+        let _ = hharness_runner::cell::exec_guarded(&backend, sa, "/", &[], Some(60_000))
+            .map_err(|e| format!("setup exec: {e}"))?;
+    }
+    // The cell contract's `/logs/agent` (the ST4 copy-out source) is a
+    // provisioning dir — the rendered argv writes trajectories into it.
+    let _ = hharness_runner::cell::exec_guarded(
+        &backend,
+        &[
+            "/bin/mkdir".to_string(),
+            "-p".to_string(),
+            "/logs/agent".to_string(),
+        ],
+        "/",
+        &[],
+        Some(60_000),
+    )
+    .map_err(|e| format!("logs-agent mkdir: {e}"))?;
+    // Agent PATH — the harness bundle's `bin/` (through the declared
+    // link) plus the node's runtime dir for arms that declare
+    // `runtime.node` (pi, claude-code): the admission pins the version,
+    // provisioning materializes it from the host-side dist tree.
+    let mut path_parts = vec![
+        "/usr/local/bin".to_string(),
+        "/opt/hh-harness-link/bin".to_string(),
+    ];
+    let runtime = admission.get("runtime");
+    let mkdir = |p: &str| {
+        hharness_runner::cell::exec_guarded(
+            &backend,
+            &["/bin/mkdir".to_string(), "-p".to_string(), p.to_string()],
+            "/",
+            &[],
+            Some(60_000),
+        )
+    };
+    if runtime.and_then(|r| r.get("python")).is_some() {
+        // The uv-tool bundle shebangs to its build-time managed python —
+        // the dist tree is materialized where `bin/python` points.
+        let _ = mkdir("/opt/python").map_err(|e| format!("python mkdir: {e}"))?;
+        backend
+            .cp_in(&format!("{}/.", cfg.python_dist_dir), "/opt/python")
+            .map_err(|e| format!("python cp_in: {e}"))?;
+        // `install.version_probe` names the entry (`bin/<arm>`); the
+        // venv script shebangs to the uv tools dir — link it to the
+        // bundle so the interpreter resolves.
+        if let Some(name) = admission
+            .get("install")
+            .and_then(|i| i.get("version_probe"))
+            .and_then(Json::as_arr)
+            .and_then(|a| a.first())
+            .and_then(Json::as_str)
+            .and_then(|p| p.rsplit('/').next().map(str::to_string))
+        {
+            let script = format!(
+                "D=$(dirname \"$(dirname \"$(readlink /opt/hh-harness-link/bin/python)\")\") && \
+                 mkdir -p \"$D\" && cp -a /opt/python/. \"$D/\" && \
+                 T=$(head -1 /opt/hh-harness-link/bin/{name} | tr -d '#!') && \
+                 L=$(dirname \"$(dirname \"$T\")\") && \
+                 mkdir -p \"$(dirname \"$L\")\" && \
+                 rmdir \"$L\" 2>/dev/null; \
+                 ln -sfnT /opt/hh-harness-link \"$L\""
+            );
+            let _ = hharness_runner::cell::exec_guarded(
+                &backend,
+                &["/bin/sh".to_string(), "-c".to_string(), script],
+                "/",
+                &[],
+                Some(60_000),
+            )
+            .map_err(|e| format!("python link: {e}"))?;
+        }
+    }
+    if runtime.and_then(|r| r.get("node")).is_some() {
+        let _ = mkdir("/opt/node").map_err(|e| format!("node mkdir: {e}"))?;
+        let _ = mkdir("/usr/local/bin").map_err(|e| format!("bin mkdir: {e}"))?;
+        backend
+            .cp_in(&format!("{}/.", cfg.node_dist_dir), "/opt/node")
+            .map_err(|e| format!("node cp_in: {e}"))?;
+        path_parts.insert(0, "/opt/node/bin".to_string());
+        // `install.version_probe` names the entry the image is expected
+        // to carry (`bin/<arm>`); the bundle lacks the shim, so mint it
+        // at the probe path pointed at the package's declared bin entry.
+        if let Some(probe_path) = admission
+            .get("install")
+            .and_then(|i| i.get("version_probe"))
+            .and_then(Json::as_arr)
+            .and_then(|a| a.first())
+            .and_then(Json::as_str)
+        {
+            let script = format!(
+                "P=$(find /opt/hh-harness-link/ -maxdepth 4 -name package.json \
+                 -not -path '*/node_modules/*' | head -1) && \
+                 f=$(/opt/node/bin/node -p \"(() => {{ \
+                 const p = require('$P'); const b = p.bin || {{}}; \
+                 const e = typeof b === 'string' ? b \
+                 : Object.values(b)[0] || ''; \
+                 const path = require('path'); \
+                 return e ? path.resolve(path.dirname('$P'), e) : ''; \
+                 }})()\") && \
+                 mkdir -p \"$(dirname '{probe_path}')\" && \
+                 printf '#!/bin/sh\\nexec /opt/node/bin/node \"%s\" \"$@\"\\n' \"$f\" \
+                 > '{probe_path}' && chmod +x '{probe_path}'"
+            );
+            let _ = hharness_runner::cell::exec_guarded(
+                &backend,
+                &["/bin/sh".to_string(), "-c".to_string(), script],
+                "/",
+                &[],
+                Some(60_000),
+            )
+            .map_err(|e| format!("bin shim: {e}"))?;
+        }
+    }
+    let workdir = backend
+        .image_workdir()
+        .unwrap_or_else(|_| cfg.workdir_default.clone());
+    let mut dc = DriveCell {
+        backend: &backend,
+        env: {
+            let mut e: Vec<(String, String)> =
+                rc.env.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+            path_parts.extend([
+                "/usr/local/sbin".to_string(),
+                "/usr/local/bin".to_string(),
+                "/usr/bin".to_string(),
+                "/usr/sbin".to_string(),
+                "/sbin".to_string(),
+                "/bin".to_string(),
+            ]);
+            e.push(("PATH".to_string(), path_parts.join(":")));
+            e
+        },
+        verify_env: Some(verify_env),
+        _agent_argv: agent_argv.clone(),
+        verifier_argv: verifier_argv.clone(),
+        policy_dst,
+        agent_policy,
+        verify_policy,
+    };
+    let plan = CellPlan {
+        oracle_participant: false,
+        workdir,
+        host_staging: staging,
+        collect_dir: collect.clone(),
+        agent_argv,
+        agent_deadline_ms: Some(agent_ms),
+        agent_deadline_source: agent_src,
+        verifier_argv,
+        verifier_deadline_ms: Some(verify_ms),
+        verifier_deadline_source: verify_src,
+        max_grade_attempts: cfg.max_grade_attempts,
+        logs_copyout: Some(
+            hharness_runner::capture::copyout_spec("/logs/agent", &slot.join("native-log"), &work)
+                .map_err(|e| e.to_string())?,
+        ),
+    };
+    let report = run_cell(&mut dc, &plan).map_err(|e| format!("run_cell: {e}"))?;
+    let _ = backend.stop();
+    drop(guard);
+    let denied = collect_denied(&store_root, &run_id, verify_version_id.as_deref());
+    let rep = Json::obj([
+        (
+            "agent_end_cause",
+            Json::str(report.agent_end_cause.as_str()),
+        ),
+        ("verify_attempts", Json::Int(report.verify_attempts as i64)),
+        (
+            "native_log",
+            report
+                .native_log
+                .as_ref()
+                .map(|b| b.to_json())
+                .unwrap_or(Json::Null),
+        ),
+        (
+            "denied_hosts",
+            Json::Arr(denied.iter().map(|h| Json::str(h.clone())).collect()),
+        ),
+    ]);
+    let _ = write_json(&slot.join("cell-report.json"), &rep);
+    Ok((rep, denied))
+}
+
+/// `image_env(image, name)` — the image-declared env member (podman
+/// inspect → Config.Env `NAME=value`); the slot's HOME/USER source.
+fn image_env(image: &str, name: &str) -> Option<String> {
+    let out = Command::new("podman")
+        .args(["image", "inspect", image])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let j = json::parse(&String::from_utf8_lossy(&out.stdout)).ok()?;
+    let env = j.as_arr()?.first()?.get("Config")?.get("Env")?.as_arr()?;
+    env.iter()
+        .filter_map(Json::as_str)
+        .find_map(|e| e.strip_prefix(&format!("{name}=")).map(str::to_string))
+}
+
+fn cmd_arm_run(args: &[String]) -> Result<String, String> {
+    let cfg = load_cfg(&req(args, "--cfg"))?;
+    let task = req(args, "--task");
+    let image = req(args, "--image");
+    let admission = read_json(&req(args, "--admission"))?;
+    let slot_id = req(args, "--slot-id");
+    let tok_file = req(args, "--slot-token-file");
+    let slot_token = std::fs::read_to_string(&tok_file)
+        .map_err(|e| format!("slot token: {e}"))?
+        .trim()
+        .to_string();
+    let upstream: u16 = req(args, "--model-upstream")
+        .parse()
+        .map_err(|_| "--model-upstream int")?;
+    let slice: u64 = arg(args, "--slot-slice-micros")
+        .map(|s| s.parse::<u64>().unwrap_or(0))
+        .unwrap_or(0);
+    let out = PathBuf::from(req(args, "--out"));
+    let _ = std::fs::create_dir_all(&out);
+    let arm = ArmSlot {
+        slot_id: &slot_id,
+        slot_token: &slot_token,
+        model_upstream_port: upstream,
+        slot_slice_micros: slice,
+    };
+    let (rep, _denied) = arm_run_once(&cfg, &task, &image, &admission, &out, &arm)?;
+    Ok(rep.to_canonical_string())
 }
 
 fn cmd_o_run(args: &[String]) -> Result<String, String> {
@@ -1695,6 +2223,115 @@ fn cmd_census(args: &[String]) -> Result<String, String> {
     Ok(out.to_canonical_string())
 }
 
+// ── corpus-manifest / corpus-check ────────────────────────────────────
+// The REQ-XD-107 corpus leg's fold tooling (spec §7.4): the L1 corpus is
+// the 28 RECORD trajectories + the 19 authored BM branch fixtures + a
+// turn-1 census of every manifest task. `corpus-manifest` folds a
+// fixtures dir + a recordings dir into the `hh-l1-corpus/1` manifest —
+// every member enumerated with its content digest so the manifest's own
+// sha256 is the corpus's frozen digest — and `corpus-check` runs the
+// REQ-XD-109/107 coverage refusal (`check_corpus`) the gate reads: every
+// BM1–BM19 branch covered by a declared entry, every manifest task
+// covered by a census entry.
+
+/// Sorted `*.json` members of `dir` as `(stem, bytes)`.
+fn corpus_members(dir: &str) -> Result<Vec<(String, Vec<u8>)>, String> {
+    let mut out = Vec::new();
+    let rd = std::fs::read_dir(dir).map_err(|e| format!("read_dir {dir}: {e}"))?;
+    for e in rd {
+        let e = e.map_err(|e| format!("read_dir entry: {e}"))?;
+        let p = e.path();
+        if p.extension().and_then(|s| s.to_str()) != Some("json") {
+            continue;
+        }
+        let stem = p
+            .file_name()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default()
+            .trim_end_matches(".json")
+            .trim_end_matches(".recording")
+            .to_string();
+        let bytes = std::fs::read(&p).map_err(|e| format!("read {}: {e}", p.display()))?;
+        out.push((stem, bytes));
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0));
+    Ok(out)
+}
+
+fn cmd_corpus_manifest(args: &[String]) -> Result<String, String> {
+    let fixtures_dir = req(args, "--fixtures-dir");
+    let recordings_dir = req(args, "--recordings-dir");
+    let census: Vec<String> = req(args, "--census-tasks")
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    if census.is_empty() {
+        return Err("--census-tasks must name at least one task".to_string());
+    }
+    // Fixture entries carry their declared branch coverage verbatim
+    // from the authored generator; a fixtures-dir member whose stem
+    // names no generator id refuses — the manifest never declares
+    // coverage it cannot attribute.
+    let fixtures = hharness_runner::l1_corpus::bm_fixtures();
+    let declared: BTreeMap<&str, &[&str]> = fixtures.iter().map(|f| (f.id, f.branches)).collect();
+    let mut entries: Vec<(String, &'static [&'static str], &'static str, String)> = Vec::new();
+    for (stem, bytes) in corpus_members(&fixtures_dir)? {
+        let branches = declared
+            .get(stem.as_str())
+            .ok_or_else(|| format!("fixture {stem} names no authored BM fixture"))?;
+        entries.push((stem, branches, "synthetic", sha256_hex(&bytes)));
+    }
+    for (stem, bytes) in corpus_members(&recordings_dir)? {
+        entries.push((stem, &[], "record", sha256_hex(&bytes)));
+    }
+    let mut doc = hharness_runner::l1_corpus::corpus_manifest(
+        entries
+            .iter()
+            .map(|(i, b, _, _)| (i.as_str(), *b))
+            .collect(),
+        census,
+    );
+    // Fold each member's provenance + content digest into its entry —
+    // the manifest digest then binds every corpus byte.
+    if let Json::Obj(map) = &mut doc {
+        if let Some(Json::Arr(es)) = map.get_mut("entries") {
+            for (i, e) in es.iter_mut().enumerate() {
+                if let Json::Obj(m) = e {
+                    m.insert("provenance".to_string(), Json::str(entries[i].2));
+                    m.insert(
+                        "digest".to_string(),
+                        Json::str(format!("sha256:{}", entries[i].3)),
+                    );
+                }
+            }
+        }
+    }
+    let out = PathBuf::from(req(args, "--out"));
+    write_json(&out, &doc)?;
+    let digest = sha256_hex(doc.to_canonical_string().as_bytes());
+    let mut side = out.clone();
+    side.set_extension("sha256");
+    std::fs::write(&side, format!("{digest}  {}\n", out.display()))
+        .map_err(|e| format!("write {}: {e}", side.display()))?;
+    Ok(format!("sha256:{digest}"))
+}
+
+fn cmd_corpus_check(args: &[String]) -> Result<String, String> {
+    let corpus = read_json(&req(args, "--corpus"))?;
+    let tasks: Vec<String> = req(args, "--tasks")
+        .split(',')
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect();
+    let map = hharness_runner::l1_corpus::check_corpus(&corpus, &tasks)
+        .map_err(|e| format!("{}: {}", e.rule, e.detail))?;
+    if let Some(out) = arg(args, "--out") {
+        write_json(Path::new(&out), &map)?;
+    }
+    Ok(map.to_canonical_string())
+}
+
 fn cmd_label_packet(args: &[String]) -> Result<String, String> {
     let pf = req(args, "--packet");
     let refr = req(args, "--ref");
@@ -1742,6 +2379,377 @@ fn cmd_index(args: &[String]) -> Result<String, String> {
     Ok("index: ok".to_string())
 }
 
+// ── l1-fold ───────────────────────────────────────────────────────
+// The Ws1 L1 fold (R6.45q; spec §7.4 REQ-XD-103/104/109): the
+// deterministic half of `l1_gate::run_sequence` composed over
+// externally-supplied drives — the driver emits L1Drive JSON docs
+// (`hh-l1-drive-report` captures + proxy receipts for O cells,
+// `hh-l1-drive` events + receipts for H legs); this surface parses
+// them, runs stable_prefix / compare_drives / diff_record /
+// conformance_record verbatim, and emits `hh-l1-diff/1` per gated
+// divergence + the `hh-l1-conformance/1` record bound to the exact H.
+//
+// spec.json shape:
+//   {canon_id, surface, cell_facts:[[k,v]], corpus_digest,
+//    h_id:{participant_ref,version,digest}, o_id:{…},
+//    coverage:<Json>, census_covered:<int>, recorded_at,
+//    seqs:[{seq_id, o_a:DRIVE, o_b:DRIVE, h1:DRIVE, h2:DRIVE,
+//           endpoint_first_1:[turn,path]|null,
+//           endpoint_first_2:[turn,path]|null}]}
+// DRIVE := {requests:[{turn,method,path,content_type,body,upstream_body}],
+//           parsed_actions:[[{command,tool_call_id}]],
+//           executed_actions:[[…]], termination, submission,
+//           extra_request, refusal:{rule,detail}|null}
+fn l1_b64_decode(s: &str) -> Result<Vec<u8>, String> {
+    fn v(c: u8) -> Result<u8, String> {
+        match c {
+            b'A'..=b'Z' => Ok(c - b'A'),
+            b'a'..=b'z' => Ok(c - b'a' + 26),
+            b'0'..=b'9' => Ok(c - b'0' + 52),
+            b'+' => Ok(62),
+            b'/' => Ok(63),
+            b'=' => Ok(0),
+            _ => Err(format!("b64 char {c}")),
+        }
+    }
+    let b: Vec<u8> = s.bytes().filter(|c| !c.is_ascii_whitespace()).collect();
+    let mut out = Vec::with_capacity(b.len() * 3 / 4);
+    let mut i = 0;
+    while i + 4 <= b.len() {
+        let (a, bb, c, d) = (v(b[i])?, v(b[i + 1])?, v(b[i + 2])?, v(b[i + 3])?);
+        out.push((a << 2) | (bb >> 4));
+        if b[i + 2] != b'=' {
+            out.push((bb << 4) | (c >> 2));
+        }
+        if b[i + 3] != b'=' {
+            out.push((c << 6) | d);
+        }
+        i += 4;
+    }
+    Ok(out)
+}
+
+fn l1_body(j: &Json, plain: &str, b64: &str) -> Result<Vec<u8>, String> {
+    if let Some(s) = j.get(b64).and_then(Json::as_str) {
+        return l1_b64_decode(s);
+    }
+    Ok(j.get(plain)
+        .and_then(Json::as_str)
+        .unwrap_or_default()
+        .as_bytes()
+        .to_vec())
+}
+
+fn l1_actions(j: Option<&Json>) -> Vec<Vec<hharness_runner::l1_drive::L1Action>> {
+    j.and_then(Json::as_arr)
+        .map(|steps| {
+            steps
+                .iter()
+                .map(|st| {
+                    st.as_arr()
+                        .map(|acts| {
+                            acts.iter()
+                                .map(|a| hharness_runner::l1_drive::L1Action {
+                                    command: jstr(a, "command").unwrap_or_default().to_string(),
+                                    tool_call_id: jstr(a, "tool_call_id")
+                                        .unwrap_or_default()
+                                        .to_string(),
+                                })
+                                .collect()
+                        })
+                        .unwrap_or_default()
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn l1_drive_from_json(j: &Json) -> Result<hharness_runner::l1_drive::L1Drive, String> {
+    let mut requests = Vec::new();
+    for r in j
+        .get("requests")
+        .and_then(Json::as_arr)
+        .cloned()
+        .unwrap_or_default()
+    {
+        requests.push(hharness_runner::l1_drive::CapturedRequest {
+            turn: r.get("turn").and_then(Json::as_int).unwrap_or(0) as usize,
+            method: jstr(&r, "method").unwrap_or_default().to_string(),
+            path: jstr(&r, "path").unwrap_or_default().to_string(),
+            content_type: jstr(&r, "content_type").map(str::to_string),
+            body: l1_body(&r, "body", "body_b64")?,
+            upstream_body: l1_body(&r, "upstream_body", "upstream_body_b64")?,
+        });
+    }
+    let refusal = j.get("refusal").and_then(|r| {
+        r.as_obj().map(|_| hharness_runner::l1_obs::L1Error {
+            rule: Box::leak(
+                jstr(r, "rule")
+                    .unwrap_or("drive")
+                    .to_string()
+                    .into_boxed_str(),
+            ),
+            detail: jstr(r, "detail").unwrap_or_default().to_string(),
+        })
+    });
+    Ok(hharness_runner::l1_drive::L1Drive {
+        requests,
+        parsed_actions: l1_actions(j.get("parsed_actions")),
+        executed_actions: l1_actions(j.get("executed_actions")),
+        termination: jstr(j, "termination")
+            .unwrap_or("exception{unspecified}")
+            .to_string(),
+        submission: jstr(j, "submission").map(str::to_string),
+        extra_request: j
+            .get("extra_request")
+            .and_then(Json::as_bool)
+            .unwrap_or(false),
+        refusal,
+    })
+}
+
+fn l1_identity_from_json(j: &Json) -> hharness_runner::l1_gate::L1Identity {
+    hharness_runner::l1_gate::L1Identity {
+        participant_ref: jstr(j, "participant_ref").unwrap_or_default().to_string(),
+        version: jstr(j, "version").unwrap_or_default().to_string(),
+        digest: jstr(j, "digest").unwrap_or_default().to_string(),
+    }
+}
+
+fn cmd_l1_fold(args: &[String]) -> Result<String, String> {
+    let spec_p = req(args, "--spec");
+    let out = PathBuf::from(req(args, "--out"));
+    let _ = std::fs::create_dir_all(&out);
+    let spec = read_json(&spec_p)?;
+    let canon_id = jstr(&spec, "canon_id")
+        .unwrap_or("hh-l1-canon/1")
+        .to_string();
+    let surface = jstr(&spec, "surface").unwrap_or("openai-chat").to_string();
+    let cell_facts: Vec<(String, String)> = spec
+        .get("cell_facts")
+        .and_then(Json::as_arr)
+        .map(|a| {
+            a.iter()
+                .filter_map(|p| {
+                    p.as_arr().and_then(|kv| {
+                        Some((
+                            kv.first()?.as_str()?.to_string(),
+                            kv.get(1)?.as_str()?.to_string(),
+                        ))
+                    })
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let corpus_digest = jstr(&spec, "corpus_digest").unwrap_or_default().to_string();
+    let h_id = l1_identity_from_json(&spec.get("h_id").cloned().unwrap_or(Json::Null));
+    let o_id = l1_identity_from_json(&spec.get("o_id").cloned().unwrap_or(Json::Null));
+    let coverage = spec.get("coverage").cloned().unwrap_or(Json::Null);
+    let census_covered = spec
+        .get("census_covered")
+        .and_then(Json::as_int)
+        .unwrap_or(0) as usize;
+    let recorded_at = jstr(&spec, "recorded_at")
+        .unwrap_or("2026-11-17T00:00:00Z")
+        .to_string();
+    let canon = || {
+        hharness_gateway::replay::canonicalizer_for(&canon_id, &cell_facts)
+            .map_err(|e| format!("canonicalizer: {e:?}"))
+    };
+
+    let mut seqs: Vec<hharness_runner::l1_gate::SeqOutcome> = Vec::new();
+    let mut diff_docs: Vec<Json> = Vec::new();
+    for seq in spec
+        .get("seqs")
+        .and_then(Json::as_arr)
+        .cloned()
+        .unwrap_or_default()
+    {
+        let seq_id = jstr(&seq, "seq_id").unwrap_or("seq").to_string();
+        let drive_a = l1_drive_from_json(&seq.get("o_a").cloned().unwrap_or(Json::Null))?;
+        let drive_b = l1_drive_from_json(&seq.get("o_b").cloned().unwrap_or(Json::Null))?;
+        let h1 = l1_drive_from_json(&seq.get("h1").cloned().unwrap_or(Json::Null))?;
+        let h2 = l1_drive_from_json(&seq.get("h2").cloned().unwrap_or(Json::Null))?;
+        // ADR-0450 — `o_rec` is the recording-derived reference the
+        // strict replay leg is measured against; absent (pre-amendment
+        // specs) the legacy `o_a` live-capture comparator stands.
+        let drive_rec_j = seq.get("o_rec").cloned().unwrap_or(Json::Null);
+        let drive_rec = if matches!(drive_rec_j, Json::Null) {
+            None
+        } else {
+            Some(l1_drive_from_json(&drive_rec_j)?)
+        };
+        let ref1 = drive_rec.as_ref().unwrap_or(&drive_a);
+        let c = canon()?;
+        let s = hharness_runner::l1_gate::stable_prefix(c.as_ref(), &surface, &drive_a, &drive_b);
+        let total = drive_a.requests.len().max(drive_b.requests.len());
+        // L1.1 — whole-trajectory gate (usize::MAX) on a
+        // marker-terminated reference; a `corpus_boundary` reference
+        // (crash-truncated recording) gates recorded-call traversal
+        // only — trajectory tail levels emit ungated (ADR-0450 item 4).
+        let boundary = ref1.termination == "exception{corpus_boundary}";
+        let (stable1, total1) = if boundary {
+            (ref1.requests.len(), usize::MAX)
+        } else {
+            (usize::MAX, ref1.requests.len())
+        };
+        let mut div1 = hharness_runner::l1_gate::compare_drives(
+            c.as_ref(),
+            &surface,
+            ref1,
+            &h1,
+            stable1,
+            total1,
+        );
+        let ep1 = seq
+            .get("endpoint_first_1")
+            .and_then(Json::as_arr)
+            .and_then(|a| {
+                Some((
+                    a.first()?.as_int()? as usize,
+                    a.get(1)?.as_str()?.to_string(),
+                ))
+            });
+        if let Some((t, pth)) = &ep1 {
+            if !div1
+                .iter()
+                .any(|d| d.turn == Some(*t) && d.level == "request")
+            {
+                div1.push(hharness_runner::l1_gate::L1Divergence {
+                    level: "request",
+                    turn: Some(*t),
+                    path: pth.clone(),
+                    detail: "strict endpoint refusal".to_string(),
+                    // a post-corpus refusal on a boundary seq is the
+                    // expected boundary artifact, not a gated failure.
+                    gated: *t <= stable1,
+                });
+            }
+        }
+        let l1_1 = hharness_runner::l1_gate::LegOutcome {
+            result: if div1.iter().any(|d| d.gated) {
+                "fail"
+            } else {
+                "pass"
+            },
+            divergences: div1,
+            endpoint_first: ep1,
+            h_drive: Some(h1.clone()),
+            o_drive: None,
+        };
+        // L1.2 — gated on requests 1…s(S).
+        let div2 =
+            hharness_runner::l1_gate::compare_drives(c.as_ref(), &surface, &drive_a, &h2, s, total);
+        let ep2 = seq
+            .get("endpoint_first_2")
+            .and_then(Json::as_arr)
+            .and_then(|a| {
+                Some((
+                    a.first()?.as_int()? as usize,
+                    a.get(1)?.as_str()?.to_string(),
+                ))
+            });
+        let l1_2 = hharness_runner::l1_gate::LegOutcome {
+            result: if div2.iter().any(|d| d.gated) {
+                "fail"
+            } else {
+                "pass"
+            },
+            divergences: div2,
+            endpoint_first: ep2,
+            h_drive: Some(h2.clone()),
+            o_drive: None,
+        };
+        // diff records — one durable `hh-l1-diff/1` per gated divergence.
+        let cmp = canon()?;
+        for (leg, outcome, od, hd) in [("l1_1", &l1_1, ref1, &h1), ("l1_2", &l1_2, &drive_a, &h2)] {
+            for d in outcome.divergences.iter().filter(|d| d.gated) {
+                let cv = |dr: &hharness_runner::l1_drive::L1Drive| -> String {
+                    d.turn
+                        .and_then(|t| dr.requests.get(t - 1))
+                        .and_then(|r| cmp.canonicalize(&surface, &r.upstream_body).ok())
+                        .map(|cv| String::from_utf8_lossy(&cv.bytes).into_owned())
+                        .unwrap_or_default()
+                };
+                diff_docs.push(hharness_runner::l1_gate::diff_record(
+                    &seq_id,
+                    leg,
+                    d,
+                    &canon_id,
+                    &o_id,
+                    &h_id,
+                    &cv(od),
+                    &cv(hd),
+                    &recorded_at,
+                ));
+            }
+        }
+        seqs.push(hharness_runner::l1_gate::SeqOutcome {
+            seq_id,
+            stable: s,
+            total,
+            l1_1,
+            l1_2,
+            diffs: vec![],
+        });
+    }
+    let seq_refs: Vec<&hharness_runner::l1_gate::SeqOutcome> = seqs.iter().collect();
+    let conf = hharness_runner::l1_gate::conformance_record(
+        &seq_refs,
+        &coverage,
+        census_covered,
+        &canon_id,
+        &corpus_digest,
+        &h_id,
+        &o_id,
+        &recorded_at,
+    );
+    write_json(&out.join("hh-l1-conformance.json"), &conf)?;
+    write_json(&out.join("hh-l1-diffs.json"), &Json::Arr(diff_docs.clone()))?;
+    Ok(Json::obj([
+        ("conformance", conf),
+        ("diffs", Json::Int(diff_docs.len() as i64)),
+    ])
+    .to_canonical_string())
+}
+
+// ── l1-raws ───────────────────────────────────────────────────────
+// Extract the recorded `RawObservation` queue from a corpus
+// recording (R6.45q): L1.1's obs_replay executor is fed exactly this
+// — the raw env effects embedded in the recorded tool messages.
+// Emits [{output, returncode, exception_info}].
+fn cmd_l1_raws(args: &[String]) -> Result<String, String> {
+    let rec_path = req(args, "--recording");
+    let out = PathBuf::from(req(args, "--out"));
+    let rec_j = read_json(&rec_path)?;
+    let rec = Recording::parse(&rec_j).map_err(|e| format!("recording: {e}"))?;
+    let raws = hharness_runner::l1_obs::raws_from_recording(&rec)
+        .map_err(|e| format!("raws: {}", e.detail))?;
+    let emit = |r: &hharness_runner::l1_obs::RawObservation, reconstructed: bool| {
+        let mut pairs: Vec<(&'static str, Json)> = vec![
+            ("output", Json::str(&r.output)),
+            ("returncode", Json::Int(r.returncode)),
+            (
+                "exception_info",
+                r.exception_info.clone().unwrap_or(Json::Null),
+            ),
+        ];
+        if reconstructed {
+            pairs.push(("reconstructed", Json::str("echo_literal")));
+        }
+        Json::obj(pairs)
+    };
+    let mut arr: Vec<Json> = raws.iter().map(|r| emit(r, false)).collect();
+    // ADR-0450 item 3 — the terminal `echo` the submit-marker
+    // convention intercepts before any observation is recorded; the
+    // queue gains the deterministic output, typed `reconstructed`.
+    if let Some(t) = hharness_runner::l1_obs::terminal_echo_observation(&rec, &raws) {
+        arr.push(emit(&t, true));
+    }
+    write_json(&out, &Json::Arr(arr.clone()))?;
+    Ok(format!("raws: {}", arr.len()))
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let Some(cmd) = args.first() else { usage() };
@@ -1755,9 +2763,14 @@ fn main() {
         "observe" => cmd_observe(rest),
         "o-run" => cmd_o_run(rest),
         "h-run" => cmd_h_run(rest),
+        "arm-run" => cmd_arm_run(rest),
         "prove" => cmd_prove(rest),
         "fault" => cmd_fault(rest),
         "census" => cmd_census(rest),
+        "corpus-manifest" => cmd_corpus_manifest(rest),
+        "corpus-check" => cmd_corpus_check(rest),
+        "l1-fold" => cmd_l1_fold(rest),
+        "l1-raws" => cmd_l1_raws(rest),
         "probe-run" => cmd_probe_run(rest),
         "label-packet" => cmd_label_packet(rest),
         "index" => cmd_index(rest),

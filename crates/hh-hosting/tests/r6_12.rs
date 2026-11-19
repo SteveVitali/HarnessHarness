@@ -51,7 +51,7 @@ fn root(tag: &str) -> PathBuf {
 
 #[derive(Debug, Clone)]
 struct Seen {
-    body: String,
+    _body: String,
 }
 
 fn fixture_upstream(payloads: Vec<String>) -> (String, Arc<Mutex<Vec<Seen>>>) {
@@ -60,18 +60,16 @@ fn fixture_upstream(payloads: Vec<String>) -> (String, Arc<Mutex<Vec<Seen>>>) {
     let seen = Arc::new(Mutex::new(Vec::<Seen>::new()));
     let seen_w = seen.clone();
     std::thread::spawn(move || {
-        let mut i = 0usize;
-        for conn in listener.incoming() {
+        for (i, conn) in listener.incoming().enumerate() {
             let Ok(mut stream) = conn else { return };
             let mut r = BufReader::new(stream.try_clone().unwrap());
             let Ok(Some((_head, body))) = hharness_wire::http::read_request(&mut r, 8 << 20) else {
                 return;
             };
             seen_w.lock().unwrap().push(Seen {
-                body: String::from_utf8_lossy(&body).to_string(),
+                _body: String::from_utf8_lossy(&body).to_string(),
             });
             let payload = payloads.get(i).cloned().unwrap_or_else(|| "{}".into());
-            i += 1;
             let resp = format!(
                 "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{payload}",
                 payload.len()
@@ -94,9 +92,9 @@ fn lane(endpoint: &str) -> ProxyLane {
     l
 }
 
-fn cfg(root: &PathBuf, endpoint: &str, mode: ProxyMode) -> ProxyConfig {
+fn cfg(root: &std::path::Path, endpoint: &str, mode: ProxyMode) -> ProxyConfig {
     ProxyConfig {
-        store_root: root.clone(),
+        store_root: root.to_path_buf(),
         run_id: RUN.to_string(),
         lane: lane(endpoint),
         listen: "127.0.0.1:0".into(),
@@ -161,8 +159,8 @@ fn receipts(store_root: &PathBuf) -> Vec<Json> {
         .map(|(_, t)| {
             let r = t.get("response_ref").and_then(Json::as_str).unwrap();
             let addr = hharness_identity::idp::ContentAddress {
-                idp: "idp/1".into(),
-                algorithm: "sha256".into(),
+                idp: "idp/1",
+                algorithm: "sha256",
                 digest: r.strip_prefix("sha256:").unwrap().to_string(),
                 media_type: "application/json".into(),
                 size: 0,

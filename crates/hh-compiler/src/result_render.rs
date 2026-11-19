@@ -168,9 +168,9 @@ pub fn tojson(v: &Json, style: ResultJsonStyle) -> String {
 /// json_style, result)` — the `json_head_tail@1` pure render. The
 /// record renders `{\n  "f1": v1` + `,\n  "f": v` for required fields
 /// + `, "f": v` inline for optional fields + `\n}` (mini's template
-/// shape, research 28 §A.5): `measure(output) >= threshold` expands the
-/// `truncate` field to `{name}_head`, `{name}_tail`, `elided_chars`
-/// (= `measure − threshold`, the template's own arithmetic), `warning`.
+///   shape, research 28 §A.5): `measure(output) >= threshold` expands the
+///   `truncate` field to `{name}_head`, `{name}_tail`, `elided_chars`
+///   (= `measure − threshold`, the template's own arithmetic), `warning`.
 pub fn render_json_head_tail(
     threshold: u64,
     head: u64,

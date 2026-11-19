@@ -36,6 +36,7 @@ pub mod helper;
 pub mod interchange;
 pub mod leaf_admission;
 pub mod local;
+pub mod obs_replay;
 pub mod observe;
 pub mod ops;
 pub mod opslive;

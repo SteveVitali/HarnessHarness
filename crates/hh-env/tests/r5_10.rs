@@ -275,7 +275,8 @@ fn r510_post_seal_mutation_diverges_from_the_pin() {
     // diverges from the sealed content (the grader's mutable-submission
     // detection input).
     let artifact = ws.join("artifact.txt").display().to_string();
-    let baseline_now = PathBaseline::take(&|p| std::fs::read(p).ok(), &[artifact.clone()]);
+    let baseline_now =
+        PathBaseline::take(&|p| std::fs::read(p).ok(), std::slice::from_ref(&artifact));
     std::fs::write(ws.join("artifact.txt"), b"mutated-after-seal").unwrap();
     let baseline_mut = PathBaseline::take(&|p| std::fs::read(p).ok(), &[artifact]);
     let diff = PathBaseline::diff(&baseline_now, &baseline_mut);

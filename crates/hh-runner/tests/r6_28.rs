@@ -9,7 +9,7 @@
 
 use std::path::PathBuf;
 
-use hharness_gateway::recording::Recording;
+use hharness_gateway::recording::{RecordedCall, RecordedReleased, Recording};
 use hharness_runner::json_ext::JsonExt;
 use hharness_runner::l1_corpus::{
     bm_fixtures, census_entries, check_corpus, corpus_manifest, BM_BRANCHES, CORPUS_SCHEMA,
@@ -132,7 +132,7 @@ fn ac1_mini_cell_reaches_endpoint_only_via_declared_profile() {
     // the declared `allowlist_mediated` profile, never a raw dial.
     let slot = hharness_runner::render::SlotInputs {
         slot_token: "toy-slot-token".to_string(),
-        model_port: 4_242,
+        model_port: 54_242,
         instruction: b"do the task".to_vec(),
         home: "/root".to_string(),
         user: "root".to_string(),
@@ -146,7 +146,7 @@ fn ac1_mini_cell_reaches_endpoint_only_via_declared_profile() {
             .unwrap();
     let base = cfg.env.get("OPENAI_BASE_URL").unwrap();
     assert!(
-        base.starts_with("http://127.0.0.1:4242"),
+        base.starts_with("http://127.0.0.1:54242"),
         "base-url setting is the cell's model-relay loopback: {base}"
     );
     // Other egress is mediated; loopback is the only direct route.
@@ -223,6 +223,62 @@ fn ac2_obs_replay_overrun_refuses_typed() {
     let mut sink = |_: hharness_env::executor::ExecutorSignal| {};
     let e = hharness_env::executor::ToolExecutor::execute(&mut x, &req, &mut sink).unwrap_err();
     assert!(format!("{e}").contains("observation_overrun"));
+}
+
+#[test]
+fn ac2b_obs_replay_exception_info_reports_tool_error_timeout() {
+    // Ws1r — O's `exception_info` channel (the `returncode: -1` timeout
+    // triple) must reach the terminal report: the model-view render
+    // emits `exception_info` only from a `ToolError{Timeout}` status
+    // with the verbatim detail in `detail_ref`. A raw carrying it
+    // surfaced `Ok` before the repair — the replayed request then
+    // diverged at the tool message.
+    let mut x = ObsReplayExecutor::new(vec![RawObservation {
+        output: "attempt 1 failed\n".to_string(),
+        returncode: -1,
+        exception_info: Some(Json::str(
+            "An error occurred while executing the command: Command 'sleep 90' \
+             timed out after 30 seconds",
+        )),
+    }]);
+    let req = exec_request();
+    let mut sink = |_: hharness_env::executor::ExecutorSignal| {};
+    let report = hharness_env::executor::ToolExecutor::execute(&mut x, &req, &mut sink).unwrap();
+    match &report.status {
+        hharness_env::executor::TerminalStatus::ToolError { class } => {
+            assert_eq!(class.as_str(), "timeout");
+        }
+        other => panic!("exception_info must report ToolError{{timeout}}, got {other:?}"),
+    }
+    assert_eq!(
+        report.detail_ref.as_deref(),
+        Some(
+            "An error occurred while executing the command: Command 'sleep 90' \
+             timed out after 30 seconds"
+        )
+    );
+    assert_eq!(report.exit_status, Some(-1));
+    // The class is declared — an undeclared class is a protocol_error.
+    assert!(hharness_env::executor::ToolExecutor::declaration(&x)
+        .error_classes
+        .contains("timeout"));
+    // The double declares probe support: the recorded `returncode: -1`
+    // raw is the settled evidence a live probe would discover — the
+    // killed command's mutation observably did not complete, so the
+    // `unknown → probed{not_applied}` settle delivers the recorded
+    // report instead of parking the effect `unknown` forever.
+    assert_eq!(
+        hharness_env::executor::ToolExecutor::declaration(&x).probe_support,
+        hharness_env::executor::ProbeSupport::Check
+    );
+    assert_eq!(
+        hharness_env::executor::ToolExecutor::probe(&x, "ef-1", 1).unwrap(),
+        hharness_env::executor::ProbeVerdict::NotApplied
+    );
+    // And a raw without the member stays the legacy `Ok`.
+    let mut x2 = ObsReplayExecutor::new(vec![raw("ok", 0)]);
+    let report2 = hharness_env::executor::ToolExecutor::execute(&mut x2, &req, &mut sink).unwrap();
+    assert_eq!(report2.status, hharness_env::executor::TerminalStatus::Ok);
 }
 
 fn exec_request() -> hharness_env::executor::ExecutionRequest {
@@ -405,8 +461,10 @@ fn ac4_legs_stable_prefix_and_first_divergence() {
 
     // Injected request divergence at turn 2 → detected at the right
     // step and leg (strict L1.1 refuses; the diff record names it).
-    let mut plan = DivergencePlan::default();
-    plan.request_patch = Some((2, vec![("temperature".into(), Json::Int(1))]));
+    let plan = DivergencePlan {
+        request_patch: Some((2, vec![("temperature".into(), Json::Int(1))])),
+        ..Default::default()
+    };
     let out = run_sequence(
         &seq,
         &make_o(),
@@ -441,8 +499,10 @@ fn ac4_l12_gates_inside_prefix_reports_beyond() {
         raw(&format!("{SUBMIT_MARKER}\n"), 0),
     ]));
     // Divergence at turn 1 (within the stable prefix) → fail.
-    let mut plan = DivergencePlan::default();
-    plan.request_patch = Some((1, vec![("temperature".into(), Json::Int(1))]));
+    let plan = DivergencePlan {
+        request_patch: Some((1, vec![("temperature".into(), Json::Int(1))])),
+        ..Default::default()
+    };
     let out = run_sequence(
         &seq,
         &make_o(),
@@ -457,8 +517,10 @@ fn ac4_l12_gates_inside_prefix_reports_beyond() {
     assert_eq!(out.l1_2.result, "fail");
     // Divergence only at turn 2 (= s+1, the excluded turn) → reported,
     // never a fail.
-    let mut plan = DivergencePlan::default();
-    plan.request_patch = Some((2, vec![("temperature".into(), Json::Int(1))]));
+    let plan = DivergencePlan {
+        request_patch: Some((2, vec![("temperature".into(), Json::Int(1))])),
+        ..Default::default()
+    };
     let out = run_sequence(
         &seq,
         &make_o(),
@@ -614,8 +676,10 @@ fn ac6_records_shape_and_diff_per_failed_trajectory() {
     assert_eq!(check_l1_conformance(&conf), Vec::<String>::new());
     // A failed trajectory emits a diff record per gated divergence and
     // the conformance carries it; validators pin the shape.
-    let mut plan = DivergencePlan::default();
-    plan.request_patch = Some((2, vec![("temperature".into(), Json::Int(1))]));
+    let plan = DivergencePlan {
+        request_patch: Some((2, vec![("temperature".into(), Json::Int(1))])),
+        ..Default::default()
+    };
     let out = run_sequence(
         &seq,
         &make_o(),
@@ -751,3 +815,105 @@ fn ac7_l1_record_refuses_as_parity_evidence() {
     assert_eq!(e.rule, "l1_not_parity");
     assert!(refuse_parity_input(&Json::obj([("schema", Json::str("x"))])).is_ok());
 }
+
+// ── ADR-0450 — recording-relative fold semantics ───────────────────
+
+/// A single-call recording whose released response proposes `command`.
+fn one_call_recording(command: &str) -> Recording {
+    let resp = format!(
+        concat!(
+            "{{\"choices\":[{{\"message\":{{\"role\":\"assistant\",",
+            "\"tool_calls\":[{{\"id\":\"call_1\",\"function\":{{\"name\":\"bash\",",
+            "\"arguments\":\"{{\\\"command\\\":\\\"{}\\\"}}\"}}}}]}}}}]}}"
+        ),
+        command.replace('\\', "\\\\").replace('"', "\\\"")
+    );
+    Recording {
+        slot_id: "s".into(),
+        provenance: "synthetic".into(),
+        calls: vec![RecordedCall {
+            k: 0,
+            downstream_method: "POST".into(),
+            downstream_path: "/v1/chat/completions".into(),
+            downstream_body: b"{\"messages\":[]}".to_vec(),
+            upstream_request: Some(b"{\"messages\":[]}".to_vec()),
+            upstream_response: None,
+            failure: None,
+            released: Some(RecordedReleased {
+                status: 200,
+                headers: Default::default(),
+                body: resp.into_bytes(),
+            }),
+            disposition: "forwarded".into(),
+            latency_ms: 0,
+        }],
+    }
+}
+
+#[test]
+fn adr450_terminal_echo_reconstructed_typed() {
+    use hharness_runner::l1_obs::terminal_echo_observation;
+    // marker-terminal corpus — the convention intercepts the echo
+    // before any request could carry its result; the queue gains the
+    // deterministic output (ADR-0450 item 3).
+    let rec = one_call_recording(&format!("echo {SUBMIT_MARKER}"));
+    let t = terminal_echo_observation(&rec, &[]).unwrap();
+    assert_eq!(t.output, format!("{SUBMIT_MARKER}\n"));
+    assert_eq!(t.returncode, 0);
+    assert!(t.exception_info.is_none());
+    // already served — no double append.
+    let have = vec![t.clone()];
+    assert!(terminal_echo_observation(&rec, &have).is_none());
+    // a non-echo terminal call reconstructs nothing.
+    let rec = one_call_recording("cat answer.txt");
+    assert!(terminal_echo_observation(&rec, &[]).is_none());
+    // a shell-compound echo is never reconstructed.
+    let rec = one_call_recording(&format!("echo {SUBMIT_MARKER} | tee x"));
+    assert!(terminal_echo_observation(&rec, &[]).is_none());
+}
+
+#[test]
+fn adr450_corpus_boundary_tail_ungated() {
+    let canon = canon();
+    // ADR-0450 item 4 — the boundary reference gates recorded-call
+    // traversal only: `stable = |o_rec|`, `total = ∞` → tail levels
+    // emit ungated; a recorded-position diff still gates.
+    let mut o = base_drive();
+    o.termination = "exception{corpus_boundary}".into();
+    o.submission = None;
+    let mut h = base_drive();
+    h.requests.push(hharness_runner::l1_drive::CapturedRequest {
+        turn: 3,
+        method: "POST".into(),
+        path: "/v1".into(),
+        content_type: Some("application/json".into()),
+        body: b"{}".to_vec(),
+        upstream_body: b"{}".to_vec(),
+    });
+    h.termination = "exception{model_error}".into();
+    h.submission = None;
+    h.extra_request = true;
+    let v = compare_drives(canon.as_ref(), "", &o, &h, 2, usize::MAX);
+    assert_eq!(gated_count(&v), 0, "boundary tail never gates: {v:?}");
+    assert!(v.iter().any(|d| d.level == "request_count" && !d.gated));
+    assert!(v.iter().any(|d| d.level == "termination" && !d.gated));
+    assert!(v.iter().any(|d| d.level == "extra_request" && !d.gated));
+    // ...while a recorded-position request diff still gates.
+    let mut h = base_drive();
+    h.requests[0].upstream_body = Json::obj([("model", Json::str("OTHER"))])
+        .to_canonical_string()
+        .into_bytes();
+    h.termination = "exception{model_error}".into();
+    h.submission = None;
+    let v = compare_drives(canon.as_ref(), "", &o, &h, 2, usize::MAX);
+    assert!(v.iter().any(|d| d.gated && d.level == "request"));
+    assert!(v.iter().any(|d| !d.gated && d.level == "termination"));
+}
+
+/// §7.4's L1 conformance legs — L1.0/L1.1/L1.2 over gate-A against the
+/// frozen H-set — run only inside Ws1 under FP-S (R6.45q, `scripts/
+/// live-verify.sh l1`); the driver composes the committed l1_gate fold
+/// over real drives — never a fixture row for live evidence.
+#[test]
+#[ignore = "live — ADR-0363: scripts/live-verify.sh l1 — the Ws1 L1 legs run only inside Ws1 under FP-S (R6.45q)"]
+fn live_l1_conformance() {}

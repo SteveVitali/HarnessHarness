@@ -526,7 +526,7 @@ impl PilotReport {
             ("envelope", self.envelope.clone()),
             (
                 "attempts",
-                Json::Arr(self.attempts.iter().map(|s| Json::str(s)).collect()),
+                Json::Arr(self.attempts.iter().map(Json::str).collect()),
             ),
             (
                 "legs",

@@ -1,5 +1,5 @@
-//! R5.15 — the producer-side reconcile battery: `ExperimentView` plans
-//! + `EvalRun`s → the eval planned-population contract (hh-analysis
+//! R5.15 — the producer-side reconcile battery: `ExperimentView` plans +
+//! `EvalRun`s → the eval planned-population contract (hh-analysis
 //! `population::planned_population`). Fails-without: the module does
 //! not exist at the R5.14b base — compiles red there.
 

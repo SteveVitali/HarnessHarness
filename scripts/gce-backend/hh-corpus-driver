@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# hh-corpus-driver — the Ws1 corpus leg controller driver (R6.45q).
+# Invoked by scripts/live-verify.sh corpus (HH_CORPUS_DRIVER). Drives
+# ws1-proxy-session.py (record mode, --seal-recordings) +
+# ws1-corpus-driver.py on the Ws1 VM — 7 dev tasks x 4 = 28 slots —
+# then fetches the recordings + manifest to HH_CORPUS_OUT_DIR.
+set -euo pipefail
+set +x
+WS1="${WS1_SESSION_DIR:-$HOME/hh-retained/ws1}"
+R="/var/lib/hh/ws1"; RR="/var/lib/hh/runs/run-root-ws1"
+INST="${WS1_INSTANCE:-hh-fp-ws1}"; PROJ="${WS1_PROJECT:-hh-fp-a1b2c3}"; ZONE="${WS1_ZONE:-us-central1-a}"
+: "${HH_CORPUS_OUT_DIR:?}"
+LISTEN="${HH_CORPUS_LISTEN:-127.0.0.1:49152}"
+mkdir -p "$HH_CORPUS_OUT_DIR"
+gcloud compute ssh "$INST" --project "$PROJ" --zone "$ZONE" --tunnel-through-iap --command \
+  "sudo podman rm -f \$(sudo podman ps -aq --filter name=hh-ws1-ws1-corpus) 2>/dev/null; \
+   sudo rm -rf $RR/proxy-store/runs/fp-ws1-corpus $RR/corpus-out $RR/corpus $RR/corpus-session.json; \
+   sudo rm -f $R/corpus-session-done $R/corpus-sentinel-done; \
+   sudo mkdir -p $RR/corpus; \
+   sudo sh -c 'export OLLAMA_API_KEY=\$(cat $R/ollama-key 2>/dev/null || true); exec python3 $R/ws1-proxy-session.py --proxy-bin $R/hh-model-proxy \
+     --store-root $RR/proxy-store --run-id fp-ws1-corpus \
+     --listen $LISTEN --lane-file $R/lane.json --authorization-file $R/auth.json \
+     --mode record --seal-recordings \
+     --slots ws1-corpus-01:850000:high,ws1-corpus-02:850000:high,ws1-corpus-03:850000:high,ws1-corpus-04:850000:high,ws1-corpus-05:850000:high,ws1-corpus-06:850000:high,ws1-corpus-07:850000:high,ws1-corpus-08:850000:high,ws1-corpus-09:850000:high,ws1-corpus-10:850000:high,ws1-corpus-11:850000:high,ws1-corpus-12:850000:high,ws1-corpus-13:850000:high,ws1-corpus-14:850000:high,ws1-corpus-15:850000:high,ws1-corpus-16:850000:high,ws1-corpus-17:850000:high,ws1-corpus-18:850000:high,ws1-corpus-19:850000:high,ws1-corpus-20:850000:high,ws1-corpus-21:850000:high,ws1-corpus-22:850000:high,ws1-corpus-23:850000:high,ws1-corpus-24:850000:high,ws1-corpus-25:850000:high,ws1-corpus-26:850000:high,ws1-corpus-27:850000:high,ws1-corpus-28:850000:high \
+     --session-out $RR/corpus-session.json --sentinel $R/corpus-session-done --poll-seconds 30' & \
+   for i in \$(seq 1 150); do [ -f $RR/corpus-session.json ] && break; sleep 2; done; \
+   if [ -f $RR/corpus-session.json ]; then sudo python3 $R/ws1-corpus-driver.py --cfg $R/cfg.json \
+     --tasks $WS1_CORPUS_TASKS --layers-file $R/layers.json \
+     --w1-bin $R/bin/hh-w1 \
+     --admission $R/admissions/mini-swe-agent.json \
+     --proxy-session $RR/corpus-session.json \
+     --model-upstream ${LISTEN##*:} --out-dir $RR/corpus-out --run-root $RR; fi; \
+   touch $R/corpus-session-done"
+gcloud compute scp --tunnel-through-iap --project "$PROJ" --zone "$ZONE" \
+  --recurse "$INST:$RR/corpus-out/" "$HH_CORPUS_OUT_DIR"

@@ -141,7 +141,9 @@ pub struct SlotInputs {
     /// The slot token — the only credential rendered (X-05).
     pub slot_token: String,
     /// The cell's model relay port (`127.0.0.1:P_model`; the declared
-    /// cell-spec constant of design/34 §1.4).
+    /// cell-spec constant of design/34 §1.4). Must sit in the IANA
+    /// dynamic/private band (`MODEL_RELAY_PORT_MIN..=65535`) — the
+    /// registered range is the task's service space (R6.45n).
     pub model_port: u16,
     /// The verbatim instruction bytes (`instruction.md` content).
     pub instruction: Vec<u8>,
@@ -535,8 +537,16 @@ fn render_pi(rec: &Json, slot: &SlotInputs) -> Result<RenderedConfig, RenderErro
     let env = closed_env(env, slot)?;
     // `json.dumps(models_json, indent=2) + "\n"` — Python's pretty form,
     // insertion-ordered keys, byte for byte (`_write_custom_models_json`).
+    // `apiKey` at this pin is an env-var name or a literal value —
+    // pi's `resolveConfigValue` resolves `process.env[apiKey]`, so the
+    // adapter's `$OPENAI_API_KEY` spelling would be sent verbatim
+    // (the `$`-form is not dereferenced); the env-name form resolves.
+    // `compat.supportsStore=false` — pi's openai-completions payload
+    // emits `store:false` under the detected-default compat; the lane
+    // policy refuses `store` outright (§4.2 — a state-sharing member
+    // upstream cannot honour), so the declared compat suppresses it.
     let models_json = format!(
-        "{{\n  \"providers\": {{\n    \"harbor-endpoint\": {{\n      \"baseUrl\": {},\n      \"apiKey\": \"$OPENAI_API_KEY\",\n      \"api\": \"openai-completions\",\n      \"models\": [\n        {{\n          \"id\": {},\n          \"reasoning\": true\n        }}\n      ]\n    }}\n  }}\n}}\n",
+        "{{\n  \"providers\": {{\n    \"harbor-endpoint\": {{\n      \"baseUrl\": {},\n      \"apiKey\": \"OPENAI_API_KEY\",\n      \"api\": \"openai-completions\",\n      \"models\": [\n        {{\n          \"id\": {},\n          \"reasoning\": true,\n          \"compat\": {{\n            \"supportsStore\": false\n          }}\n        }}\n      ]\n    }}\n  }}\n}}\n",
         py_json_str(&url),
         py_json_str(&model)
     );
@@ -696,6 +706,12 @@ pub fn render(
     use_: RenderUse,
 ) -> Result<RenderedConfig, RenderError> {
     admission::validate(rec, &ValidationContext::first_pass())?;
+    // `slot.model_port` is the in-cell relay bind — a registered-range
+    // port is a silent EADDRINUSE against a task-owned service (the
+    // R6.45n pypi-server :8080 deadlock); refuse, never render a
+    // colliding cell.
+    hharness_env::egress_allowlist::check_model_relay_port(slot.model_port)
+        .map_err(|e| err("model_port", e.to_string()))?;
     let name = rec
         .get("harness")
         .and_then(|h| h.get("name"))

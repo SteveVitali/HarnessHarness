@@ -192,9 +192,10 @@ impl SweepDecl {
 pub fn check_sweep_decl(decl: &SweepDecl) -> Vec<String> {
     let mut out = Vec::new();
     if phase4_cohort_id(&decl.baseline, &decl.level_ref) != decl.cohort_id {
-        out.push(format!(
+        out.push(
             "cohort_id does not recompute over baseline+level_ref — an H change is a new phase-4 cohort"
-        ));
+                .to_string(),
+        );
     }
     if !decl.departure.contains("AR-33") {
         out.push("departure does not cite AR-33 — the concurrency-with-L2 departure is admitted only as AR-33 recorded it".to_string());

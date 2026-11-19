@@ -343,7 +343,7 @@ fn exercise_refusals() -> BTreeMap<String, String> {
             if let Json::Obj(ref mut p) = pin {
                 p.insert(
                     "sha256".into(),
-                    Json::str(&format!("sha256:{}", "0".repeat(64))),
+                    Json::str(format!("sha256:{}", "0".repeat(64))),
                 );
                 break;
             }

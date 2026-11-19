@@ -67,7 +67,7 @@
  "config": {
   "renderer_id": "adpt.pi",
   "renderer_version": "1",
-  "template_hash": "sha256:7775f082ca457d570e7386f2d7bec3e9702ea747926b721f659714d103f2eaf8",
+  "template_hash": "sha256:0424adf0dc96b3e66d763777444f213b74ab842aba26a858ecbe0aeab8fcd2c4",
   "effort": {
    "mechanism": "--thinking",
    "value": "high"

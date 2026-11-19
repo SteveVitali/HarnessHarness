@@ -788,7 +788,7 @@ pub fn task_mixture(
         .slots
         .iter()
         .filter(|s| s.arm_id == decl.test_arm || s.arm_id == decl.control_arm)
-        .filter(|s| decl.stratum.as_ref().map_or(true, |st| &s.stratum == st))
+        .filter(|s| decl.stratum.as_ref().is_none_or(|st| &s.stratum == st))
         .cloned()
         .collect();
     let stratum_membership: Vec<String> = slots

@@ -145,10 +145,12 @@ fn later_higher_reward_and_duplicate_instrument_cannot_win() {
 }
 
 // AC-2: wrong subject/submission/oracle/set and bad causes cannot win.
+type MutationCase = (fn(&mut GradeAttempt), &'static str);
+
 #[test]
 fn wrong_pins_set_and_causes_cannot_win() {
     let s = set();
-    let cases: [(fn(&mut GradeAttempt), &str); 3] = [
+    let cases: [MutationCase; 3] = [
         (|a| a.subject_ref = "run-other".into(), "subject_ref"),
         (|a| a.submission_ref = "subm-other".into(), "submission_ref"),
         (|a| a.oracle_ref = "oracle-other".into(), "oracle_ref"),

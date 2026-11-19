@@ -1,0 +1,1317 @@
+{
+ "cells": {
+  "build-pmars/H-allow/r0": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 13
+    },
+    "decided": 172,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 172,
+    "tunnel_closed": 13,
+    "undecided": 0
+   }
+  },
+  "build-pmars/H-allow/r1": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 13
+    },
+    "decided": 172,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 172,
+    "tunnel_closed": 13,
+    "undecided": 0
+   }
+  },
+  "cancel-async-tasks/H-allow/r0": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 14
+    },
+    "decided": 39,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 39,
+    "tunnel_closed": 14,
+    "undecided": 0
+   }
+  },
+  "cancel-async-tasks/H-allow/r1": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 13
+    },
+    "decided": 38,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 38,
+    "tunnel_closed": 13,
+    "undecided": 0
+   }
+  },
+  "db-wal-recovery/H-allow/r0": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 15
+    },
+    "decided": 48,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 48,
+    "tunnel_closed": 15,
+    "undecided": 0
+   }
+  },
+  "db-wal-recovery/H-allow/r1": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 16
+    },
+    "decided": 49,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 49,
+    "tunnel_closed": 16,
+    "undecided": 0
+   }
+  },
+  "db-wal-recovery/H-allow/r2": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 16
+    },
+    "decided": 48,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 48,
+    "tunnel_closed": 16,
+    "undecided": 0
+   }
+  },
+  "git-leak-recovery/H-allow/r0": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 15
+    },
+    "decided": 33,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 33,
+    "tunnel_closed": 15,
+    "undecided": 0
+   }
+  },
+  "git-leak-recovery/H-allow/r1": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 15
+    },
+    "decided": 33,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 33,
+    "tunnel_closed": 15,
+    "undecided": 0
+   }
+  },
+  "git-leak-recovery/H-allow/r2": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 15
+    },
+    "decided": 34,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 34,
+    "tunnel_closed": 15,
+    "undecided": 0
+   }
+  },
+  "make-doom-for-mips/H-allow/r0": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 18
+    },
+    "decided": 185,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 185,
+    "tunnel_closed": 18,
+    "undecided": 0
+   }
+  },
+  "make-doom-for-mips/H-allow/r1": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 19
+    },
+    "decided": 186,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 186,
+    "tunnel_closed": 19,
+    "undecided": 0
+   }
+  },
+  "make-doom-for-mips/H-allow/r2": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 18
+    },
+    "decided": 185,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 185,
+    "tunnel_closed": 18,
+    "undecided": 0
+   }
+  },
+  "polyglot-c-py/H-allow/r0": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 15
+    },
+    "decided": 51,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 51,
+    "tunnel_closed": 15,
+    "undecided": 0
+   }
+  },
+  "polyglot-c-py/H-allow/r1": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 16
+    },
+    "decided": 52,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 52,
+    "tunnel_closed": 16,
+    "undecided": 0
+   }
+  },
+  "polyglot-c-py/H-allow/r2": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 15
+    },
+    "decided": 52,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 52,
+    "tunnel_closed": 15,
+    "undecided": 0
+   }
+  },
+  "prove-plus-comm/H-allow/r0": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 15
+    },
+    "decided": 53,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 53,
+    "tunnel_closed": 15,
+    "undecided": 0
+   }
+  },
+  "prove-plus-comm/H-allow/r1": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 16
+    },
+    "decided": 55,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 55,
+    "tunnel_closed": 16,
+    "undecided": 0
+   }
+  },
+  "prove-plus-comm/H-allow/r2": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 15
+    },
+    "decided": 53,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 53,
+    "tunnel_closed": 15,
+    "undecided": 0
+   }
+  },
+  "pypi-server/H-allow/r0": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 26
+    },
+    "decided": 179,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 179,
+    "tunnel_closed": 26,
+    "undecided": 0
+   }
+  },
+  "pypi-server/H-allow/r1": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 25
+    },
+    "decided": 178,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 178,
+    "tunnel_closed": 25,
+    "undecided": 0
+   }
+  },
+  "pypi-server/H-allow/r2": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 26
+    },
+    "decided": 179,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 179,
+    "tunnel_closed": 26,
+    "undecided": 0
+   }
+  },
+  "pytorch-model-cli/H-allow/r0": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 0,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [
+    "download.pytorch.org"
+   ],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 51
+    },
+    "decided": 398,
+    "deny_hosts": [
+     "download.pytorch.org"
+    ],
+    "mediator_err_5xx": 0,
+    "requested": 398,
+    "tunnel_closed": 51,
+    "undecided": 0
+   }
+  },
+  "pytorch-model-cli/H-allow/r1": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 0,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [
+    "download.pytorch.org"
+   ],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 53
+    },
+    "decided": 400,
+    "deny_hosts": [
+     "download.pytorch.org"
+    ],
+    "mediator_err_5xx": 0,
+    "requested": 400,
+    "tunnel_closed": 53,
+    "undecided": 0
+   }
+  },
+  "pytorch-model-recovery/H-allow/r0": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 40
+    },
+    "decided": 65,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 65,
+    "tunnel_closed": 40,
+    "undecided": 0
+   }
+  },
+  "pytorch-model-recovery/H-allow/r1": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 40
+    },
+    "decided": 65,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 65,
+    "tunnel_closed": 40,
+    "undecided": 0
+   }
+  },
+  "query-optimize/H-allow/r0": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "verifier_unavailable:bootstrap:signature",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 1800000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": null,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 3
+    },
+    "decided": 20,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 20,
+    "tunnel_closed": 3,
+    "undecided": 0
+   }
+  },
+  "query-optimize/H-allow/r1": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 1800000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 16
+    },
+    "decided": 35,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 35,
+    "tunnel_closed": 16,
+    "undecided": 0
+   }
+  },
+  "query-optimize/H-allow/r2": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 1800000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 16
+    },
+    "decided": 33,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 33,
+    "tunnel_closed": 16,
+    "undecided": 0
+   }
+  },
+  "sqlite-db-truncate/H-allow/r0": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 14
+    },
+    "decided": 39,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 39,
+    "tunnel_closed": 14,
+    "undecided": 0
+   }
+  },
+  "sqlite-db-truncate/H-allow/r1": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 13
+    },
+    "decided": 38,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 38,
+    "tunnel_closed": 13,
+    "undecided": 0
+   }
+  },
+  "sqlite-db-truncate/H-allow/r2": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 13
+    },
+    "decided": 38,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 38,
+    "tunnel_closed": 13,
+    "undecided": 0
+   }
+  },
+  "torch-tensor-parallelism/H-allow/r0": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 43
+    },
+    "decided": 87,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 87,
+    "tunnel_closed": 43,
+    "undecided": 0
+   }
+  },
+  "torch-tensor-parallelism/H-allow/r1": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 42
+    },
+    "decided": 88,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 88,
+    "tunnel_closed": 42,
+    "undecided": 0
+   }
+  },
+  "torch-tensor-parallelism/H-allow/r2": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 42
+    },
+    "decided": 84,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 84,
+    "tunnel_closed": 42,
+    "undecided": 0
+   }
+  },
+  "vulnerable-secret/H-allow/r0": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 13
+    },
+    "decided": 31,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 31,
+    "tunnel_closed": 13,
+    "undecided": 0
+   }
+  },
+  "vulnerable-secret/H-allow/r1": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 13
+    },
+    "decided": 31,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 31,
+    "tunnel_closed": 13,
+    "undecided": 0
+   }
+  },
+  "vulnerable-secret/H-allow/r2": {
+   "cell_report": {
+    "agent_end_cause": "exited{0}",
+    "classification": "decided",
+    "deadlines": {
+     "agent": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     },
+     "verify": {
+      "deadline_ms": 900000,
+      "deadline_source": "task_toml"
+     }
+    },
+    "denied_hosts": [],
+    "reward_ppm": 1000000,
+    "verify_attempt": 1,
+    "verify_attempts": 1
+   },
+   "illegal_denies": [],
+   "store": {
+    "bad_close": [],
+    "bad_decisions": [],
+    "close_causes": {
+     "eof": 14
+    },
+    "decided": 32,
+    "deny_hosts": [],
+    "mediator_err_5xx": 0,
+    "requested": 32,
+    "tunnel_closed": 14,
+    "undecided": 0
+   }
+  }
+ },
+ "failures": [
+  "pytorch-model-cli/H-allow/r0: denies outside epoch set ['download.pytorch.org']",
+  "pytorch-model-cli/H-allow/r1: denies outside epoch set ['download.pytorch.org']",
+  "query-optimize/H-allow/r0: classification verifier_unavailable:bootstrap:signature"
+ ],
+ "freeze_digest": "sha256:e61a6ed9771d506e0606dd7a953ebe49a56dc96d8427d9eb410ae492e7f3b328",
+ "permitted_denies": [
+  "hub.harborframework.com",
+  "tbench.ai"
+ ],
+ "result": "fail",
+ "schema": "hh-wc10-store-check/1-window-local",
+ "window": "wc10"
+}

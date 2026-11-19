@@ -276,7 +276,7 @@ fn instrument_with_verdict(
         &irun,
         "verification.oracle.verdict",
         Json::obj([
-            ("invocation_ref", Json::str(&format!("{irun}:evt-inv-1"))),
+            ("invocation_ref", Json::str(format!("{irun}:evt-inv-1"))),
             ("subject_run", Json::str(subject_run)),
             ("submission_ref", Json::str(submission_ref)),
             ("oracle_ref", Json::str("oracle:o1")),
@@ -427,7 +427,7 @@ fn export_refuses_pending_foreign_leaderboard() {
     let err = export_rows(
         &r.results,
         &mut r.store,
-        &[row.clone()],
+        std::slice::from_ref(&row),
         ExportTarget::ForeignLeaderboardSubmission,
         &Json::Null,
     )
@@ -442,7 +442,7 @@ fn export_refuses_pending_foreign_leaderboard() {
         let out = export_rows(
             &r.results,
             &mut r.store,
-            &[row.clone()],
+            std::slice::from_ref(&row),
             target,
             &Json::Null,
         )
@@ -460,7 +460,7 @@ fn export_refuses_pending_foreign_leaderboard() {
     let out = export_rows(
         &r.results,
         &mut r.store,
-        &[row.clone()],
+        std::slice::from_ref(&row),
         ExportTarget::LedgerNativeRows,
         &Json::Null,
     )
@@ -508,7 +508,7 @@ fn graded_disposition_agrees_with_owner_and_scheduler() {
     let out = export_rows(
         &r.results,
         &mut r.store,
-        &[row.clone()],
+        std::slice::from_ref(&row),
         ExportTarget::ForeignLeaderboardSubmission,
         &Json::Null,
     )

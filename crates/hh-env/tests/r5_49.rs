@@ -1749,29 +1749,30 @@ fn efficacy_packet_json(
         Result<hharness_eval::finite_manifest::FiniteManifestContrast, ContrastError>,
     >,
 ) -> Json {
-    let mut members: Vec<(&'static str, Json)> = Vec::new();
-    members.push(("schema", Json::str("hh-s4-efficacy/1")));
-    members.push(("admission", Json::str("recompute_only")));
-    members.push((
-        "basis",
-        Json::str(
-            "complete-cohort — GATE-G19 PASSED 2026-11-06 (operator verbatim \"confirmed and proceed\"): all 300/300 cohort slots carry a real receipt across the four named epochs",
+    let mut members: Vec<(&'static str, Json)> = vec![
+        ("schema", Json::str("hh-s4-efficacy/1")),
+        ("admission", Json::str("recompute_only")),
+        (
+            "basis",
+            Json::str(
+                "complete-cohort — GATE-G19 PASSED 2026-11-06 (operator verbatim \"confirmed and proceed\"): all 300/300 cohort slots carry a real receipt across the four named epochs",
+            ),
         ),
-    ));
-    members.push(("protocol_id", Json::str(COHORT_PROTOCOL_ID)));
-    members.push((
-        "declared",
-        Json::obj([
-            ("population", Json::str("canonical")),
-            ("test_arm", Json::str("arm:h-podman-oracle")),
-            ("control_arm", Json::str("arm:o-tb-oracle")),
-            ("prior", Json::str("beta{1,1}")),
-            ("direction", Json::str("test_minus_control")),
-            ("level_ppm", Json::Int(950_000)),
-            ("draws_requested", Json::Int(8_000)),
-            ("seed", Json::Int(0)),
-        ]),
-    ));
+        ("protocol_id", Json::str(COHORT_PROTOCOL_ID)),
+        (
+            "declared",
+            Json::obj([
+                ("population", Json::str("canonical")),
+                ("test_arm", Json::str("arm:h-podman-oracle")),
+                ("control_arm", Json::str("arm:o-tb-oracle")),
+                ("prior", Json::str("beta{1,1}")),
+                ("direction", Json::str("test_minus_control")),
+                ("level_ppm", Json::Int(950_000)),
+                ("draws_requested", Json::Int(8_000)),
+                ("seed", Json::Int(0)),
+            ]),
+        ),
+    ];
     let (mut resolved, mut unresolved) = (0u64, 0u64);
     for (_, v) in receipt_verdicts() {
         match v.as_deref() {

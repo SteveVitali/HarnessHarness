@@ -344,7 +344,7 @@ fn ac1_copyout_after_agent_before_verify_and_work_alias_refused() {
     bundle.verify(&bytes_of).unwrap();
     // A tampered member fails the recompute.
     let mut drifted = bundle.clone();
-    drifted.files.values_mut().next().unwrap().sha256 = "sha256:0".repeat(1) + &"0".repeat(63);
+    drifted.files.values_mut().next().unwrap().sha256 = "sha256:0".to_string() + &"0".repeat(63);
     assert!(drifted.verify(&bytes_of).is_err());
     // The trajectory member round-trips the slot codec.
     s_integrity_bundle();
@@ -848,7 +848,7 @@ fn ac8_custom_base_url_evidenced_and_excluded_typed() {
     }
     // A receipt not on the relay fails the evidence leg.
     let r = rec("mini-swe-agent");
-    let bad = vec![receipt(0, "/v1/chat/completions", "forwarded")];
+    let bad = [receipt(0, "/v1/chat/completions", "forwarded")];
     let mut off = bad[0].clone();
     if let Json::Obj(m) = &mut off {
         if let Json::Obj(d) = m.get_mut("downstream").unwrap() {

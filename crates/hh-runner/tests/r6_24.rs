@@ -15,7 +15,7 @@ use hharness_runner::render::{
 use hharness_wire::json::Json;
 
 const TOKEN: &str = "slot-token-7f3aa1c9d24b4e01";
-const PORT: u16 = 8080;
+const PORT: u16 = 5_8080;
 const INSTRUCTION: &str = "write `ok` to /app/hh_smoke.txt";
 
 fn fixture(name: &str) -> Json {
@@ -88,14 +88,14 @@ fn ac1_mini_golden_mirrors_the_adapter() {
         vec![
             "bash".to_string(),
             "-c".to_string(),
-            "set -o pipefail; if [ -f \"$HOME/.local/bin/env\" ]; then . \"$HOME/.local/bin/env\"; else export PATH=\"$HOME/.local/bin:$PATH\"; fi; mini-swe-agent --yolo --model=openai/glm-5.3-flash --task='write `ok` to /app/hh_smoke.txt' --output=/logs/agent/mini-swe-agent.trajectory.json --cost-limit 0 -c mini -c model.model_kwargs.timeout=3600 -c model.model_kwargs.reasoning_effort=high -c \"model.model_kwargs.api_key=$MINI_SWE_AGENT_MODEL_API_KEY_JSON\" -c model.model_kwargs.custom_llm_provider=openai -c model.model_class=litellm -c model.model_kwargs.api_base=http://127.0.0.1:8080/v1 --exit-immediately 2>&1 </dev/null | tee /logs/agent/mini-swe-agent.txt".to_string(),
+            "set -o pipefail; if [ -f \"$HOME/.local/bin/env\" ]; then . \"$HOME/.local/bin/env\"; else export PATH=\"$HOME/.local/bin:$PATH\"; fi; mini-swe-agent --yolo --model=openai/glm-5.3-flash --task='write `ok` to /app/hh_smoke.txt' --output=/logs/agent/mini-swe-agent.trajectory.json --cost-limit 0 -c mini -c model.model_kwargs.timeout=3600 -c model.model_kwargs.reasoning_effort=high -c \"model.model_kwargs.api_key=$MINI_SWE_AGENT_MODEL_API_KEY_JSON\" -c model.model_kwargs.custom_llm_provider=openai -c model.model_class=litellm -c model.model_kwargs.api_base=http://127.0.0.1:58080/v1 --exit-immediately 2>&1 </dev/null | tee /logs/agent/mini-swe-agent.txt".to_string(),
         ]
     );
     // The closed env (REQ-XC-308): harness members + hints + no_proxy +
     // HOME/USER — nothing else.
     let want_env: BTreeMap<String, String> = [
         ("OPENAI_API_KEY", TOKEN),
-        ("OPENAI_BASE_URL", "http://127.0.0.1:8080/v1"),
+        ("OPENAI_BASE_URL", "http://127.0.0.1:58080/v1"),
         (
             "MINI_SWE_AGENT_MODEL_API_KEY_JSON",
             "\"slot-token-7f3aa1c9d24b4e01\"",
@@ -122,7 +122,7 @@ fn ac1_mini_golden_mirrors_the_adapter() {
         "/opt/hh-harness/mini-swe-agent-2.4.6/.hh-config.json"
     );
     let manifest = String::from_utf8(rc.files[0].bytes.clone()).unwrap();
-    assert!(manifest.contains("\"api_base\":\"http://127.0.0.1:8080/v1\""));
+    assert!(manifest.contains("\"api_base\":\"http://127.0.0.1:58080/v1\""));
     assert!(manifest.contains("\"model\":\"openai/glm-5.3-flash\""));
     secret_free(&rc);
     files_have_no_secret(&rc);
@@ -139,7 +139,7 @@ fn ac1_mini_golden_mirrors_the_adapter() {
         rendered_config_hash(&rc2, TOKEN)
     );
     let mut s3 = slot();
-    s3.model_port = 9090;
+    s3.model_port = 59_090;
     let rc3 = render(&rec, &s3, RenderUse::HostedArm).unwrap();
     assert_ne!(
         rendered_config_hash(&rc, TOKEN),
@@ -165,10 +165,14 @@ fn ac1_pi_golden_mirrors_the_adapter() {
     assert!(!rc.env.contains_key("OPENAI_BASE_URL")); // Pi's spec disables the base-url env destination.
     only_token_credential(&rc.env, &["OPENAI_API_KEY"]);
     // models.json — Python json.dumps(indent=2)+"\n" byte for byte.
+    // `apiKey` at this pin is an env-var name, not a `$`-ref —
+    // `resolveConfigValue` resolves `process.env[apiKey]` (pi
+    // 0.52.3 live-verified: the `$OPENAI_API_KEY` form is sent
+    // verbatim and the slot gate refuses it).
     let models = String::from_utf8(rc.files[0].bytes.clone()).unwrap();
     assert_eq!(
         models,
-        "{\n  \"providers\": {\n    \"harbor-endpoint\": {\n      \"baseUrl\": \"http://127.0.0.1:8080/v1\",\n      \"apiKey\": \"$OPENAI_API_KEY\",\n      \"api\": \"openai-completions\",\n      \"models\": [\n        {\n          \"id\": \"glm-5.3-flash\",\n          \"reasoning\": true\n        }\n      ]\n    }\n  }\n}\n"
+        "{\n  \"providers\": {\n    \"harbor-endpoint\": {\n      \"baseUrl\": \"http://127.0.0.1:58080/v1\",\n      \"apiKey\": \"OPENAI_API_KEY\",\n      \"api\": \"openai-completions\",\n      \"models\": [\n        {\n          \"id\": \"glm-5.3-flash\",\n          \"reasoning\": true,\n          \"compat\": {\n            \"supportsStore\": false\n          }\n        }\n      ]\n    }\n  }\n}\n"
     );
     assert_eq!(rc.files[0].path, "/tmp/harbor-pi-agent/models.json");
     secret_free(&rc);
@@ -199,7 +203,7 @@ fn ac1_claude_golden_mirrors_the_adapter() {
     assert_eq!(rc.env["ANTHROPIC_AUTH_TOKEN"], TOKEN);
     assert_eq!(rc.env["ANTHROPIC_API_KEY"], "");
     assert_eq!(rc.env["CLAUDE_CODE_OAUTH_TOKEN"], "");
-    assert_eq!(rc.env["ANTHROPIC_BASE_URL"], "http://127.0.0.1:8080");
+    assert_eq!(rc.env["ANTHROPIC_BASE_URL"], "http://127.0.0.1:58080");
     for k in [
         "ANTHROPIC_MODEL",
         "ANTHROPIC_DEFAULT_SONNET_MODEL",
@@ -438,7 +442,7 @@ fn ac7_mini_participant_identity_and_limits() {
             "model.model_kwargs.api_key=$MINI_SWE_AGENT_MODEL_API_KEY_JSON",
             "model.model_kwargs.custom_llm_provider=openai",
             "model.model_class=litellm",
-            "model.model_kwargs.api_base=http://127.0.0.1:8080/v1",
+            "model.model_kwargs.api_base=http://127.0.0.1:58080/v1",
         ]
     );
     // The declared external caps ride the record; the ceiling binding is

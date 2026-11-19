@@ -428,9 +428,9 @@ fn routed_positive_persisted() {
     );
     // Holm over the declared frozen family — m1 computed (raw 1.0),
     // m2 declared (raw .03 → adj 3·.03), m3 unavailable (worst mass).
-    let m1 = member(&b, "m1");
-    let m2 = member(&b, "m2");
-    let m3 = member(&b, "m3");
+    let m1 = member(b, "m1");
+    let m2 = member(b, "m2");
+    let m3 = member(b, "m3");
     assert_eq!(m1[0].get("status").and_then(Json::as_str), Some("computed"));
     assert_eq!(m1[0].get("raw_ppm").and_then(Json::as_int), Some(1_000_000));
     assert_eq!(m2[0].get("status").and_then(Json::as_str), Some("declared"));
@@ -596,11 +596,11 @@ fn split_reports_same_holm() {
     let bb = bb.get("task_mixture_sensitivity").unwrap();
     // The shared *declared* member m2 adjusts identically in both.
     assert_eq!(
-        member(&ba, "m2")[0].get("adjusted_ppm"),
-        member(&bb, "m2")[0].get("adjusted_ppm")
+        member(ba, "m2")[0].get("adjusted_ppm"),
+        member(bb, "m2")[0].get("adjusted_ppm")
     );
     // m3 declared as own member without a sign flip → unavailable row.
-    let m3 = member(&bb, "m3");
+    let m3 = member(bb, "m3");
     assert_eq!(m3[0].get("status").and_then(Json::as_str), Some("computed"));
     // Family size stays 3 in both — a missing member cannot shrink it.
     assert_eq!(
@@ -788,7 +788,7 @@ fn refusal_table() {
         Some("not_declared")
     );
     assert_eq!(
-        member(&b, "m1")[0].get("status").and_then(Json::as_str),
+        member(b, "m1")[0].get("status").and_then(Json::as_str),
         Some("unavailable")
     );
 }

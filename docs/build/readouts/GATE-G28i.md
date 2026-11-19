@@ -1,5 +1,5 @@
 # GATE-G28i — PROV-SMOKE: the non-evidence smoke envelope's compute authorization (R-3 — up to 3 smoke windows on the exact window recipe, $0 model, results never re-proof evidence) · readout
-Status: PENDING   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
+Status: PASSED   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
 
 > An operator or authorized human record supplies the decision; an agent must not sign or assume silence is
 > approval.

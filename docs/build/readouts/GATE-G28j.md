@@ -1,5 +1,5 @@
 # GATE-G28j — PROV-Wc9: authorize the Wc9 evidence re-proof's compute (the hardened-runner re-proof under epoch-5 at one declared pinned commit, D=8h, with the R-8 early-inspection checkpoint) · readout
-Status: PENDING   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
+Status: PASSED   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
 
 > An operator or authorized human record supplies the decision; an agent must not sign or assume silence is
 > approval.

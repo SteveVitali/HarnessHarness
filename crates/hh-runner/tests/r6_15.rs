@@ -57,7 +57,7 @@ fn relay_digest_lands_in_identity_infrastructure() {
         ))
         .ok()
         .and_then(|t| json::parse(&t).ok())
-        .unwrap_or_else(|| minimal_slot_json());
+        .unwrap_or_else(minimal_slot_json);
         ExperimentSlot::from_json(&base).unwrap()
     };
     let infra = Json::obj([

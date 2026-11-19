@@ -406,7 +406,7 @@ impl ActivationReport {
             ("admission", Json::str(&self.admission)),
             (
                 "attempts",
-                Json::Arr(self.attempts.iter().map(|s| Json::str(s)).collect()),
+                Json::Arr(self.attempts.iter().map(Json::str).collect()),
             ),
             (
                 "legs",

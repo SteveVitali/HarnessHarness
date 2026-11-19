@@ -521,6 +521,10 @@ impl EndpointOutcome {
     }
 }
 
+/// `(claim_ref, verdict, members, unknown_members)` — the IUT
+/// conjunction outcome record (`KlEquivalence::conjunction`).
+pub type ConjunctionOutcome = (String, String, Vec<(String, String)>, Vec<String>);
+
 /// The estimator's result — every member a fact on the report.
 #[derive(Debug, Clone, PartialEq)]
 pub struct KlEquivalence {
@@ -528,7 +532,7 @@ pub struct KlEquivalence {
     pub endpoints: Vec<EndpointOutcome>,
     /// The IUT conjunction outcome `(claim_ref, verdict, members,
     /// unknown_members)` when declared.
-    pub conjunction: Option<(String, String, Vec<(String, String)>, Vec<String>)>,
+    pub conjunction: Option<ConjunctionOutcome>,
     /// Population/class counts (the declared pair universe —
     /// canonical/raw/joint read the same declared records here;
     /// authentic-population separation is R5.39's).
@@ -942,6 +946,7 @@ fn verdict(
 /// hi_scale]` units. `per_pair` = resolved `(lo_ppm, hi_ppm)`
 /// normalized values (outward-rounded per pair). Returns `(tost,
 /// reporting, bounds, reporting_bounds)` on the output scale.
+#[allow(clippy::too_many_arguments)]
 fn normalized_mean(
     leg: &str,
     per_pair: &[(i64, i64)],
@@ -1113,6 +1118,10 @@ fn bounded_endpoint(
     })
 }
 
+/// `(tost_on_Z, reporting_on_Z, bounds, reporting_bounds, point)` —
+/// one affine contrast leg's output (`contrast_leg`).
+type ContrastLegOut = (Interval, Interval, Vec<KlBound>, Vec<KlBound>, i64);
+
 /// One affine contrast leg `Z = X_H − κ·X_O` (`κ = 1−ρ` for `C−`,
 /// `1+ρ` for `C+`) — declared range
 /// `[a_h − κ·b_o, b_h − κ·a_o]` (outward), per-pair values
@@ -1131,7 +1140,7 @@ fn contrast_leg(
     b_o: i64,
     eta_lo: i64,
     eta_hi: i64,
-) -> Result<(Interval, Interval, Vec<KlBound>, Vec<KlBound>, i64), KlEquivalenceError> {
+) -> Result<ContrastLegOut, KlEquivalenceError> {
     // Contrast range — outward-rounded bounds on `z = h·PPM − κ·o`
     // (`z` in ppm² numerator units for exact integer arithmetic).
     let cm_lo = floor_div(
@@ -1410,7 +1419,7 @@ fn bounded_absolute_leg(
             (
                 "absolute_fallback",
                 Json::obj([
-                    ("dimension", Json::str(&format!("{}:absolute", ep.endpoint))),
+                    ("dimension", Json::str(format!("{}:absolute", ep.endpoint))),
                     ("epsilon_ppm", Json::Int(epsilon_ppm)),
                     ("range", Json::Arr(vec![Json::Int(a), Json::Int(b)])),
                 ]),

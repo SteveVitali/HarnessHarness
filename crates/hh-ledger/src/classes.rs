@@ -78,7 +78,10 @@ pub enum ScopeKind {
     /// `turn_id` — opened by `lifecycle.turn.started`, closed by `lifecycle.turn.finished`.
     Turn,
     /// `model_call_id` — opened by `model.call.requested`, closed by
-    /// `model.call.completed`/`failed`.
+    /// `model.call.completed`/`failed`; a `completed` whose `calls` induced
+    /// tool calls holds the scope open through the post-completion dispatch
+    /// leg (the `tool_call` children it opened at `proposed` settle under it,
+    /// and the settlement tail — verdicts/K4/unattributed rows — names it).
     ModelCall,
     /// `tool_call_id` — opened by `action.tool.proposed`, closed by
     /// `action.tool.completed`/`rejected`/`surface_rejected`.
@@ -169,9 +172,11 @@ pub const AUDIT_PAYLOAD_MAX_BYTES: usize = 4 * 1024;
 /// One declared `audit_fields` member (§5g.6 I-A1 Rule C): the payload member `name`
 /// is an inline audit field — canonical, hashed, never offloaded, never redactable —
 /// bounded at `max_bytes` canonical bytes. The sentinel name `"*"` declares the
-/// **open partition**: every payload member is an audit field at
-/// [`AUDIT_FIELD_MAX_BYTES`] (used for classes whose payload dossier is another
-/// subsystem's contract; the dossier-fixed partitions are enumerated).
+/// **open partition**: every payload member not named by a sibling entry is an
+/// audit field at [`AUDIT_FIELD_MAX_BYTES`] (used for classes whose payload
+/// dossier is another subsystem's contract; the dossier-fixed partitions are
+/// enumerated). A named entry alongside `"*"` overrides the sentinel's bound for
+/// that member only — the open partition still admits every other member.
 #[derive(Debug, Clone, Copy)]
 pub struct AuditField {
     /// The payload member name (`"*"` = every member is an audit field).
@@ -205,6 +210,32 @@ const fn afb(name: &'static str, max_bytes: usize) -> AuditField {
 
 /// The open partition — `audit_fields = {"*"}`.
 pub const OPEN_AUDIT: &[AuditField] = &[af("*")];
+
+/// `model.call.{requested,completed,failed}` — the open partition plus the
+/// named dossier overrides the family's provider-shaped members need. The
+/// flat `*` 512 B bound refused honestly-measured rows: `calls[]` carries
+/// the recorded `args_raw` strings verbatim (ADR-0135 §2 — provider-sized
+/// tool-call arguments; the Ws1 O-corpus's largest completed call measured
+/// 13,186 canonical bytes), `error`/`plan_error` carry classified provider
+/// or plan-refusal text, and `cache`/`usage`/`timing`/`model_ref`/
+/// `token_estimate`/`dialect` are record- or list-shaped dossier members.
+/// Each override is bounded by the row's audit budget
+/// ([`DEFAULT_OFFLOAD_BYTES`]) or the record/list bound
+/// ([`AUDIT_FIELD_LIST_BYTES`]); every other member keeps the open
+/// partition's 512 B bound, so participant-lifted rows naming members the
+/// kernel does not emit still partition exactly as before.
+const MODEL_CALL_AUDIT_FIELDS: &[AuditField] = &[
+    af("*"),
+    afb("calls", DEFAULT_OFFLOAD_BYTES),
+    afb("error", DEFAULT_OFFLOAD_BYTES),
+    afb("plan_error", DEFAULT_OFFLOAD_BYTES),
+    afb("cache", AUDIT_FIELD_LIST_BYTES),
+    afb("usage", AUDIT_FIELD_LIST_BYTES),
+    afb("timing", AUDIT_FIELD_LIST_BYTES),
+    afb("model_ref", AUDIT_FIELD_LIST_BYTES),
+    afb("token_estimate", AUDIT_FIELD_LIST_BYTES),
+    afb("dialect", AUDIT_FIELD_LIST_BYTES),
+];
 
 /// The Rule-P producer set over `producer.component_class` for every audit-grade
 /// class: kernel-only (§5g.6 §2 — "accepted only if `producer.component_class ∈
@@ -1737,9 +1768,9 @@ pub const CLASS_TABLE: &[ClassSpec] = &[
     // `credential_binding_id`; the open partition stands until the adapter's
     // dossier lands — content rides `content_refs`). Attempt spans are not
     // audit-grade; the stream delta is ephemeral.
-    row_audit("model.call.requested",      O::Events, false, OPEN_AUDIT, &[], Some(ModelCall), None),
-    row_audit("model.call.completed",      O::Events, false, OPEN_AUDIT, &[], None, Some(ModelCall)),
-    row_audit("model.call.failed",         O::Events, false, OPEN_AUDIT, &[], None, Some(ModelCall)),
+    row_audit("model.call.requested",      O::Events, false, MODEL_CALL_AUDIT_FIELDS, &[], Some(ModelCall), None),
+    row_audit("model.call.completed",      O::Events, false, MODEL_CALL_AUDIT_FIELDS, &[], None, Some(ModelCall)),
+    row_audit("model.call.failed",         O::Events, false, MODEL_CALL_AUDIT_FIELDS, &[], None, Some(ModelCall)),
     row("model.call.attempt.started",      Led, O::ModelIo, false, false, None, None),
     row("model.call.attempt.completed",    Led, O::ModelIo, false, false, None, None),
     row("model.call.attempt.failed",       Led, O::ModelIo, false, false, None, None),

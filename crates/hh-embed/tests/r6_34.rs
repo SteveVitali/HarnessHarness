@@ -252,7 +252,7 @@ fn lane(params: &[(&str, Json)], endpoint: &str) -> hharness_embed::gateway_mode
 }
 
 /// The plan body the port stages for `mc` over `prefix`.
-fn arr<'a>(j: &'a Json) -> &'a Vec<Json> {
+fn arr(j: &Json) -> &Vec<Json> {
     match j {
         Json::Arr(v) => v,
         _ => panic!("not an array: {j:?}"),
@@ -482,7 +482,7 @@ fn ac4_bm_replay_goldens() {
         let body = staged_body(&replay_params(), &prefix, &blob_seam(&blobs, &hits));
         let assistant = arr(body.get("messages").unwrap())[1].clone();
         // Provider ids render in `tool_calls[].id` when a call exists.
-        if let Some(tcs) = assistant.get("tool_calls").map(|j| arr(j)) {
+        if let Some(tcs) = assistant.get("tool_calls").map(arr) {
             assert_eq!(
                 tcs[0].get("id").unwrap().as_str().unwrap(),
                 "call_0",

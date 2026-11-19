@@ -432,9 +432,9 @@ pub fn l1_not_passed_disposition() -> Disposition {
 /// - `no_proxy` does not cover `127.0.0.1` **and** `localhost` (O's
 ///   mandatory pin — without it harness clients proxy the model route
 ///   through the registry relay).
-/// The shared semaphore is the proxy process's own FIFO `Gate`
-/// (`proxy::core_::Gate`) — a single queue both arms' calls serialize
-/// through; the check's caller asserts the one-listener fact.
+///   The shared semaphore is the proxy process's own FIFO `Gate`
+///   (`proxy::core_::Gate`) — a single queue both arms' calls serialize
+///   through; the check's caller asserts the one-listener fact.
 pub fn native_lane_check(env: &BTreeMap<String, String>) -> Result<u16, String> {
     let port_of = |k: &str| -> Result<u16, String> {
         let v = env.get(k).ok_or_else(|| format!("lane env {k} absent"))?;

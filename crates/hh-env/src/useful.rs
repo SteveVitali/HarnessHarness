@@ -189,7 +189,7 @@ pub fn evaluate_oracle(o: &OracleOutcome) -> LegVerdict {
     }
     match o.outcome.as_deref() {
         Some("decided") | Some("oracle_failure") => LegVerdict::Verified,
-        Some(x) => return LegVerdict::Unsupported(format!("oracle_outcome:{x}")),
+        Some(x) => LegVerdict::Unsupported(format!("oracle_outcome:{x}")),
         None => LegVerdict::Inconclusive("verdict_unobserved".to_string()),
     }
 }
@@ -372,17 +372,12 @@ impl UsefulReport {
             ("useful_acceptance", Json::str(&self.useful_acceptance)),
             (
                 "carried_predicates",
-                Json::Arr(
-                    self.carried_predicates
-                        .iter()
-                        .map(|s| Json::str(s))
-                        .collect(),
-                ),
+                Json::Arr(self.carried_predicates.iter().map(Json::str).collect()),
             ),
             ("admission", Json::str(&self.admission)),
             (
                 "attempts",
-                Json::Arr(self.attempts.iter().map(|s| Json::str(s)).collect()),
+                Json::Arr(self.attempts.iter().map(Json::str).collect()),
             ),
             (
                 "legs",

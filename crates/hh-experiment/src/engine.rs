@@ -261,8 +261,12 @@ pub struct EngineContext<'a> {
     /// Durability-fault seam (`None` in production — the `SpawnHook`
     /// precedent): invoked at each [`LaunchPhase`]; an `Err` aborts the
     /// launch at that durable boundary as if the process died.
-    pub launch_fault_hook: Option<Box<dyn Fn(LaunchPhase) -> Result<(), String> + 'a>>,
+    pub launch_fault_hook: Option<LaunchFaultHook<'a>>,
 }
+
+/// The durability-fault seam's boxed hook (`EngineContext::
+/// launch_fault_hook`) — invoked at each [`LaunchPhase`].
+type LaunchFaultHook<'a> = Box<dyn Fn(LaunchPhase) -> Result<(), String> + 'a>;
 
 impl EngineContext<'_> {
     fn spec_ctx(&self) -> SpecContext<'_> {

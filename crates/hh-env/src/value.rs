@@ -595,9 +595,9 @@ pub fn evaluate_claims(f: &ClaimsFacts) -> LegVerdict {
 /// was compiled, no contact or raw observation was ever created
 /// (nothing to delete), the predecessor packets' adverse + unmet
 /// + absent members carried verbatim (`adoption:
-/// unavailable{not_started}` — observed-not-achieved, never
-/// hidden success), all claims withheld and DF-H9-1 open;
-/// `packet_id` is minted last over the canonical record.
+///   unavailable{not_started}` — observed-not-achieved, never
+///   hidden success), all claims withheld and DF-H9-1 open;
+///   `packet_id` is minted last over the canonical record.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ValueWithheldReport {
     /// `H(canonical(record minus packet_id))` under

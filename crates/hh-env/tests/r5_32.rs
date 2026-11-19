@@ -753,7 +753,7 @@ fn o8_seeded_duplicate_detected_three_of_three() {
             &c.effect_id,
         );
         match verdict {
-            CellVerdict::DefectDetected { count, .. } if count == 2 => detected += 1,
+            CellVerdict::DefectDetected { count: 2, .. } => detected += 1,
             other => panic!("trial {i} expected defect_detected, got {other:?}"),
         }
     }

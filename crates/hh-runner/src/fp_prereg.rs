@@ -801,32 +801,33 @@ pub fn compute_readiness(
     w1_manifest_verified_at: Option<&str>,
     trigger_after_days: u64,
 ) -> Json {
-    let mut inputs = Vec::new();
-    inputs.push(Json::obj([
-        ("record", Json::str(&paths.packet)),
-        ("precondition", Json::str("fp_prereg_packet_hashed")),
-        ("present", Json::Bool(true)),
-        ("recorded_at", Json::str(packet_recorded_at)),
-        ("task_lists_state", Json::str(packet_state)),
-    ]));
-    inputs.push(Json::obj([
-        ("record", Json::str(&paths.human_h14_readout)),
-        ("precondition", Json::str("human_h14_ollama_hf_rows")),
-        ("present", Json::Bool(human_h14_recorded_at.is_some())),
-        (
-            "recorded_at",
-            human_h14_recorded_at.map_or(Json::Null, Json::str),
-        ),
-    ]));
-    inputs.push(Json::obj([
-        ("record", Json::str(&paths.w1_manifest)),
-        ("precondition", Json::str("w1_verified_harvest_manifest")),
-        ("present", Json::Bool(w1_manifest_verified_at.is_some())),
-        (
-            "recorded_at",
-            w1_manifest_verified_at.map_or(Json::Null, Json::str),
-        ),
-    ]));
+    let inputs = vec![
+        Json::obj([
+            ("record", Json::str(&paths.packet)),
+            ("precondition", Json::str("fp_prereg_packet_hashed")),
+            ("present", Json::Bool(true)),
+            ("recorded_at", Json::str(packet_recorded_at)),
+            ("task_lists_state", Json::str(packet_state)),
+        ]),
+        Json::obj([
+            ("record", Json::str(&paths.human_h14_readout)),
+            ("precondition", Json::str("human_h14_ollama_hf_rows")),
+            ("present", Json::Bool(human_h14_recorded_at.is_some())),
+            (
+                "recorded_at",
+                human_h14_recorded_at.map_or(Json::Null, Json::str),
+            ),
+        ]),
+        Json::obj([
+            ("record", Json::str(&paths.w1_manifest)),
+            ("precondition", Json::str("w1_verified_harvest_manifest")),
+            ("present", Json::Bool(w1_manifest_verified_at.is_some())),
+            (
+                "recorded_at",
+                w1_manifest_verified_at.map_or(Json::Null, Json::str),
+            ),
+        ]),
+    ];
     let instants: Vec<&str> = [
         Some(packet_recorded_at),
         human_h14_recorded_at,
@@ -910,6 +911,7 @@ fn cite(path: &str, sha: &str) -> Json {
 /// citations emit `paths`' supplied relpaths verbatim (the reader rule
 /// — no `docs/` literal lives in the crate), and the task lists are
 /// the freeze record (never a silently substituted list).
+#[allow(clippy::too_many_arguments)] // the packet record's own member arity.
 pub fn build_packet(
     paths: &PreregInputs,
     freeze: Json,

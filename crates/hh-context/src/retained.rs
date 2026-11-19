@@ -704,12 +704,14 @@ impl RetainedSelection {
     }
 }
 
+/// `ctr_parameters`' decode triple — `{capabilities, older_than,
+/// completed_invocations}` per the recorded `parameters` members.
+type CtrParameters = (BTreeSet<String>, u64, BTreeMap<String, u64>);
+
 /// The recorded `parameters` members a `clear_tool_results` policy
 /// carries — decoded for the completion-age join check and the
 /// variant reconstruction.
-fn ctr_parameters(
-    params: &Json,
-) -> Result<(BTreeSet<String>, u64, BTreeMap<String, u64>), SelectionRefusal> {
+fn ctr_parameters(params: &Json) -> Result<CtrParameters, SelectionRefusal> {
     const REC: &str = "retained_selection/1.input.policy.parameters";
     let m = expect_obj(params, REC).map_err(malformed)?;
     reject_unknown(

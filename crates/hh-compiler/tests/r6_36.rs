@@ -208,7 +208,7 @@ fn ac3_text_head_tail_golden() {
         head: 4,
         tail: 4,
         unit: HeadTailUnit::Utf8Bytes,
-        marker,
+        marker: Box::new(marker),
     };
     let result = rec(&[("output", Json::str("0123456789AB".to_string()))]);
     let out = render(&spec, &result).unwrap();

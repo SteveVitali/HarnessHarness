@@ -347,7 +347,7 @@ fn ac1_prepared_order_reconciles_through_owner() {
     };
     open_turn(&mut store, &run, &lease);
     let dialect = dialects::openai_compatible();
-    let mut creds = NoCredentials::default();
+    let mut creds = NoCredentials;
     let mut transport = FakeTransport {
         sends: vec![],
         queued: vec![Ok(ok_frames("fixture-model", "done", Some(usage_41_7())))].into(),
@@ -449,7 +449,7 @@ fn ac1_deadline_persists_across_resume_approval_and_drain() {
     };
     open_turn(&mut store, &run, &lease);
     let dialect = dialects::openai_compatible();
-    let mut creds = NoCredentials::default();
+    let mut creds = NoCredentials;
     let mut transport = FakeTransport {
         sends: vec![],
         queued: vec![].into(),
@@ -506,7 +506,7 @@ fn ac1_deadline_persists_across_resume_approval_and_drain() {
 fn ac2_unbounded_and_unfunded_dispatch_zero() {
     let (_clk, mut store, run, lease) = open("unfunded", 1_000);
     let dialect = dialects::openai_compatible();
-    let mut creds = NoCredentials::default();
+    let mut creds = NoCredentials;
     let head = store.events(&run).unwrap().len();
     // Missing a required role → Unbounded, zero rows, zero bytes.
     let budget_id = {
@@ -576,7 +576,7 @@ fn ac2_mutated_prepared_bytes_refuse() {
     };
     open_turn(&mut store, &run, &lease);
     let dialect = dialects::openai_compatible();
-    let mut creds = NoCredentials::default();
+    let mut creds = NoCredentials;
     let mut transport = FakeTransport {
         sends: vec![],
         queued: vec![Ok(ok_frames("fixture-model", "ok", Some(usage_41_7())))].into(),
@@ -636,7 +636,7 @@ fn ac2_timeout_not_cancellation_and_retries_reuse_reservation() {
     };
     open_turn(&mut store, &run, &lease);
     let dialect = dialects::openai_compatible();
-    let mut creds = NoCredentials::default();
+    let mut creds = NoCredentials;
     // attempt 1: socket timeout (transient) → attempt 2: completes. One
     // reservation, one `model.call.requested`, attempt joins durable.
     let mut transport = FakeTransport {
@@ -705,7 +705,7 @@ fn ac2_failed_timeout_is_unknown_exposure_never_cancelled() {
     };
     open_turn(&mut store, &run, &lease);
     let dialect = dialects::openai_compatible();
-    let mut creds = NoCredentials::default();
+    let mut creds = NoCredentials;
     let mut transport = FakeTransport {
         sends: vec![],
         queued: vec![Err(ModelError::new(
@@ -780,7 +780,7 @@ fn ac2_unavailable_usage_is_unknown_not_zero() {
     };
     open_turn(&mut store, &run, &lease);
     let dialect = dialects::openai_compatible();
-    let mut creds = NoCredentials::default();
+    let mut creds = NoCredentials;
     // The stream completes but reports no usage member.
     let mut transport = FakeTransport {
         sends: vec![],
@@ -827,7 +827,7 @@ fn ac2_served_model_drift_refuses() {
     };
     open_turn(&mut store, &run, &lease);
     let dialect = dialects::openai_compatible();
-    let mut creds = NoCredentials::default();
+    let mut creds = NoCredentials;
     let mut transport = FakeTransport {
         sends: vec![],
         queued: vec![Ok(ok_frames("other-model", "done", Some(usage_41_7())))].into(),
@@ -875,7 +875,7 @@ fn ac2_release_creates_no_physical_capacity() {
     };
     open_turn(&mut store, &run, &lease);
     let dialect = dialects::openai_compatible();
-    let mut creds = NoCredentials::default();
+    let mut creds = NoCredentials;
     let mut transport = FakeTransport {
         sends: vec![],
         queued: vec![Ok(ok_frames("fixture-model", "done", Some(usage_41_7())))].into(),

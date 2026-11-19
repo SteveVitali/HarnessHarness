@@ -296,7 +296,7 @@ fn malformed_decl_member_refuses() {
 #[test]
 fn absent_admission_the_bound_stays_the_enforced_decl() {
     let record = cell_record(Some("swe-bench-astropy-2"), Some(Json::Int(360)));
-    assert!(record.ext.get(ADMISSION_FIELD).is_none());
+    assert!(!record.ext.contains_key(ADMISSION_FIELD));
     assert_eq!(enforced_decl_sec(&record).unwrap(), 360);
     assert_eq!(
         verifier_deadline_ms(enforced_decl_sec(&record).unwrap()),

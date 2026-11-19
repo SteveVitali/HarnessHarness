@@ -32,6 +32,7 @@ use hharness_env::executor::{
     InterruptSupport, ProbeSupport, ProbeVerdict, TerminalReport, TerminalStatus, ToolExecutor,
 };
 use hharness_env::handle::{OnLoss, Roots};
+use hharness_env::observe::{EffectOutcome, ErrorClass};
 use hharness_env::record::{EnvironmentClass, EnvironmentRecord, ImageRef, ProvisioningRecipe};
 use hharness_hir::kinds::{
     EffectAttributes, EffectClass, EffectDomain, Mutability, RepeatSafety, Reversibility,
@@ -92,6 +93,16 @@ fn open(tag: &str) -> (Store, String, Lease, ManualClock) {
 /// driver-side shape (`turn`+`effect` scope members; no `ordinal`, so the
 /// coordinate is a free `ef`, not the dispatcher's derived `f(...)`).
 fn open_adopted_scopes(store: &mut Store, run: &str, lease: &Lease, ef: &str) {
+    open_adopted_scopes_risk(store, run, lease, ef, RiskReversibility::Reversible)
+}
+
+fn open_adopted_scopes_risk(
+    store: &mut Store,
+    run: &str,
+    lease: &Lease,
+    ef: &str,
+    reversibility: RiskReversibility,
+) {
     let m = EventMinter::new(store, run);
     let mut t = m.mint("lifecycle.turn.started", Json::obj([])).unwrap();
     t.scope.turn_id = Some("turn-1".into());
@@ -114,7 +125,7 @@ fn open_adopted_scopes(store: &mut Store, run: &str, lease: &Lease, ef: &str) {
             Json::obj([(
                 "effective_risk_class",
                 RiskClass {
-                    reversibility: RiskReversibility::Reversible,
+                    reversibility,
                     repeat_safety: RiskRepeatSafety::Idempotent,
                     scope: RiskScope::WorkspaceLocal,
                 }
@@ -464,13 +475,6 @@ fn read_all(store: &Store, run: &str) -> Vec<hharness_ledger::event::EventEnvelo
         .events
 }
 
-fn class_count(store: &Store, run: &str, class: &str) -> usize {
-    read_all(store, run)
-        .iter()
-        .filter(|e| e.class == class)
-        .count()
-}
-
 fn effect_scoped(store: &Store, run: &str, ef: &str, class: &str) -> usize {
     read_all(store, run)
         .iter()
@@ -734,7 +738,7 @@ fn r58_adopted_refuses_args_mismatch() {
     let (mut store, run, lease, _clock) = open("args-mismatch");
     // Intended carrying a recorded `args_canonical_hash` that the
     // presented dispatch cannot match.
-    let m = EventMinter::new(&mut store, &run);
+    let m = EventMinter::new(&store, &run);
     let mut t = m.mint("lifecycle.turn.started", Json::obj([])).unwrap();
     t.scope.turn_id = Some("turn-1".into());
     let mut i = m
@@ -946,5 +950,169 @@ fn r58_adopted_refuses_stale_environment() {
         read_all(disp.store_mut(), &run).len(),
         rows_before,
         "resolve-stage refusal lands nothing"
+    );
+}
+
+/// An executor that reports the recorded timeout channel —
+/// `ToolError{Timeout}` + `detail_ref` — and answers the lapsed-window
+/// probe `NotApplied` (the recorded kill is the settled evidence: the
+/// command's intended mutation observably did not complete).
+struct TimeoutProbeExecutor {
+    decl: ExecutorDeclaration,
+    calls: std::cell::Cell<u64>,
+}
+
+impl TimeoutProbeExecutor {
+    fn new(domains: &[EffectDomain]) -> Self {
+        TimeoutProbeExecutor {
+            decl: ExecutorDeclaration {
+                executor_id: "tmo-probe/1".to_string(),
+                isolation_support: hharness_containment::policy::IsolationClass::None,
+                dedup_support: DedupSupport::BestEffort,
+                probe_support: ProbeSupport::Check,
+                interrupt: InterruptSupport::Supported,
+                error_classes: ["executor_error".to_string(), "timeout".to_string()]
+                    .into_iter()
+                    .collect(),
+                streams: false,
+                domains: domains.iter().copied().collect(),
+            },
+            calls: std::cell::Cell::new(0),
+        }
+    }
+}
+
+impl ToolExecutor for TimeoutProbeExecutor {
+    fn declaration(&self) -> &ExecutorDeclaration {
+        &self.decl
+    }
+    fn execute(
+        &mut self,
+        _request: &ExecutionRequest,
+        _sink: &mut dyn FnMut(ExecutorSignal),
+    ) -> Result<TerminalReport, EnvError> {
+        self.calls.set(self.calls.get() + 1);
+        Ok(TerminalReport {
+            status: TerminalStatus::ToolError {
+                class: ErrorClass::Timeout,
+            },
+            exit_status: Some(-1),
+            outcome_hint: "applied".to_string(),
+            retryable_hint: None,
+            detail_ref: Some("Command killed by timeout (30s)".to_string()),
+            truncated: false,
+            omitted_bytes: 0,
+            original_size: 0,
+        })
+    }
+    fn probe(&self, _effect_id: &str, _attempt_no: u64) -> Result<ProbeVerdict, EnvError> {
+        Ok(ProbeVerdict::NotApplied)
+    }
+}
+
+/// AC probe-settle through the adopted path — the defect the Ws1r battery
+/// surfaced: `ToolError{Timeout}` on an irreversible risk maps to
+/// `unknown`; the inline probe settles `probed{not_applied}` (the
+/// terminal — no second `observed`, ADR-0100 I-4); and the returned
+/// `DurableEffectRef.settlement_ref` must resolve to the `probed` row,
+/// not the `unknown` — the stale-resolution defect parked the turn
+/// (`DriverError::Port` → `TurnActive` on the next submit).
+#[test]
+fn r58_dispatch_adopted_probe_settle_resolves_the_probed_settlement_ref() {
+    let (mut store, run, lease, _clock) = open("adopted-probe");
+    let ef = "ef-71";
+    open_adopted_scopes_risk(
+        &mut store,
+        &run,
+        &lease,
+        ef,
+        RiskReversibility::Irreversible,
+    );
+    let ws = workspace("adopted-probe");
+    let mut driver = EnvDriver::new(&run);
+    let env = ready_env(&mut store, &lease, &mut driver, &ws);
+    let irrev_attrs = EffectAttributes {
+        mutability: Mutability::Additive,
+        repeat_safety: RepeatSafety::Idempotent,
+        world: World::Closed,
+        reversibility: Reversibility::Irreversible,
+    };
+    let cap = capability(EffectDomain::FsWrite, irrev_attrs.clone());
+    let bind = binding();
+    let sb = cap.scope_bindings.clone();
+    let mon = test_monitor(&cap, &[EffectDomain::FsWrite]);
+    let mut disp = Dispatcher::new(&mut store, &mon, &run, [7u8; 32], DetectorSet::default());
+    let mut exec = TimeoutProbeExecutor::new(&[EffectDomain::FsWrite]);
+    let path = format!("{}/a.txt", ws.display());
+    let inp = input(
+        &cap,
+        &bind,
+        &sb,
+        &env,
+        Json::obj([("path", Json::str(&path)), ("content", Json::str("hi"))]),
+        EffectClass {
+            domain: EffectDomain::FsWrite,
+            attributes: Some(irrev_attrs),
+        },
+    );
+
+    let (out, dref) = disp
+        .dispatch_adopted(ef, &mut driver, &mut exec, None, &inp, &lease)
+        .unwrap();
+    assert!(
+        matches!(
+            &out,
+            DispatchOutcome::Observed(o) if o.outcome == EffectOutcome::NotApplied
+        ),
+        "the determinable probe verdict settles the observed outcome, got {out:?}"
+    );
+
+    // The lifecycle tail: intended → authorized → prepared → committed →
+    // unknown → probed — and no second `observed` (I-4).
+    for (class, want) in [
+        ("action.effect.intended", 1),
+        ("action.effect.authorized", 1),
+        ("action.effect.prepared", 1),
+        ("action.effect.committed", 1),
+        ("action.effect.unknown", 1),
+        ("action.effect.probed", 1),
+        ("action.effect.observed", 0),
+    ] {
+        assert_eq!(
+            effect_scoped(disp.store_mut(), &run, ef, class),
+            want,
+            "{class} count under {ef}"
+        );
+    }
+    assert_eq!(
+        exec.calls.get(),
+        1,
+        "the executor ran once — never redispatched"
+    );
+
+    let events = read_all(disp.store_mut(), &run);
+    let settle = events
+        .iter()
+        .find(|e| e.event_id == dref.settlement_ref)
+        .expect("settlement_ref resolves to a durable row");
+    assert_eq!(
+        settle.class, "action.effect.probed",
+        "the observed outcome's durable settlement is the determinable probe verdict"
+    );
+    assert_eq!(
+        settle.payload.get("verdict").and_then(Json::as_str),
+        Some("not_applied")
+    );
+
+    // Ordering: `unknown` is durable before the probe runs.
+    let pos = |class: &str| {
+        events
+            .iter()
+            .position(|e| e.class == class && e.scope.effect_id.as_deref() == Some(ef))
+            .unwrap()
+    };
+    assert!(
+        pos("action.effect.unknown") < pos("action.effect.probed"),
+        "unknown precedes probed"
     );
 }

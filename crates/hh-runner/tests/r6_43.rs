@@ -365,7 +365,7 @@ mod drive {
         };
         let arm = |arm_id: &str, level_id: &str| ArmSpec {
             arm_id: arm_id.to_string(),
-            hypothesis: format!("{arm_id}"),
+            hypothesis: arm_id.to_string(),
             level_assignment: BTreeMap::from([("harness".to_string(), level_id.to_string())]),
             eval_budget: "eval:a".to_string(),
             search_budget: Some("search:a".to_string()),

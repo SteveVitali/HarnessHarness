@@ -377,8 +377,24 @@ impl EffectFold {
 ///
 /// `fold` is the effect's fold *before* this event; `None` (a defensive caller
 /// or a torn replay) is conservative — `not_applied` then closes.
+///
+/// `model.call.completed` is the same kind of conditional closer: a completed
+/// call whose `calls` induced tool calls leaves the `model_call` scope open —
+/// `action.tool.proposed` opened each `tool_call` child before `completed`
+/// landed (`calls[].args_raw` is the durable intent-args source, so
+/// `completed` must precede dispatch), and the §5a.1 chain requires the
+/// parent open while children settle. The scope then stays open for the
+/// dispatch tail — the post-settlement kernel rows (effect verdicts, the K4
+/// deposit, unattributed-signal rows) scope to "the still-open
+/// turn/model_call chain" by design; no later ModelCall closer exists, so an
+/// induced-call scope is honestly unclosed at turn end (`scopes_unclosed`).
+/// `calls` absent or empty closes as before.
 pub fn scope_close_fires(class: &str, payload: &Json, fold: Option<&EffectFold>) -> bool {
     match class {
+        "model.call.completed" => match payload.get("calls") {
+            Some(Json::Arr(c)) => c.is_empty(),
+            _ => true,
+        },
         "action.effect.observed" => {
             match payload.get("outcome").and_then(Json::as_str) {
                 Some("partial") => false,

@@ -343,12 +343,16 @@ fn read_prefix<C: FnMut(&str, Json) -> Result<Json, String>>(
     out
 }
 
-/// The 13-row dispatch ceremony the capstone surfaced: the
-/// `action.tool.proposed` ask plus the contiguous 12-row pair of §5a.2
-/// write-ahead chains — `action.effect.intended` →
-/// `security.permission.decided` → `action.effect.{authorized,prepared,
-/// committed}` → `action.effect.observed`, once per dispatched effect —
-/// and the verification/lifecycle rows the run seals with.
+/// The dispatch ceremony the capstone surfaced: the
+/// `action.tool.proposed` ask plus the contiguous §5a.2 write-ahead
+/// chain — `action.effect.intended` → `security.permission.decided` →
+/// `action.effect.{authorized,prepared,committed}` →
+/// `action.effect.observed`, once per dispatched effect — and the
+/// verification/lifecycle rows the run seals with. (The capstone's
+/// 12-row *pair* was the doubled-propose artifact the R6.45q wedge fix
+/// retired: the first `submit`'s `follow_up` cue burned a second call
+/// and one drain-all `act` landed both chains. The honest scripted run
+/// now dispatches one effect — one contiguous chain.)
 fn assert_dispatch_ceremony(classes: &[&str], label: &str) {
     assert!(
         classes.contains(&"action.tool.proposed"),
@@ -362,11 +366,10 @@ fn assert_dispatch_ceremony(classes: &[&str], label: &str) {
         "action.effect.committed",
         "action.effect.observed",
     ];
-    let pair: Vec<&str> = CHAIN.iter().chain(CHAIN.iter()).copied().collect();
     assert!(
-        classes.windows(pair.len()).any(|w| w == pair.as_slice()),
-        "{label}: the record carries the contiguous 12-row ceremony \
-         (two write-ahead chains): {classes:?}"
+        classes.windows(CHAIN.len()).any(|w| w == CHAIN),
+        "{label}: the record carries the contiguous 6-row ceremony \
+         (the write-ahead chain): {classes:?}"
     );
     for class in ["verification.gate.evaluated", "lifecycle.run.finished"] {
         assert!(

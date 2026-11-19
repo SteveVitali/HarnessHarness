@@ -41,7 +41,7 @@ fn tmp(tag: &str) -> PathBuf {
 }
 
 fn sha64(c: char) -> String {
-    std::iter::repeat(c).take(64).collect()
+    std::iter::repeat_n(c, 64).collect()
 }
 
 fn infra_members() -> BTreeMap<String, String> {
@@ -108,9 +108,9 @@ fn ac1_rebuild_without_gate_record_refuses() {
         ("role", Json::str("layer_export")),
         ("name", Json::str("mini-2.4.6-task-a")),
         ("window", Json::str("W1")),
-        ("image_id", Json::str(&format!("sha256:{}", sha64('7')))),
+        ("image_id", Json::str(format!("sha256:{}", sha64('7')))),
         ("path", Json::str("artifacts/mini-2.4.6-task-a.oci")),
-        ("sha256", Json::str(&sha64('8'))),
+        ("sha256", Json::str(sha64('8'))),
         ("bytes", Json::Int(3)),
         ("upload", Json::str("archived")),
     ]);
@@ -160,7 +160,7 @@ fn ac1_w4_slot_set_digests_and_lanes() {
         check_slot_identity(&Json::Obj(m.clone()), &s, lane).unwrap();
     }
     let hosted = slot_identity(&s, ArmLane::Hosted).unwrap();
-    assert!(hosted.get("h_set").is_none());
+    assert!(!hosted.contains_key("h_set"));
     check_slot_identity(&Json::Obj(hosted), &s, ArmLane::Hosted).unwrap();
     // an H lane with h_set absent refuses; a hosted lane carrying one refuses.
     let mut e = check_slot_identity(
@@ -672,7 +672,7 @@ fn ac3_upload_receipt_admission_provided_and_codec() {
     );
     let files = vec![Json::obj([
         ("path", Json::str("w1/f.bin")),
-        ("sha256", Json::str(&sha64('a'))),
+        ("sha256", Json::str(sha64('a'))),
         ("bytes", Json::Int(3)),
     ])];
     let receipt = upload_receipt(
@@ -783,7 +783,7 @@ fn ac4_revoked_slot_token_stays_raw_tombstoned_derived_unrevoked_refuses() {
         "w1/r.bin",
         "x slot-token-fixture-9f8e y",
         &live,
-        &[tok.clone()],
+        std::slice::from_ref(&tok),
     ) {
         ScanOutcome::Clean { stays } => assert_eq!(stays.len(), 1),
         other => panic!("expected clean, got {other:?}"),
@@ -794,7 +794,7 @@ fn ac4_revoked_slot_token_stays_raw_tombstoned_derived_unrevoked_refuses() {
         "w1/t.jsonl",
         "x slot-token-fixture-9f8e y",
         &live,
-        &[tok.clone()],
+        std::slice::from_ref(&tok),
     ) {
         ScanOutcome::Refuse { reason, .. } => assert_eq!(reason, "tombstone_missing"),
         other => panic!("expected refuse, got {other:?}"),
@@ -853,9 +853,9 @@ fn fixture_index(sha: &str) -> Json {
                 ("role", Json::str("binary_set")),
                 ("name", Json::str("infrastructure")),
                 ("window", Json::str("W1")),
-                ("digest", Json::str(&format!("sha256:{}", sha64('9')))),
+                ("digest", Json::str(format!("sha256:{}", sha64('9')))),
                 ("path", Json::str("artifacts/infra.tar")),
-                ("sha256", Json::str(&sha64('b'))),
+                ("sha256", Json::str(sha64('b'))),
                 ("bytes", Json::Int(4)),
                 ("upload", Json::str("archived")),
             ])]),
@@ -965,7 +965,7 @@ fn ac7_no_record_carries_credential_bytes() {
     let live = live_detectors();
     let files = vec![Json::obj([
         ("path", Json::str("w1/f")),
-        ("sha256", Json::str(&sha64('a'))),
+        ("sha256", Json::str(sha64('a'))),
         ("bytes", Json::Int(1)),
     ])];
     let recs = vec![

@@ -71,7 +71,7 @@
  "config": {
   "renderer_id": "adpt.mini_swe_agent",
   "renderer_version": "1",
-  "template_hash": "sha256:949efd2c0749641b41c140bfc35d449b1ad19d680c29e070aa8e3c29926162cb",
+  "template_hash": "sha256:a956b100ec30a54fe1a23e96cd69298203dfc41663a79b1813b400aaa17ee128",
   "effort": {
    "mechanism": "model_kwargs.reasoning_effort",
    "value": "high"

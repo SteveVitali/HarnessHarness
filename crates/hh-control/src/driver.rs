@@ -3273,11 +3273,26 @@ impl<S: ControlStrategy> Driver<S> {
                         );
                     }
                 }
-                self.inbox.push_back(Cue::ModelCompleted {
-                    model_call_id: mc,
-                    response_ref: outcome.response_ref.clone(),
-                    stop_reason: outcome.stop_reason,
-                });
+                // A suppressed batch has its interpretation already —
+                // the guard verdict's cue (`guard_fired`) rides the
+                // inbox below and is the response's *only* strategy input.
+                // Pushing `ModelCompleted` too would double-interpret one
+                // response: the strategy's `tool_use`/`end_turn` arms read
+                // an empty `pending_intents` (the suppression minted no
+                // `action.tool.proposed`) as a *fresh* format error —
+                // double-charging the streak — and the stale
+                // `GuardFired` cue then burns a whole model call on the
+                // next iteration, whose own `ModelCompleted` finds the
+                // intents drained and charges a phantom third. One
+                // response, one interpretation (the `failed` arm already
+                // never cues `ModelCompleted`).
+                if !suppressed {
+                    self.inbox.push_back(Cue::ModelCompleted {
+                        model_call_id: mc,
+                        response_ref: outcome.response_ref.clone(),
+                        stop_reason: outcome.stop_reason,
+                    });
+                }
             }
         }
         // A guard verdict that was not pass (a nudge/deny/stop from
@@ -3655,7 +3670,10 @@ impl<S: ControlStrategy> Driver<S> {
             )));
         }
         let expected: &[&str] = match &out.outcome {
-            SettledOutcome::Observed { .. } => &["action.effect.observed"],
+            // A determinable `probed` verdict is the observed outcome's
+            // durable settle for an `unknown → probe` effect — no second
+            // `observed` mints (ADR-0100 I-4).
+            SettledOutcome::Observed { .. } => &["action.effect.observed", "action.effect.probed"],
             SettledOutcome::Refused => &["action.effect.refused", "action.tool.rejected"],
             SettledOutcome::Unknown { .. } => &["action.effect.unknown"],
             SettledOutcome::Abandoned => &["action.effect.abandoned"],
@@ -9899,10 +9917,8 @@ mod tests {
             seq: 0,
         };
         // The scenario deliberately emits `unknown_surface` rejections
-        // (the refused calls' C0 leg) and stale `model_completed` cues can
-        // pop further proposes before the submission's `effects_settled`
-        // lands — the envelope's declared bound is raised for the
-        // fixture, not bypassed.
+        // (the refused calls' C0 leg) — the envelope's declared bound is
+        // raised for the fixture, not bypassed.
         let mut envelope = EnvelopePolicy::stage1_default("b-1");
         envelope.output_validation.max_format_failures = 8;
         let policy = envelope.seal().unwrap();
@@ -9927,7 +9943,18 @@ mod tests {
                         args_raw: "{}".into(),
                     }],
                 ),
-                // mc-2 — the kernel `discover_surfaces` capability:
+                // mc-2 — a call on the deferred surface ahead of the
+                // reveal: `surface_not_revealed{hint: search}` beside
+                // the `unknown_surface` rejection.
+                outcome(
+                    hharness_gateway::vocab::StopReason::ToolUse,
+                    vec![ParsedCall {
+                        tool_call_id: "tc-3".into(),
+                        surface: "deep.search".into(),
+                        args_raw: "{}".into(),
+                    }],
+                ),
+                // mc-3 — the kernel `discover_surfaces` capability:
                 // `exposure_dispatch` runs `discover` in-kernel.
                 outcome(
                     hharness_gateway::vocab::StopReason::ToolUse,
@@ -9935,18 +9962,6 @@ mod tests {
                         tool_call_id: "tc-2".into(),
                         surface: "discover_surfaces".into(),
                         args_raw: r#"{"query":"deep","form":"regex"}"#.into(),
-                    }],
-                ),
-                // mc-3 — a call on the deferred surface ahead of the
-                // reveal (the mc-1 nudge's propose leg runs before the
-                // pending intent's `act`): `surface_not_revealed{
-                // hint: search}` beside the `unknown_surface` rejection.
-                outcome(
-                    hharness_gateway::vocab::StopReason::ToolUse,
-                    vec![ParsedCall {
-                        tool_call_id: "tc-3".into(),
-                        surface: "deep.search".into(),
-                        args_raw: "{}".into(),
                     }],
                 ),
                 // mc-4 — the revealed surface is `direct` now: delivered,

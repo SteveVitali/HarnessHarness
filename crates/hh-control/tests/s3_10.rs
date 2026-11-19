@@ -2206,3 +2206,212 @@ fn r221_unknown_effect_at_finish_is_escalated() {
     let pos = |c: &str| classes.iter().position(|x| *x == c).unwrap();
     assert!(pos("lifecycle.escalation.raised") < pos("lifecycle.run.finished"));
 }
+
+/// INV-5 scope-key regression (Ws1 L1 leg) — the durable-dispatch lane
+/// stamps the full `{model_call ⊃ tool_call ⊃ effect}` chain on every
+/// effect row, so the attempt series must key on the innermost
+/// `effect_id`: `action.effect.{intended,committed}` for *different*
+/// effects under one `model_call` at `attempt_no:1` are distinct
+/// series, not a reuse. The first-non-null scope order collided them
+/// into `attempt_not_increasing`/`duplicate_commit` on any multi-call
+/// response — a false `infrastructure_failure`.
+#[test]
+fn inv5_attempt_series_key_on_the_innermost_scope() {
+    let env =
+        |seq: u64, class: &str, mc: &str, tc: &str, ef: &str, attempt: Option<i64>| EventEnvelope {
+            event_id: format!("e{seq}"),
+            run_id: "run".into(),
+            seq,
+            ts: "2026-10-14T00:00:00.000Z".into(),
+            hlc: None,
+            plane: EventPlane::of_class(class).unwrap_or(EventPlane::Control),
+            class: class.into(),
+            schema_version: 1,
+            producer: hharness_ledger::event::Producer::kernel("kernel:test"),
+            participant_class: ParticipantClass::Native,
+            observability_level: Default::default(),
+            durability: Durability::Ledger,
+            scope: hharness_ledger::event::Scope {
+                model_call_id: Some(mc.into()),
+                tool_call_id: Some(tc.into()),
+                effect_id: Some(ef.into()),
+                ..Default::default()
+            },
+            lease_generation: 1,
+            parent_event_id: hharness_ledger::ids::ROOT_EVENT.into(),
+            causes: vec![],
+            refs: vec![],
+            ir_refs: vec![],
+            surface_ids: Default::default(),
+            provenance: None,
+            payload: match attempt {
+                Some(a) => Json::obj([("attempt_no", Json::Int(a))]),
+                None => Json::obj([]),
+            },
+            prev_hash: "h".into(),
+            hash: format!("h{seq}"),
+        };
+    let input = hharness_control::invariants::InvariantInput::default();
+    // Two effects under one `model_call` — the multi-call response the
+    // durable-dispatch lane produces. The lane stamps `attempt_no` only
+    // on `committed` (the attempt series opener), matching the real
+    // payloads; `intended` carries the effect scope without it.
+    let clean = vec![
+        env(
+            1,
+            "action.effect.intended",
+            "mc-1",
+            "mc-1.tc1",
+            "ef-1",
+            None,
+        ),
+        env(
+            2,
+            "action.effect.committed",
+            "mc-1",
+            "mc-1.tc1",
+            "ef-1",
+            Some(1),
+        ),
+        env(
+            3,
+            "action.effect.intended",
+            "mc-1",
+            "mc-1.tc2",
+            "ef-2",
+            None,
+        ),
+        env(
+            4,
+            "action.effect.committed",
+            "mc-1",
+            "mc-1.tc2",
+            "ef-2",
+            Some(1),
+        ),
+    ];
+    let violations = hharness_control::invariants::check(
+        &clean,
+        hharness_control::vocab::GuardPoint::Decide,
+        &input,
+    );
+    assert!(
+        violations
+            .iter()
+            .all(|v| v.invariant_id != hharness_ontology::control::InvariantId::Inv5),
+        "distinct effects under one model_call must not trip INV-5: {violations:?}"
+    );
+    // Negative control — a genuine reuse still fires: the same
+    // `effect_id` at `attempt_no:1` twice.
+    let reused = vec![
+        env(
+            1,
+            "action.effect.committed",
+            "mc-1",
+            "mc-1.tc1",
+            "ef-1",
+            Some(1),
+        ),
+        env(
+            2,
+            "action.effect.committed",
+            "mc-1",
+            "mc-1.tc2",
+            "ef-1",
+            Some(1),
+        ),
+    ];
+    let violations = hharness_control::invariants::check(
+        &reused,
+        hharness_control::vocab::GuardPoint::Decide,
+        &input,
+    );
+    assert!(
+        violations
+            .iter()
+            .any(|v| v.invariant_id == hharness_ontology::control::InvariantId::Inv5),
+        "a reused attempt on one effect must still trip INV-5"
+    );
+}
+
+/// A `tool_use` response rejected at G-INTERPRET (the
+/// `control.output.rejected` + `guard.fired{format_error}` pair) must not
+/// *also* push `Cue::ModelCompleted` — the suppressed batch minted no
+/// `action.tool.proposed`, so the cue's `tool_use` arm read an empty
+/// `pending_intents` as a fresh format error, double-charging the streak,
+/// and the stale `GuardFired` cue then burned a whole model call on the
+/// next iteration (whose own `ModelCompleted` found the intents drained
+/// and charged a phantom third). One response, one interpretation: the
+/// guard's cue is it — every valid batch `act`s on its own
+/// `ModelCompleted` and a rejection costs exactly one retry.
+#[test]
+fn rejected_batch_suppresses_model_completed_cue() {
+    let mut sink = MemSink::new();
+    let policy = EnvelopePolicy::stage1_default("b-1").seal().unwrap();
+    let mut driver = Driver::open_react(
+        &ctx(),
+        policy,
+        &mut sink,
+        DriverConfig {
+            surfaces: vec![fs_read()],
+            ..DriverConfig::default()
+        },
+    )
+    .unwrap();
+    let mk = |tc: &str, args: &str| ModelOutcome {
+        stop_reason: hharness_gateway::vocab::StopReason::ToolUse,
+        response_ref: "r".into(),
+        text_empty: false,
+        calls: vec![ParsedCall {
+            tool_call_id: tc.into(),
+            surface: "fs.read".into(),
+            args_raw: args.into(),
+        }],
+        error_class: None,
+        retry_after_ms: None,
+    };
+    let mut model = ScriptedModel {
+        script: [
+            mk("tc-a", r#"{"path":"/a"}"#),
+            mk("tc-b", r#"{"bogus":1}"#),
+            mk("tc-c", r#"{"path":"/c"}"#),
+            mk("tc-d", r#"{"path":"/d"}"#),
+        ]
+        .into_iter()
+        .collect(),
+        calls: 0,
+    };
+    let mut gate = ScriptedGate::observed();
+    let mut asm = NullAssembler;
+    let _ = driver.run(&mut model, &mut gate, &mut asm, &mut sink);
+    // The rejected batch produces exactly one interpretation: its
+    // `control.output.rejected` + `control.guard.fired{format_error}`
+    // rows and one `propose` — no second `propose` from a stale cue.
+    assert_eq!(sink.count("control.output.rejected"), 3);
+    // tc-b's suppressed response minted no `action.tool.proposed`; the
+    // three valid calls proposed and dispatched — each on its own
+    // `ModelCompleted` (3 `act` decisions for 3 valid batches, never a
+    // phantom `propose` between `proposed` and `completed`).
+    assert_eq!(sink.count("action.tool.proposed"), 3);
+    assert_eq!(sink.count("action.effect.intended"), 3);
+    let decisions = sink.find("control.decision");
+    let acts = decisions
+        .iter()
+        .filter(|e| e.payload.get("kind").and_then(Json::as_str) == Some("act"))
+        .count();
+    assert_eq!(acts, 3);
+    // The stop is the guard's own `format_failure` count
+    // (`format_failures_running` 1 rejected + 2 exhausted-script empties),
+    // never a strategy-side double-count.
+    let stop = decisions
+        .iter()
+        .find(|e| e.payload.get("kind").and_then(Json::as_str) == Some("stop"))
+        .expect("a format_failure stop");
+    assert_eq!(
+        stop.payload
+            .get("reason")
+            .and_then(|r| r.get("kind"))
+            .and_then(Json::as_str),
+        Some("format_failure")
+    );
+}

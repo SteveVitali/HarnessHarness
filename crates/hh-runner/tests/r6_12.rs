@@ -11,7 +11,7 @@ use hharness_runner::receipt_index::{
 use hharness_secrets::redact::DetectorSet;
 use hharness_secrets::types::SecretFingerprint;
 use hharness_secrets::{MaskEntry, MaskSet};
-use hharness_wire::json::{parse, Json};
+use hharness_wire::json::Json;
 use hharness_wire::sha256::sha256_hex;
 
 fn receipt(k: i64, mc: &str, disposition: &str, messages: Json) -> Json {

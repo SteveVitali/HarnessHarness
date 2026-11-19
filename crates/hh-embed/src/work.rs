@@ -57,11 +57,23 @@ impl EmbedService {
         {
             let s = self.session_mut(&p.session_id)?;
             if let Some(d) = s.driver.as_mut() {
-                d.submit(Cue::HumanInput(if mid_turn {
-                    HumanInput::Steer { payload_ref }
-                } else {
-                    HumanInput::FollowUp { payload_ref }
-                }));
+                // A first submit on a run that has never driven needs no
+                // input cue of its own — the seeded `run_opened` propose
+                // already drives turn 1 over the staged input artefact.
+                // A `follow_up` here would queue *behind* `run_opened`
+                // and pop before the first `model_completed`, burning a
+                // duplicate turn and offsetting every later completion
+                // cue by one. `last_cue_seq == 0` is exactly "the driver
+                // never observed or decided" (resumed drivers restore a
+                // non-zero watermark, parked ones take `steer` above).
+                let fresh = !mid_turn && d.state().last_cue_seq == 0;
+                if !fresh {
+                    d.submit(Cue::HumanInput(if mid_turn {
+                        HumanInput::Steer { payload_ref }
+                    } else {
+                        HumanInput::FollowUp { payload_ref }
+                    }));
+                }
             }
         }
         self.drive(&p.session_id)?;

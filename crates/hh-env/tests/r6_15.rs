@@ -70,7 +70,7 @@ fn cell() -> MediatedCell {
         pairs: vec![
             RelayPair {
                 name: "model".to_string(),
-                port: 8080,
+                port: 58_080,
             },
             RelayPair {
                 name: "egress".to_string(),
@@ -99,7 +99,7 @@ fn decl() -> MediatedDecl {
         protocol_id: "protocol:t".to_string(),
         epoch: 1,
         cell: cell(),
-        model_port: 8080,
+        model_port: 58_080,
         slot_token: "slot-token-t".to_string(),
     }
 }
@@ -201,7 +201,7 @@ fn ac1_admission_composes_profile_and_refusals_are_byte_identical() {
 
 #[test]
 fn ac2_env_projection_is_routing_hints_only() {
-    let env = cell_env_projection(8080, "slot-token-t").unwrap();
+    let env = cell_env_projection(58_080, "slot-token-t").unwrap();
     assert_eq!(
         env.get("http_proxy"),
         Some(&"http://127.0.0.1:3128".to_string())
@@ -212,7 +212,7 @@ fn ac2_env_projection_is_routing_hints_only() {
     );
     assert_eq!(
         env.get("OPENAI_BASE_URL"),
-        Some(&"http://127.0.0.1:8080/v1".to_string())
+        Some(&"http://127.0.0.1:58080/v1".to_string())
     );
     assert_eq!(
         env.get("ANTHROPIC_API_KEY"),

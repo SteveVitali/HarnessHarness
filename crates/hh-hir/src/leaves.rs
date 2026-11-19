@@ -134,8 +134,34 @@ impl Text {
             })?;
         let provenance = crate::schema::provenance_from_json(prov, path)?;
         let language = j.get("language").and_then(Json::as_str).map(str::to_string);
+        // `content?` — the parse-side authoring admission (R6.45q): a
+        // wire doc may carry the leaf's raw text beside its hash —
+        // the compiled-surface lowering (`hh-tmpl/1` `section_templates`,
+        // §5b.3 row 8) reads `Text.content`, which an in-process doc has
+        // but canonical bytes never emit. The member is hash-bound:
+        // `identify_text(content) == content_hash` or the parse is a
+        // `SchemaViolation`, never a coercion — canonical emission
+        // (`to_json`) is unchanged, so identity is unaffected.
+        let content = match j.get("content") {
+            Some(Json::Str(c)) => {
+                if crate::leaves::identify_text(c.as_bytes()) != content_hash {
+                    return Err(HirError::SchemaViolation {
+                        detail: format!(
+                            "{path}.content does not hash to the declared content_hash"
+                        ),
+                    });
+                }
+                Some(c.clone())
+            }
+            Some(_) => {
+                return Err(HirError::SchemaViolation {
+                    detail: format!("{path}.content must be a string when present"),
+                })
+            }
+            None => None,
+        };
         Ok(Text {
-            content: None,
+            content,
             content_hash,
             owner,
             authority,

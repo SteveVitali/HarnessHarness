@@ -1064,6 +1064,93 @@ fn ac_r_2_5_5_4_timeout_maps_by_class() {
     assert_eq!(exec2.calls.get(), 1);
 }
 
+// ── `unknown → probe` settles inline (AC-R-2.5.5-9's completion) ────────────
+
+#[test]
+fn ac_unknown_probe_settled_delivers_the_recorded_observation() {
+    // A `probe_support` executor's determinable verdict settles the
+    // `unknown` effect at `probed` (ADR-0100 I-4 — no second `observed`
+    // may mint), and the tool's report still reaches the observation
+    // plane (`DispatchOutcome::Observed` + `context.observation.recorded`
+    // where a renderer/admission arms it). The observation-replay double
+    // is the motivating case: its recorded `returncode: -1` raw is
+    // settled evidence, never a live unknown.
+    let (mut store, run, lease, _c) = open("tmo-probe-settle");
+    open_scopes(&mut store, &run, &lease, "turn-1", "mc-1");
+    let ws = workspace("tmo-probe-settle");
+    let mut driver = EnvDriver::new(&run);
+    let env = ready_env(&mut store, &lease, &mut driver, &ws);
+    let cap = capability(
+        EffectDomain::FsWrite,
+        attrs(Reversibility::Compensable),
+        scope_bindings(),
+    );
+    let bind = binding();
+    let sb = scope_bindings();
+    let mon = test_monitor(&cap);
+    let mut disp = Dispatcher::new(&mut store, &mon, &run, [6u8; 32], DetectorSet::default());
+    let mut exec = MockExecutor::ok();
+    exec.report = report_error(ErrorClass::Timeout);
+    exec.verdict = ProbeVerdict::NotApplied;
+    let mut inp = input(
+        &cap,
+        &bind,
+        &sb,
+        &env,
+        "tc-1",
+        Json::obj([
+            ("path", Json::str(format!("{}/a.txt", ws.display()))),
+            ("content", Json::str("hi")),
+        ]),
+        EffectClass {
+            domain: EffectDomain::FsWrite,
+            attributes: Some(attrs(Reversibility::Compensable)),
+        },
+    );
+    // Compensable `prepared` requires the registered compensation plan.
+    inp.compensation_plan_id = Some("plan-1".to_string());
+    match disp
+        .dispatch(&mut driver, &mut exec, None, &inp, &lease)
+        .unwrap()
+    {
+        DispatchOutcome::Observed(o) => {
+            assert_eq!(o.outcome, EffectOutcome::NotApplied, "{o:?}");
+            assert!(matches!(
+                o.status,
+                ObservedStatus::Error {
+                    class: ErrorClass::Timeout,
+                    ..
+                }
+            ));
+        }
+        other => panic!("expected observed(not_applied) via probe, got {other:?}"),
+    }
+    let events = read_all(&store, &run);
+    let classes: Vec<&str> = events.iter().map(|e| e.class.as_str()).collect();
+    assert!(classes.contains(&"action.effect.unknown"), "{classes:?}");
+    assert!(classes.contains(&"action.effect.probed"), "{classes:?}");
+    assert!(classes.contains(&"action.tool.completed"), "{classes:?}");
+    // `probed` is the effect terminal — no second `observed` (I-4).
+    assert!(!classes.contains(&"action.effect.observed"), "{classes:?}");
+    let probed = events
+        .iter()
+        .find(|e| e.class == "action.effect.probed")
+        .expect("probed row");
+    assert_eq!(
+        probed.payload.get("verdict").and_then(Json::as_str),
+        Some("not_applied")
+    );
+    // `unknown` precedes `probed` (the phase gate admits only `unknown`).
+    let pos = |c: &str| classes.iter().position(|k| *k == c).unwrap();
+    assert!(
+        pos("action.effect.unknown") < pos("action.effect.probed"),
+        "{classes:?}"
+    );
+    // The executor ran exactly once — the probe settled, never a
+    // redispatch.
+    assert_eq!(exec.calls.get(), 1);
+}
+
 // ── AC-R-2.5.5-5 — streaming + retention ────────────────────────────────────
 
 #[test]

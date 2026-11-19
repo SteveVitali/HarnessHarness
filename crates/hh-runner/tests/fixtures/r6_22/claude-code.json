@@ -77,7 +77,7 @@
  "config": {
   "renderer_id": "adpt.claude_code",
   "renderer_version": "1",
-  "template_hash": "sha256:5bfda49c06695c9bb163b1d99ee18a17ba3625bbc5b284ce1e6b922b8026a506",
+  "template_hash": "sha256:b68b8697cc05e4554e94fb0b2a892bc668d0bad31cb8e5a1e0fbf2d9bc1dc01c",
   "effort": {
    "mechanism": "--effort",
    "value": "high"

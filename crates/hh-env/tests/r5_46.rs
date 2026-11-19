@@ -1,5 +1,5 @@
-//! R5.46 — bounded one-task activation execution (GATE-G12 Reading 1)
-//! + the fixed N=10 pilot execution (Reading 2). Two real podman
+//! R5.46 — bounded one-task activation execution (GATE-G12 Reading 1) +
+//! the fixed N=10 pilot execution (Reading 2). Two real podman
 //! first-subject cells (`a-hello`, one per frozen arm) + the real
 //! `compact()` ladder per arm under an eligible pressure opportunity +
 //! all-first/all-attempt costs + declared §9.2 worksheet + the
@@ -616,7 +616,7 @@ fn drive_cell(
             Ok(_) => "other".to_string(),
             Err(e) => {
                 out.failure = Some(format!("dispatch:{e}"));
-                let _ = driver.return_executor(&env_id, exec);
+                driver.return_executor(&env_id, exec);
                 let _ = driver.teardown(&mut store, &lease, &env_id);
                 extras.wall_ms = Some(t0.elapsed().as_millis() as u64);
                 return (out, extras);
@@ -839,13 +839,10 @@ fn freeze_facts() -> (FreezeFacts, Json) {
         ("oracle", Json::str("adapter_a:hh-bench-adapter")),
         (
             "detectors",
-            Json::Arr(f.detectors.iter().map(|d| Json::str(d)).collect()),
+            Json::Arr(f.detectors.iter().map(Json::str).collect()),
         ),
         ("family_id", Json::str(&f.family_id)),
-        (
-            "stops",
-            Json::Arr(f.stops.iter().map(|s| Json::str(s)).collect()),
-        ),
+        ("stops", Json::Arr(f.stops.iter().map(Json::str).collect())),
         (
             "roles",
             Json::obj([
@@ -998,7 +995,7 @@ fn worksheet_facts(pilot_dispatch: bool) -> WorksheetFacts {
         total_micros: q.total_micros,
         unknown_exposure_bounded: true,
         pilot_subjects: None,
-        pilot_floor_met: 2 * 1 * 5 >= 10 * 1,
+        pilot_floor_met: true, // 2 floors × 5 subjects = 10 ≥ the 10-floor
         pilot_state: String::new(),
         quote_only: vec![],
         blocked: vec![],
@@ -1425,7 +1422,7 @@ fn pilot_freeze_facts(act_fid: &str, act_verified: bool) -> (PilotFreezeFacts, J
         tasks: 1,
         repeats_per_arm: 5,
         declared_first: 10,
-        floor_met: 2 * 1 * 5 >= 10 * 1,
+        floor_met: true, // 2 floors × 5 subjects = 10 ≥ the 10-floor
         ceiling_respected: 10 <= 60,
         reading_2: "passed".to_string(),
         activation_freeze_id: act_fid.to_string(),
@@ -1451,13 +1448,10 @@ fn pilot_freeze_facts(act_fid: &str, act_verified: bool) -> (PilotFreezeFacts, J
         ("oracle", Json::str("adapter_a:hh-bench-adapter")),
         (
             "detectors",
-            Json::Arr(f.detectors.iter().map(|d| Json::str(d)).collect()),
+            Json::Arr(f.detectors.iter().map(Json::str).collect()),
         ),
         ("family_id", Json::str(&f.family_id)),
-        (
-            "stops",
-            Json::Arr(f.stops.iter().map(|s| Json::str(s)).collect()),
-        ),
+        ("stops", Json::Arr(f.stops.iter().map(Json::str).collect())),
         (
             "roles",
             Json::obj([
@@ -1523,7 +1517,7 @@ fn arm_tail(subjects: &[PilotSubject], arm: &str) -> ArmTail {
         if n == 0 {
             return 0;
         }
-        let k = ((p * n + 99) / 100).max(1).min(n);
+        let k = (p * n).div_ceil(100).max(1).min(n);
         walls[(k - 1) as usize]
     };
     let toks: Vec<u64> = subjects

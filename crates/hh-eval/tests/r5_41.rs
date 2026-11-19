@@ -368,7 +368,7 @@ fn ac2_insufficient_and_malformed_quotas_refuse() {
     // revision or stop, never replacement or a silent smaller manifest.
     let mut d = golden();
     d.tasks
-        .retain(|t| !(t.split == TaskSplit::HeldOut && t.task_id <= "task:lo-05".to_string()));
+        .retain(|t| !(t.split == TaskSplit::HeldOut && t.task_id.as_str() <= "task:lo-05"));
     assert_eq!(
         materialize_protocol(&d),
         Err(ProtocolError::InsufficientHeldOut {

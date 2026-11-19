@@ -870,7 +870,7 @@ fn o4_allow_wait_answer_resume_one_mutation() {
 
     // Restart preserves the pending — a second suspended cell's runtime
     // dies mid-wait; restore reports the id owed and stays answerable.
-    let mut b = suspend_cell("o4-restart");
+    let b = suspend_cell("o4-restart");
     let (brun, bpid) = (b.run.clone(), b.permission_id.clone());
     let root = b.root.clone();
     drop(b.store); // close just the store — the WAL survives subject death

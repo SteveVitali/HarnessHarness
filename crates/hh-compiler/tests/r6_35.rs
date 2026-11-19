@@ -300,7 +300,7 @@ fn ac4_section_templates_place_leaves_with_roles() {
     let task = &s.layout[1];
     assert_eq!(task.role.as_deref(), Some("user"));
     assert_eq!(
-        task.slots.iter().cloned().collect::<Vec<_>>(),
+        task.slots.to_vec(),
         vec![
             "task".to_string(),
             "system".to_string(),

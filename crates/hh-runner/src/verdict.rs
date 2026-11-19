@@ -555,7 +555,7 @@ pub fn parse_pytest_summary(content: &str) -> Result<BTreeMap<String, String>, S
             && line
                 .trim_start_matches(|c: char| c == '=' || c.is_whitespace())
                 .starts_with(|_: char| true)
-            && line.starts_with(|c: char| c == '=')
+            && line.starts_with('=')
         {
             let _ = idx;
             let pos: usize = content

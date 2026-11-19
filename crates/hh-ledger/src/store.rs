@@ -4328,19 +4328,24 @@ fn check_audit_partition(
             }
             continue;
         }
-        let bound = if open {
-            classes::AUDIT_FIELD_MAX_BYTES
-        } else {
-            match spec.audit_fields.iter().find(|f| f.name == name.as_str()) {
-                Some(f) => f.max_bytes,
-                None => {
-                    return Err(LedgerError::SchemaViolation {
-                        detail: format!(
-                            "audit-grade {class}.{name} is not a declared \
-                             audit_fields or content_refs member"
-                        ),
-                    })
-                }
+        // A named entry overrides the open sentinel's bound for its own
+        // member (the dossier override — e.g. `model.call.completed.calls`
+        // carries provider-sized `args_raw` verbatim); every unnamed member
+        // of an open partition still lands at the 512 B default.
+        let bound = match spec
+            .audit_fields
+            .iter()
+            .find(|f| f.name != "*" && f.name == name.as_str())
+        {
+            Some(f) => f.max_bytes,
+            None if open => classes::AUDIT_FIELD_MAX_BYTES,
+            None => {
+                return Err(LedgerError::SchemaViolation {
+                    detail: format!(
+                        "audit-grade {class}.{name} is not a declared \
+                         audit_fields or content_refs member"
+                    ),
+                })
             }
         };
         let bytes = value.to_canonical_string().len();

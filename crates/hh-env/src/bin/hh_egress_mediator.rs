@@ -286,7 +286,7 @@ fn main() {
         &c.effect_id,
     ) {
         let mut store_g = store.lock().unwrap_or_else(|p| p.into_inner());
-        let minter = hharness_env::events::EventMinter::new(&*store_g, &run_id);
+        let minter = hharness_env::events::EventMinter::new(&store_g, &run_id);
         let risk = hharness_ontology::risk::RiskClass::UNKNOWN;
         let ev = minter
             .mint_effect(
@@ -365,7 +365,7 @@ fn main() {
                 let mut med = EgressMediator {
                     store: &*store,
                     run_id: run_id.clone(),
-                    lease: &*lease,
+                    lease: &lease,
                     tokens,
                     broker: &mut broker,
                     policy,

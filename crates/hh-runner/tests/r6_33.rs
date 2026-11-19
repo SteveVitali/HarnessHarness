@@ -335,19 +335,19 @@ fn ac4_v5_declaration() {
         Some("transcript_render.assistant_replay.reasoning")
     );
     assert_eq!(
-        ptr(&v5, "/parameters/level").and_then(Json::as_str),
+        ptr(v5, "/parameters/level").and_then(Json::as_str),
         Some("drop")
     );
     assert_eq!(
-        ptr(&v5, "/parameters/baseline").and_then(Json::as_str),
+        ptr(v5, "/parameters/baseline").and_then(Json::as_str),
         Some("keep (as O)")
     );
     assert_eq!(
-        ptr(&v5, "/q_x56/text").and_then(Json::as_str),
+        ptr(v5, "/q_x56/text").and_then(Json::as_str),
         Some(Q_X56_VERBATIM)
     );
     assert_eq!(
-        ptr(&v5, "/q_x56/status").and_then(Json::as_str),
+        ptr(v5, "/q_x56/status").and_then(Json::as_str),
         Some("pending")
     );
     assert_eq!(v5.get("label").and_then(Json::as_str), Some(V5_LABEL));

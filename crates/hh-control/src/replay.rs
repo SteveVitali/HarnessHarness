@@ -428,8 +428,18 @@ pub fn extract_recorded(
                 // deliveries (`harness_rule` nudges, `procedure_index`,
                 // held-out artefacts, …) are reproduced by the replayed
                 // driver's own machinery, never re-fed.
+                //
+                // A delivery that precedes the run's first
+                // `control.decision` is the fresh session's initial
+                // input — the live `submit` queues *no* input cue for
+                // it (the seeded `run_opened` propose already drives
+                // turn 1 over the staged artefact; R6.45q). Re-feeding
+                // one here would mint a second `propose` the live drive
+                // never decided — the same doubled-propose skew the fix
+                // retired.
                 let kind = sget(&e.payload, "kind").unwrap_or("");
-                if matches!(kind, "instruction" | "capability") {
+                let preceded_by_decision = decisions.iter().any(|d| d.seq < e.seq);
+                if matches!(kind, "instruction" | "capability") && preceded_by_decision {
                     if let Some(id) = sget(&e.payload, "artefact_id") {
                         out.external_cues
                             .push_back((mark_for(e.seq), artefact_cue(id, e.seq)));

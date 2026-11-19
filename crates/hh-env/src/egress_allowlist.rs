@@ -2,11 +2,11 @@
 //! REQ-XB-113/114/115/116/129, absorbing ADR-C2-C) — the single paid-cell
 //! network posture of experiments-spec §3.5: podman `--network none` for
 //! the cell's whole life, `net.mode = mediated`, exactly the two
-//! bind-mounted unix sockets `{model, egress}` that `hh-cell-relay` (PID
-//! 1) bridges from in-cell loopback ports, per-phase host-side policy
-//! under the sealed `set_phase` schedule, and the declared residuals
-//! (`unix_socket` ×2, `tls_opaque`, `approved_host_body`, `dns_names`,
-//! `side_channel`).
+//! bind-mounted unix sockets `{model, egress}` that `hh-cell-relay`
+//! (PID 1) bridges from in-cell loopback ports, per-phase host-side
+//! policy under the sealed `set_phase` schedule, and the declared
+//! residuals (`unix_socket` ×2, `tls_opaque`, `approved_host_body`,
+//! `dns_names`, `side_channel`).
 //!
 //! First-pass allowlist (Q-X55): the agent phase reaches only the model
 //! proxy and apt/PyPI/npm/crates — no `github.com` and no named-host
@@ -48,6 +48,14 @@ pub const MODEL_SOCK_PATH: &str = "/run/hh/model.sock";
 pub const EGRESS_SOCK_PATH: &str = "/run/hh/egress.sock";
 /// The registry-channel loopback port the env hints point at.
 pub const EGRESS_RELAY_PORT: u16 = 3128;
+/// The model relay's in-cell port floor: the harness's own loopback
+/// listeners sit in the IANA dynamic/private band (RFC 6335 §6,
+/// 49152–65535) — the registered range is the task's service space,
+/// and a harness bind there is a silent EADDRINUSE deadlock against
+/// any task that owns the port (the R6.45n `pypi-server -p 8080`
+/// collision: the relay held :8080, so the task's upload POST hung on
+/// the never-answering model stub until the agent deadline).
+pub const MODEL_RELAY_PORT_MIN: u16 = 49_152;
 /// The in-cell relay binary location (bind-mounted read-only).
 pub const RELAY_CELL_BIN: &str = "/hh/bin/hh-cell-relay";
 /// The `ext` member the mediated-cell spec lives under.
@@ -589,6 +597,22 @@ const FORBIDDEN_ENV_NAMES: [&str; 3] = [
     "HH_KERNEL_TOKEN",
 ];
 
+/// `check_model_relay_port(model_port)` — the declared in-cell model
+/// listener must sit in the dynamic/private band
+/// (`MODEL_RELAY_PORT_MIN..=65535`): a registered-range port is a
+/// latent silent collision with task-owned services and refuses —
+/// never a coerced or silently colliding bind.
+pub fn check_model_relay_port(model_port: u16) -> Result<(), EnvError> {
+    if model_port < MODEL_RELAY_PORT_MIN {
+        return Err(unsupported(format!(
+            "cell env: model relay port {model_port} is in the registered-service \
+             range — the in-cell harness listener must use a dynamic/private port \
+             (≥{MODEL_RELAY_PORT_MIN}) so a task-owned service can bind its port"
+        )));
+    }
+    Ok(())
+}
+
 /// `cell_env_projection(model_port, slot_token)` — the routing hints the
 /// cell carries (§3.5 "Environment hints"): `http(s)_proxy` at the
 /// registry relay port, the mandatory `no_proxy`, the proxy base URLs
@@ -602,9 +626,7 @@ pub fn cell_env_projection(
             "cell env: the slot token is required (the model route's routing credential)",
         ));
     }
-    if !(1..=65535).contains(&model_port) {
-        return Err(unsupported("cell env: model relay port out of range"));
-    }
+    check_model_relay_port(model_port)?;
     let mut env = BTreeMap::new();
     let proxy = format!("http://127.0.0.1:{EGRESS_RELAY_PORT}");
     env.insert("http_proxy".to_string(), proxy.clone());
@@ -840,6 +862,12 @@ pub fn admit_allowlist_mediated(
             "a github.com agent-phase grant is outside the first pass (Q-X55) — \
              denied whenever it is not granted, and never granted in the first pass",
         ));
+    }
+    // The pair the relay actually binds must sit in the dynamic band
+    // too — a `model` pair on a registered-range port is the same
+    // silent collision the projection guard refuses (R6.45n).
+    if let Some(p) = decl.cell.pairs.iter().find(|p| p.name == "model") {
+        check_model_relay_port(p.port)?;
     }
     let digest = decl.allowlist.digest();
     let env = cell_env_projection(decl.model_port, &decl.slot_token)?;

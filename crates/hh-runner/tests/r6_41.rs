@@ -216,8 +216,8 @@ fn ac4_l1_gate_match() {
 fn ac2_lane_config() {
     // The stamp is `cell_env_projection`'s own output — O's pins by
     // construction (one home, never a second lane grammar).
-    let env = hharness_env::egress_allowlist::cell_env_projection(9_001, "tok:slot-1").unwrap();
-    assert_eq!(native_lane_check(&env).unwrap(), 9_001);
+    let env = hharness_env::egress_allowlist::cell_env_projection(59_001, "tok:slot-1").unwrap();
+    assert_eq!(native_lane_check(&env).unwrap(), 59_001);
     // A non-loopback base URL refuses.
     let mut e2 = env.clone();
     e2.insert("OPENAI_BASE_URL".into(), "https://api.openai.com/v1".into());
@@ -226,7 +226,7 @@ fn ac2_lane_config() {
     let mut e3 = env.clone();
     e3.insert(
         "ANTHROPIC_BASE_URL".into(),
-        "http://127.0.0.1:9_002".replace('_', ""),
+        "http://127.0.0.1:59_002".replace('_', ""),
     );
     assert!(native_lane_check(&e3).is_err());
     // An empty token member refuses — the per-slot token is required.

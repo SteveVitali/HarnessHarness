@@ -201,10 +201,33 @@ pub struct TranscriptRender {
     /// re-sends the recorded assistant text ("" when none was
     /// recorded); `drop` (default) renders `content: null` (legacy).
     pub replay_content: bool,
-    /// `assistant_replay.reasoning ∈ {drop, verbatim}` — `verbatim`
-    /// re-sends the recorded `reasoning_content` member (absent when
-    /// none was recorded — never a fabricated empty member).
+    /// `assistant_replay.reasoning ∈ {drop, verbatim,
+    /// provider_specific_fields}` — `verbatim` re-sends the recorded
+    /// `reasoning_content` member (absent when none was recorded —
+    /// never a fabricated empty member). `provider_specific_fields`
+    /// re-sends the recorded `reasoning` member inside the
+    /// `provider_specific_fields` echo object *and* at the verbatim
+    /// `reasoning_content` member — the GLM spelling carries both
+    /// (only meaningful with `provider_specific_fields: echo`).
     pub replay_reasoning: bool,
+    /// Set by `reasoning: "provider_specific_fields"` — emits the
+    /// recorded reasoning verbatim at `reasoning_content` *and*
+    /// nested into the echo object, matching the recorded GLM
+    /// assistant-turn shape.
+    pub reasoning_psf: bool,
+    /// `assistant_replay.tool_call_index ∈ {omit, emit}` — `emit`
+    /// re-sends the positional `index` member providers put on
+    /// replayed `tool_calls[]` entries (O's GLM transcript carries it
+    /// on every call).
+    pub tool_call_index: bool,
+    /// `assistant_replay.provider_specific_fields ∈ {drop, echo}` —
+    /// `echo` emits `provider_specific_fields` on the replayed
+    /// assistant turn: `{refusal: <recorded or null>, reasoning?:
+    /// <recorded>}` — the GLM echo shape (O's requests carry
+    /// `{refusal: null}` on every assistant turn; the recorded
+    /// `reasoning` member nests inside when `reasoning` declares the
+    /// `provider_specific_fields` placement).
+    pub provider_specific_fields: bool,
     /// `assistant_replay.extra_members[]` — provider message members
     /// re-sent verbatim when the durable `message_extra` record
     /// preserved them (a recorded-absent member stays absent — the
@@ -237,6 +260,8 @@ impl TranscriptRender {
     pub fn requires_blob(&self) -> bool {
         self.replay_content
             || self.replay_reasoning
+            || self.reasoning_psf
+            || self.provider_specific_fields
             || !self.extra_members.is_empty()
             || self.provider_ids
             || self.verbatim_args
@@ -250,13 +275,27 @@ impl TranscriptRender {
     /// Canonical JSON — the manifest member (non-default members only).
     fn to_json(&self) -> Json {
         let mut m = BTreeMap::new();
-        if self.replay_content || self.replay_reasoning || !self.extra_members.is_empty() {
+        if self.replay_content
+            || self.replay_reasoning
+            || self.reasoning_psf
+            || self.tool_call_index
+            || self.provider_specific_fields
+            || !self.extra_members.is_empty()
+        {
             let mut ar = BTreeMap::new();
             if self.replay_content {
                 ar.insert("content".into(), Json::str("verbatim"));
             }
             if self.replay_reasoning {
                 ar.insert("reasoning".into(), Json::str("verbatim"));
+            } else if self.reasoning_psf {
+                ar.insert("reasoning".into(), Json::str("provider_specific_fields"));
+            }
+            if self.tool_call_index {
+                ar.insert("tool_call_index".into(), Json::str("emit"));
+            }
+            if self.provider_specific_fields {
+                ar.insert("provider_specific_fields".into(), Json::str("echo"));
             }
             if !self.extra_members.is_empty() {
                 ar.insert(
@@ -800,16 +839,32 @@ fn decode_transcript_render(j: &Json) -> Result<TranscriptRender, EmbedError> {
                 let Json::Obj(ar) = v else {
                     return Err(bad("assistant_replay is not an object"));
                 };
-                for (ak, _) in ar {
+                for ak in ar.keys() {
                     match ak.as_str() {
                         "content" => {
                             tr.replay_content = str_member(v, ak, &["drop", "verbatim"])?.as_deref()
                                 == Some("verbatim")
                         }
                         "reasoning" => {
-                            tr.replay_reasoning = str_member(v, ak, &["drop", "verbatim"])?
-                                .as_deref()
-                                == Some("verbatim")
+                            match str_member(
+                                v,
+                                ak,
+                                &["drop", "verbatim", "provider_specific_fields"],
+                            )?
+                            .as_deref()
+                            {
+                                Some("verbatim") => tr.replay_reasoning = true,
+                                Some("provider_specific_fields") => tr.reasoning_psf = true,
+                                _ => {}
+                            }
+                        }
+                        "tool_call_index" => {
+                            tr.tool_call_index =
+                                str_member(v, ak, &["omit", "emit"])?.as_deref() == Some("emit")
+                        }
+                        "provider_specific_fields" => {
+                            tr.provider_specific_fields =
+                                str_member(v, ak, &["drop", "echo"])?.as_deref() == Some("echo")
                         }
                         "extra_members" => match ar.get(ak) {
                             Some(Json::Arr(xs)) => {
@@ -825,7 +880,8 @@ fn decode_transcript_render(j: &Json) -> Result<TranscriptRender, EmbedError> {
                         other => {
                             return Err(bad(&format!(
                                 "assistant_replay.{other} unknown — admitted: content, \
-                                 reasoning, extra_members"
+                                 reasoning, tool_call_index, provider_specific_fields, \
+                                 extra_members"
                             )))
                         }
                     }
@@ -1371,8 +1427,45 @@ impl GatewayModel {
     ) -> Json {
         let tr = &self.lane.transcript_render;
         let mut extra = BTreeMap::new();
-        if tr.replay_reasoning && !rec.reasoning.is_empty() {
-            extra.insert("reasoning_content".into(), Json::str(rec.reasoning.clone()));
+        // `reasoning_content` — the recorded reasoning verbatim (the
+        // recorded `reasoning` member or the folded reasoning deltas).
+        // The GLM echo (`provider_specific_fields`) carries it in
+        // *both* places: the verbatim top-level member and the nested
+        // `provider_specific_fields.reasoning` below.
+        if tr.replay_reasoning || tr.reasoning_psf {
+            let rc = if !rec.reasoning.is_empty() {
+                Some(Json::str(rec.reasoning.clone()))
+            } else {
+                rec.extra.get("reasoning").cloned()
+            };
+            if let Some(rc) = rc {
+                extra.insert("reasoning_content".into(), rc);
+            }
+        }
+        if tr.provider_specific_fields {
+            // `echo` — the GLM replay spelling: `refusal` is the
+            // recorded member verbatim (`provider_specific_fields.
+            // refusal`, else a bare `refusal` member, else null —
+            // never fabricated); `reasoning` nests the recorded
+            // member only when the declaration places it there and
+            // the turn carried one.
+            let mut psf = BTreeMap::new();
+            if tr.reasoning_psf {
+                if let Some(r) = rec.extra.get("reasoning") {
+                    psf.insert("reasoning".to_string(), r.clone());
+                } else if !rec.reasoning.is_empty() {
+                    psf.insert("reasoning".to_string(), Json::str(rec.reasoning.clone()));
+                }
+            }
+            let refusal = rec
+                .extra
+                .get("provider_specific_fields")
+                .and_then(|p| p.get("refusal"))
+                .or_else(|| rec.extra.get("refusal"))
+                .cloned()
+                .unwrap_or(Json::Null);
+            psf.insert("refusal".to_string(), refusal);
+            extra.insert("provider_specific_fields".to_string(), Json::Obj(psf));
         }
         for name in &tr.extra_members {
             if let Some(v) = rec.extra.get(name) {
@@ -1384,7 +1477,7 @@ impl GatewayModel {
         } else {
             None
         };
-        hharness_gateway::openai::assistant_msg(content, &extra, calls)
+        hharness_gateway::openai::assistant_msg(content, &extra, calls, tr.tool_call_index)
     }
 
     /// The transcript render — instruction + recorded rounds from the

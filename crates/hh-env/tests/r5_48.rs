@@ -328,7 +328,7 @@ fn refusal_name<T, E: std::fmt::Debug>(r: &Result<T, E>) -> String {
     match r {
         Ok(_) => "materialized".to_string(),
         Err(e) => format!("{e:?}")
-            .split(|c: char| c == ' ' || c == '(' || c == '{')
+            .split([' ', '(', '{'])
             .next()
             .unwrap()
             .to_string(),
@@ -339,7 +339,7 @@ fn admission_name(r: &Result<pa::ParityAdmission, pa::AdmissionError>) -> String
     match r {
         Ok(_) => "admitted".to_string(),
         Err(e) => format!("{e:?}")
-            .split(|c: char| c == ' ' || c == '(' || c == '{')
+            .split([' ', '(', '{'])
             .next()
             .unwrap()
             .to_string(),

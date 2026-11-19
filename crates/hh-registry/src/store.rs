@@ -1074,8 +1074,7 @@ impl RegistryStore {
         // Identity + idempotence on equal canonical bytes (R6).
         let version_id = identity::version_id(&record);
         if let Some((existing_env, existing_rec)) = self.records.get(&version_id) {
-            let same_body =
-                schema::body_json(existing_rec, false) == schema::body_json(&record, false);
+            let same_body = Self::same_body_json(existing_rec, &record);
             if same_body && existing_env.kind == kind {
                 return Ok(self.to_versioned_ref(existing_env, existing_rec));
             }
@@ -1322,6 +1321,53 @@ impl RegistryStore {
             }
         }
         Ok(())
+    }
+
+    /// R6's "equal canonical bytes" for the idempotence check — the
+    /// `SealedDefinition` body carries volatile resolution stamps the
+    /// definition's own identity already excludes (`definition_ref
+    /// .version_id` is the root's sealed coordinate):
+    /// `document.assembly.resolved` (`resolved_at`,
+    /// `registry_snapshot_id`), the seal's `attestation.verified_at`
+    /// stamps, and the `version.version_id`s derived over them.
+    /// Comparing the raw body makes every reseal of an equal document a
+    /// `conflicting body`; the check compares the identity-scoped body —
+    /// every member that participates in the record's identity —
+    /// instead. Derived members are compared by their basis: equal
+    /// bases derive equal ids, so nothing identity-bearing is skipped.
+    fn same_body_json(existing: &RegistryRecord, incoming: &RegistryRecord) -> bool {
+        fn strip_volatile(j: &mut Json) {
+            match j {
+                Json::Obj(m) => {
+                    if let Some(Json::Obj(att)) = m.get_mut("attestation") {
+                        att.remove("verified_at");
+                    }
+                    if let Some(Json::Obj(ver)) = m.get_mut("version") {
+                        ver.remove("version_id");
+                    }
+                    if let Some(Json::Obj(asm)) = m.get_mut("assembly") {
+                        asm.remove("resolved");
+                    }
+                    for v in m.values_mut() {
+                        strip_volatile(v);
+                    }
+                }
+                Json::Arr(v) => {
+                    for x in v.iter_mut() {
+                        strip_volatile(x);
+                    }
+                }
+                _ => {}
+            }
+        }
+        fn identity_body(r: &RegistryRecord) -> Json {
+            let mut body = schema::body_json(r, false);
+            if matches!(r, RegistryRecord::SealedDefinition(_)) {
+                strip_volatile(&mut body);
+            }
+            body
+        }
+        identity_body(existing) == identity_body(incoming)
     }
 
     fn to_versioned_ref(&self, env: &RegistryEnvelope, _rec: &RegistryRecord) -> VersionedRef {

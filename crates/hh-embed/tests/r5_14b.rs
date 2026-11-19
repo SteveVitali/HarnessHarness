@@ -229,7 +229,7 @@ fn instrument_with_verdict(
         &irun,
         "verification.oracle.verdict",
         Json::obj([
-            ("invocation_ref", Json::str(&format!("{irun}:evt-inv-1"))),
+            ("invocation_ref", Json::str(format!("{irun}:evt-inv-1"))),
             ("subject_run", Json::str(subject_run)),
             ("submission_ref", Json::str(submission_ref)),
             ("oracle_ref", Json::str("oracle:o1")),

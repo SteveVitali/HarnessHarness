@@ -2161,11 +2161,13 @@ fn typed_renderer_from_json(
             head: u64_member("head")?,
             tail: u64_member("tail")?,
             unit,
-            marker: hharness_hir::leaves::Text::from_json(
-                req(j, "marker", path)?,
-                &format!("{path}.marker"),
-            )
-            .map_err(|e| schema_err(&format!("{path}.marker"), format!("{e}")))?,
+            marker: Box::new(
+                hharness_hir::leaves::Text::from_json(
+                    req(j, "marker", path)?,
+                    &format!("{path}.marker"),
+                )
+                .map_err(|e| schema_err(&format!("{path}.marker"), format!("{e}")))?,
+            ),
         }),
         other => Err(bad(&format!("renderer.kind `{other}` unknown"))),
     }

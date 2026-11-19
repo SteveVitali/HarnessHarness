@@ -248,7 +248,7 @@ pub fn bm_fixtures() -> Vec<BmFixture> {
     // observation with multi-byte characters straddling the 5 000-char
     // boundary (the inverse's head/tail leg).
     let mut big: String = "é".repeat(4_999);
-    big.push_str("a");
+    big.push('a');
     big.push_str(&"".repeat(5_002));
     let big_raw = RawObservation {
         output: big,

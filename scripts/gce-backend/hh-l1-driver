@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# hh-l1-driver — the Ws1 L1 legs controller driver (R6.45q).
+# Invoked by scripts/live-verify.sh l1 (HH_L1_DRIVER). Drives
+# ws1-l1-driver.py on the Ws1 VM — L1.0/L1.1/L1.2 over the gate-A
+# partition's 8 trajectories against the frozen H-set — then fetches
+# the conformance rows + diffs to HH_L1_OUT_DIR. The on-VM driver
+# owns its replay-mode sessions per trajectory; legs that cannot run
+# emit typed withholds, never fabricated conformance.
+set -euo pipefail
+set +x
+WS1="${WS1_SESSION_DIR:-$HOME/hh-retained/ws1}"
+R="/var/lib/hh/ws1"; RR="/var/lib/hh/runs/run-root-ws1"
+INST="${WS1_INSTANCE:-hh-fp-ws1}"; PROJ="${WS1_PROJECT:-hh-fp-a1b2c3}"; ZONE="${WS1_ZONE:-us-central1-a}"
+: "${HH_L1_OUT_DIR:?}"
+mkdir -p "$HH_L1_OUT_DIR"
+gcloud compute ssh "$INST" --project "$PROJ" --zone "$ZONE" --tunnel-through-iap --command \
+  "sudo podman rm -f \$(sudo podman ps -aq --filter name=hh-ws1-ws1-l1) 2>/dev/null; \
+   sudo rm -rf $RR/l10-* $RR/l11-* $RR/l12-* $RR/*-raws.json \
+     $RR/proxy-store/runs/l10-* $RR/proxy-store/runs/l11-* \
+     $RR/proxy-store/runs/l12-* $RR/l1-out; \
+   sudo mkdir -p $RR/l1 && sudo python3 $R/ws1-l1-driver.py --cfg $R/cfg.json \
+     --corpus-dir $RR/corpus-out/recordings \
+     --gate-a-list $R/gate-a.json --h-set-dir $R/h-set \
+     --layers-file $R/layers.json --admission $R/admissions/mini-swe-agent.json \
+     --proxy-bin $R/hh-model-proxy --w1-bin $R/hh-w1 \
+     --l1-drive-bin $R/hh_l1_drive --session-shim $R/ws1-proxy-session.py \
+     --lane-file $R/lane.json \
+     --authorization-file $R/auth.json \
+     --canon-id ${HH_L1_CANON:-hh-l1-canon/1} \
+     --instruction-dir ${HH_L1_INSTRUCTION_DIR:-$R/instructions} \
+     --out-dir $RR/l1-out --run-root $RR"
+gcloud compute scp --tunnel-through-iap --project "$PROJ" --zone "$ZONE" \
+  --recurse "$INST:$RR/l1-out/" "$HH_L1_OUT_DIR"

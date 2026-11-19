@@ -8,7 +8,6 @@
 //! empty streams + a phase-blind `"agent"` walk, collects mix
 //! attempts, and `allowlist_gap{unknown}` stands for `denied_hosts: []`.
 
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -69,7 +68,7 @@ memory_mb = 8192
     let staging = dir.join("staging");
     std::fs::create_dir_all(staging.join("solution")).unwrap();
     std::fs::create_dir_all(staging.join("tests")).unwrap();
-    let mut cell = QuietCell::default();
+    let mut cell = QuietCell;
     let plan = CellPlan {
         oracle_participant: false,
         workdir: "/app".to_string(),
@@ -157,7 +156,7 @@ fn ac2_lapsed_verifier_tree_dies_confirmed_and_attempt2_owns_collect() {
         attempt: u32,
         tree_alive: bool,
         terminate_calls: Vec<String>,
-        confirm_calls: Vec<String>,
+        _confirm_calls: Vec<String>,
         exec_log: Vec<Vec<String>>,
     }
     impl CellOps for LeakyCell {
@@ -231,7 +230,7 @@ fn ac2_lapsed_verifier_tree_dies_confirmed_and_attempt2_owns_collect() {
         attempt: 0,
         tree_alive: true,
         terminate_calls: vec![],
-        confirm_calls: vec![],
+        _confirm_calls: vec![],
         exec_log: vec![],
     };
     let plan = CellPlan {

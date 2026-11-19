@@ -210,13 +210,14 @@ pub fn run_slot_worker(packet: &SlotPacket, slot_root: &Path) -> Result<WorkerSe
             _ => None,
         }
     });
-    if packet.task.get("deadlines").is_some() && deadlines.is_none() {
+    if packet.task.contains_key("deadlines") && deadlines.is_none() {
         // An ST0 refusal precedes any run — nothing the recipe would
         // have produced exists (no reward, no infra ending); only the
         // refusal fact stands.
-        let mut refused = crate::facts::SlotFacts::default();
-        refused.admission_refusal = Some(crate::disposition::AdmissionReason::DeadlineAdmission);
-        facts = refused;
+        facts = crate::facts::SlotFacts {
+            admission_refusal: Some(crate::disposition::AdmissionReason::DeadlineAdmission),
+            ..Default::default()
+        };
     }
     let outcome = map_slot_facts(&facts);
 

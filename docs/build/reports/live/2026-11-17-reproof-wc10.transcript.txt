@@ -1,0 +1,235 @@
+wc10-prove: deadline 1794900180 (UTC-minted from creation_timestamp, ~15 min inside dead-man)
+== wc10-prove launch held(10) R=3 ==
+WARNING: 
+
+To increase the performance of the tunnel, consider installing NumPy. For instructions,
+please see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth
+
+held-launched
+[23:51:19Z] held:RUN
+[23:51:21Z] ckpt-probe: {"distinct": 0, "completed": 0, "ok": true, "failing": []} (elapsed 7s)
+[23:52:23Z] held:RUN
+[23:52:25Z] ckpt-probe: {"distinct": 0, "completed": 1, "ok": true, "failing": []} (elapsed 71s)
+[23:53:28Z] held:RUN
+[23:53:30Z] ckpt-probe: {"distinct": 1, "completed": 4, "ok": true, "failing": []} (elapsed 136s)
+[23:54:33Z] held:RUN
+[23:54:35Z] ckpt-probe: {"distinct": 1, "completed": 5, "ok": true, "failing": []} (elapsed 201s)
+[23:55:38Z] held:RUN
+[23:55:40Z] ckpt-probe: {"distinct": 1, "completed": 6, "ok": true, "failing": []} (elapsed 266s)
+[23:56:43Z] held:RUN
+[23:56:45Z] ckpt-probe: {"distinct": 1, "completed": 6, "ok": true, "failing": []} (elapsed 331s)
+[23:57:47Z] held:RUN
+[23:57:49Z] ckpt-probe: {"distinct": 1, "completed": 6, "ok": true, "failing": []} (elapsed 395s)
+[23:58:51Z] held:RUN
+[23:58:53Z] ckpt-probe: {"distinct": 1, "completed": 7, "ok": true, "failing": []} (elapsed 459s)
+[23:59:55Z] held:RUN
+[23:59:58Z] ckpt-probe: {"distinct": 1, "completed": 8, "ok": true, "failing": []} (elapsed 524s)
+[00:01:01Z] held:RUN
+[00:01:03Z] ckpt-probe: {"distinct": 1, "completed": 9, "ok": true, "failing": []} (elapsed 589s)
+[00:02:05Z] held:RUN
+[00:02:07Z] ckpt-probe: {"distinct": 1, "completed": 9, "ok": true, "failing": []} (elapsed 653s)
+[00:03:10Z] held:RUN
+[00:03:12Z] ckpt-probe: {"distinct": 2, "completed": 10, "ok": true, "failing": []} (elapsed 718s)
+[00:04:15Z] held:RUN
+[00:04:18Z] ckpt-probe: {"distinct": 2, "completed": 11, "ok": true, "failing": []} (elapsed 784s)
+[00:05:20Z] held:RUN
+[00:05:22Z] ckpt-probe: {"distinct": 2, "completed": 12, "ok": true, "failing": []} (elapsed 848s)
+[00:06:24Z] held:RUN
+[00:06:26Z] ckpt-probe: {"distinct": 2, "completed": 12, "ok": true, "failing": []} (elapsed 912s)
+[00:07:29Z] held:RUN
+[00:07:32Z] ckpt-probe: {"distinct": 2, "completed": 12, "ok": true, "failing": []} (elapsed 978s)
+[00:08:34Z] held:RUN
+[00:08:36Z] ckpt-probe: {"distinct": 2, "completed": 12, "ok": true, "failing": []} (elapsed 1042s)
+[00:09:39Z] held:RUN
+[00:09:41Z] ckpt-probe: {"distinct": 2, "completed": 12, "ok": true, "failing": []} (elapsed 1107s)
+[00:10:43Z] held:RUN
+[00:10:45Z] ckpt-probe: {"distinct": 2, "completed": 12, "ok": true, "failing": []} (elapsed 1171s)
+[00:11:47Z] held:RUN
+[00:11:50Z] ckpt-probe: {"distinct": 2, "completed": 12, "ok": true, "failing": []} (elapsed 1236s)
+[00:12:52Z] held:RUN
+[00:12:54Z] ckpt-probe: {"distinct": 2, "completed": 13, "ok": true, "failing": []} (elapsed 1300s)
+[00:13:56Z] held:RUN
+[00:13:59Z] ckpt-probe: {"distinct": 2, "completed": 13, "ok": true, "failing": []} (elapsed 1365s)
+[00:15:01Z] held:RUN
+[00:15:03Z] ckpt-probe: {"distinct": 2, "completed": 13, "ok": true, "failing": []} (elapsed 1429s)
+[00:16:05Z] held:RUN
+[00:16:07Z] ckpt-probe: {"distinct": 2, "completed": 14, "ok": true, "failing": []} (elapsed 1493s)
+[00:17:09Z] held:RUN
+[00:17:11Z] ckpt-probe: {"distinct": 2, "completed": 14, "ok": true, "failing": []} (elapsed 1557s)
+[00:18:14Z] held:RUN
+[00:18:16Z] ckpt-probe: {"distinct": 2, "completed": 14, "ok": true, "failing": []} (elapsed 1622s)
+[00:19:19Z] held:RUN
+[00:19:21Z] ckpt-probe: {"distinct": 2, "completed": 14, "ok": true, "failing": []} (elapsed 1687s)
+[00:20:23Z] held:RUN
+[00:20:25Z] ckpt-probe: {"distinct": 2, "completed": 15, "ok": true, "failing": []} (elapsed 1751s)
+[00:21:28Z] held:RUN
+[00:21:30Z] ckpt-probe: {"distinct": 2, "completed": 15, "ok": true, "failing": []} (elapsed 1816s)
+[00:22:32Z] held:RUN
+[00:22:34Z] ckpt-probe: {"distinct": 2, "completed": 15, "ok": true, "failing": []} (elapsed 1880s)
+[00:23:37Z] held:RUN
+[00:23:39Z] ckpt-probe: {"distinct": 2, "completed": 15, "ok": true, "failing": []} (elapsed 1945s)
+[00:24:45Z] held:RUN
+[00:24:53Z] ckpt-probe: {"distinct": 2, "completed": 15, "ok": true, "failing": []} (elapsed 2019s)
+[00:25:56Z] held:RUN
+[00:25:58Z] ckpt-probe: {"distinct": 3, "completed": 16, "ok": true, "failing": []} (elapsed 2084s)
+== checkpoint harvest 2026-11-17T00:25:58Z ==
+== CHECKPOINT 2026-11-17T00:26:06Z: 3 distinct members / 2084s elapsed → continue ({"distinct": 3, "completed": 16, "ok": true, "failing": []}) ==
+[00:27:08Z] held:RUN
+[00:28:13Z] held:RUN
+[00:29:15Z] held:RUN
+[00:30:17Z] held:RUN
+[00:31:20Z] held:RUN
+[00:32:22Z] held:RUN
+[00:33:25Z] held:RUN
+[00:34:37Z] held:RUN
+[00:35:47Z] held:RUN
+[00:36:59Z] held:RUN
+[00:38:09Z] held:RUN
+[00:39:17Z] held:RUN
+[00:40:25Z] held:RUN
+[00:41:33Z] held:RUN
+[00:42:41Z] held:RUN
+[00:43:48Z] held:RUN
+[00:44:56Z] held:RUN
+[00:46:04Z] held:RUN
+[00:47:09Z] held:RUN
+[00:48:17Z] held:RUN
+[00:49:25Z] held:RUN
+[00:50:33Z] held:RUN
+[00:51:41Z] held:RUN
+[00:52:51Z] held:RUN
+[00:53:58Z] held:RUN
+[00:55:06Z] held:RUN
+[00:56:13Z] held:RUN
+[00:57:19Z] held:RUN
+[00:58:30Z] held:RUN
+[00:59:38Z] held:RUN
+[01:00:47Z] held:RUN
+[01:01:54Z] held:RUN
+[01:03:02Z] held:RUN
+[01:04:10Z] held:RUN
+[01:05:18Z] held:RUN
+[01:06:27Z] held:RUN
+[01:07:38Z] held:RUN
+[01:08:45Z] held:RUN
+[01:09:52Z] held:RUN
+[01:11:01Z] held:RUN
+[01:12:11Z] held:RUN
+[01:13:18Z] held:RUN
+[01:14:28Z] held:RUN
+[01:15:38Z] held:RUN
+[01:16:45Z] held:RUN
+[01:17:53Z] held:RUN
+[01:19:01Z] held:RUN
+[01:20:08Z] held:RUN
+[01:21:15Z] held:RUN
+[01:22:22Z] held:RUN
+[01:23:30Z] held:RUN
+[01:24:39Z] held:RUN
+[01:25:49Z] held:RUN
+[01:26:57Z] held:RUN
+[01:28:05Z] held:RUN
+[01:29:13Z] held:RUN
+[01:30:23Z] held:RUN
+[01:31:30Z] held:RUN
+[01:32:37Z] held:RUN
+[01:33:46Z] held:RUN
+[01:34:54Z] held:RUN
+[01:36:01Z] held:RUN
+[01:37:09Z] held:RUN
+[01:38:19Z] held:RUN
+[01:39:28Z] held:RUN
+[01:40:35Z] held:RUN
+[01:41:44Z] held:RUN
+[01:42:52Z] held:RUN
+[01:44:00Z] held:RUN
+[01:45:08Z] held:RUN
+[01:46:15Z] held:RUN
+[01:47:21Z] held:RUN
+[01:48:31Z] held:RUN
+[01:49:39Z] held:RUN
+[01:50:48Z] held:RUN
+[01:51:56Z] held:RUN
+[01:53:05Z] held:RUN
+[01:54:15Z] held:RUN
+[01:55:26Z] held:RUN
+[01:56:36Z] held:RUN
+[01:57:46Z] held:RUN
+[01:58:56Z] held:RUN
+[02:00:08Z] held:RUN
+[02:01:18Z] held:RUN
+[02:02:30Z] held:RUN
+[02:03:41Z] held:RUN
+[02:04:50Z] held:RUN
+[02:05:57Z] held:RUN
+[02:07:05Z] held:RUN
+[02:08:13Z] held:RUN
+[02:09:22Z] held:RUN
+[02:10:30Z] held:RUN
+[02:11:37Z] held:RUN
+[02:12:47Z] held:RUN
+[02:13:56Z] held:RUN
+[02:15:08Z] held:RUN
+[02:16:16Z] held:RUN
+[02:17:25Z] held:RUN
+[02:18:32Z] held:RUN
+[02:19:42Z] held:RUN
+[02:20:50Z] held:RUN
+[02:21:59Z] held:DONE
+== wc10-prove launch dev(4) R=2 ==
+WARNING: 
+
+To increase the performance of the tunnel, consider installing NumPy. For instructions,
+please see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth
+
+dev-launched
+[02:22:21Z] dev:RUN
+[02:23:30Z] dev:RUN
+[02:24:37Z] dev:RUN
+[02:25:47Z] dev:RUN
+[02:26:55Z] dev:RUN
+[02:28:07Z] dev:RUN
+[02:29:16Z] dev:RUN
+[02:30:25Z] dev:RUN
+[02:31:37Z] dev:RUN
+[02:32:48Z] dev:RUN
+[02:33:56Z] dev:RUN
+[02:35:04Z] dev:RUN
+[02:36:13Z] dev:RUN
+[02:37:23Z] dev:RUN
+[02:38:30Z] dev:RUN
+[02:39:38Z] dev:RUN
+[02:40:46Z] dev:RUN
+[02:41:54Z] dev:RUN
+[02:43:04Z] dev:RUN
+[02:44:14Z] dev:RUN
+[02:45:23Z] dev:RUN
+[02:46:30Z] dev:RUN
+[02:47:40Z] dev:RUN
+[02:48:48Z] dev:RUN
+[02:49:57Z] dev:RUN
+[02:51:06Z] dev:RUN
+[02:52:13Z] dev:RUN
+[02:53:21Z] dev:RUN
+[02:54:31Z] dev:RUN
+[02:55:39Z] dev:RUN
+[02:56:48Z] dev:RUN
+[02:57:58Z] dev:RUN
+[02:59:05Z] dev:DONE
+== held r 3 tasks 10 label recorded_execution
+  db-wal-recovery admit
+  git-leak-recovery admit
+  make-doom-for-mips admit
+  polyglot-c-py admit
+  prove-plus-comm admit
+  pypi-server admit
+  query-optimize exclude:runner_infeasible:oracle_fails_on_O{unclassified}
+  sqlite-db-truncate admit
+  torch-tensor-parallelism admit
+  vulnerable-secret admit
+== dev r 2 tasks 4 label recorded_execution
+  build-pmars admit
+  cancel-async-tasks admit
+  pytorch-model-cli repair:machinery{h_allow}
+  pytorch-model-recovery admit
+== wc10-prove done ==

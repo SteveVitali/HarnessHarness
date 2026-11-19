@@ -501,6 +501,15 @@ impl EmbedService {
             ),
             (
                 hharness_registry::suites::control_strategy_class(),
+                // The Stage-1 default loop — `variant_for` has always
+                // answered `hh/react-minimal` (`REACT_MINIMAL_VARIANT`);
+                // the seed never published the name, so a sealed slot
+                // binding it could not resolve (R6.45q L1 drives).
+                "react-minimal",
+                BTreeMap::new(),
+            ),
+            (
+                hharness_registry::suites::control_strategy_class(),
                 // R2.6: the `queue_next_turn` declaration — the same
                 // `ReactSteerable` interpreter (`variant_for`), a
                 // different steer-mode declaration (the durable wakeup
@@ -1688,6 +1697,65 @@ impl EmbedService {
         Ok(())
     }
 
+    /// `rebind_exec_executor(sess, surface_id, executor)` — the L1
+    /// host's substitution seam (spec §7.4 REQ-XD-103; R6.45q): swap
+    /// one armed cap's executor — `ObsReplayExecutor` for L1.1's
+    /// observation-replay leg — re-running the `executor::bind` check
+    /// so a requirement the double cannot satisfy refuses typed at
+    /// rebind, never a downgrade mid-drive. Runtime posture only —
+    /// the same arm path as `arm_exec_capabilities`, per surface.
+    /// Call before `drive`; a finished session refuses.
+    pub fn rebind_exec_executor(
+        &mut self,
+        sess_id: &str,
+        surface_id: &str,
+        executor: Box<dyn hharness_env::executor::ToolExecutor>,
+    ) -> Result<(), EmbedError> {
+        let s = self.session_mut(sess_id)?;
+        if s.finished {
+            return Err(EmbedError::Refused {
+                reason: "exec_cap_rebind_inadmissible".to_string(),
+            });
+        }
+        let cap = s
+            .exec_caps
+            .iter_mut()
+            .find(|c| c.surface_id == surface_id)
+            .ok_or_else(|| EmbedError::Refused {
+                reason: format!("exec_cap_unarmed:{surface_id}"),
+            })?;
+        let req = hharness_env::executor::ExecutionRequirement::from_json(
+            &cap.capability.execution_requirement,
+        )
+        .map_err(|e| EmbedError::Refused {
+            reason: format!("exec_cap_requirement:{}:{e:?}", surface_id),
+        })?;
+        hharness_env::executor::bind(executor.declaration(), cap.declared.domain, &req).map_err(
+            |e| EmbedError::Refused {
+                reason: format!("exec_cap_unbound:{}:{e:?}", surface_id),
+            },
+        )?;
+        cap.executor = executor;
+        Ok(())
+    }
+
+    /// The session's lifecycle reads for a drive host — `(finished,
+    /// turn_active)`, `None` for an unknown session.
+    pub fn session_state(&self, sess_id: &str) -> Option<(bool, bool)> {
+        self.session(sess_id)
+            .ok()
+            .map(|s| (s.finished, s.turn_active))
+    }
+
+    /// The session's armed exec surfaces — the L1 host reads the ids
+    /// before [`Self::rebind_exec_executor`] (each bound surface gets one
+    /// clone of the shared replay queue).
+    pub fn exec_surface_ids(&self, sess_id: &str) -> Vec<String> {
+        self.session(sess_id)
+            .map(|s| s.exec_caps.iter().map(|c| c.surface_id.clone()).collect())
+            .unwrap_or_default()
+    }
+
     /// Drive the session's control loop until it parks or finishes, then
     /// scan the newly durable prefix (host asks, turn/flags).
     pub(crate) fn drive(&mut self, sess_id: &str) -> Result<(), EmbedError> {
@@ -1918,6 +1986,10 @@ impl EmbedService {
                 .set_compaction_port(Box::new(crate::runtime::KernelCompaction::new(ctx.clone())));
         }
         let outcome = driver.run(model, gate, &mut asm, &mut sink);
+        // A long drive may have renewed the writer lease inside the sink
+        // (LEASE_RENEW_HEADROOM_MS); take it before `sink`'s store borrow
+        // ends so the session copy below stays current.
+        let sink_lease = sink.lease.clone();
         // R2.4 — `on_idle`: a parked drive (inbox emptied mid-turn) is the
         // env's idle boundary; the declared cadence take lands durable
         // below while the run is still open.
@@ -1935,6 +2007,9 @@ impl EmbedService {
         s.driver = Some(driver);
         s.model_fail_plan = fail_left;
         s.next_invoke = None;
+        // A long drive may have renewed the writer lease inside the sink
+        // (LEASE_RENEW_HEADROOM_MS); keep the session copy current.
+        s.lease = Some(sink_lease);
         match outcome {
             Ok(_r) => {
                 s.turn_active = false;
