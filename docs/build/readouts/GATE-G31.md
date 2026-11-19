@@ -55,7 +55,7 @@ prominence (REQ-XH-020) are already on the frozen pages.
 ## Signature   <!-- appended at signing; nothing above is edited or deleted -->
 ## Signature   <!-- appended at signing; nothing above is edited or deleted -->
 
-- **Operator:** Steve Vitali · **UTC:** 2026-11-19T04:05Z · **Channel:** operator CLI session.
+- **Operator:** Steve Vitali · **UTC:** 2026-11-19T03:52Z · **Channel:** operator CLI session.
 - **Decision:** `PASSED — publish` (presented scope: phase-3/4 first-pass pages pinned to the five
   frozen packets `a8485bd8…`/`01db3d7f…`/`9869c904…`/`eb7ac3a1…`/`5c425c1a…`; every outcome a
   typed withhold verbatim).
