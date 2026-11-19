@@ -17,6 +17,8 @@
 | Harness documents and compilation | `crates/hh-hir/`, `crates/hh-assembly/`, `crates/hh-compiler/` |
 | Model calls and execution environments | `crates/hh-gateway/`, `crates/hh-env/`, `crates/hh-helper/` |
 | Experiment, evaluation, and orchestration services | See the full package map in [crates/AGENTS.md](crates/AGENTS.md) |
+| Experiment windows, cells, and hosted-harness machinery | `crates/hh-runner/` (window coordinator, slot workers, and the `fp_*` first-pass emitters); `hh-model-proxy` in `crates/hh-hosting/`; `allowlist_mediated` egress + `hh-cell-relay` in `crates/hh-env/` and `crates/hh-helper/` |
+| Results site | `scripts/site/` generator (`hh-site-data/1` in `docs/results/site-data/`); publication records in `docs/results/publication/`; `scripts/check-site.sh` |
 | Packaged variants | Manifests in `plugins/`; host in `crates/hh-varhost/`; shared plugin runtime in `crates/hh-plugin-fixture/` |
 
 - `hh` is a client and renderer over `hh-embed/1`; keep kernel semantics out of the CLI (K-2).
@@ -127,6 +129,7 @@ bash "$AGENT_SKILLS_ROOT/skills/build-memory/scripts/check-build-memory.sh" .
 ```
 
 - `scripts/check-bm-tools.sh` checks the in-repo row readers; it does not replace the external build-memory validator.
+- Round-7 entry points: CAP6.2's later-pass routing register [docs/build/reports/round6/LATER_PASS_ROUTING.md](docs/build/reports/round6/LATER_PASS_ROUTING.md) (34 routed ids, each with owner and trigger — a routed id is routed, never satisfied) and CAP6.3's round-7 decision memo `docs/build/planning/2026-11-19_round7-decision-memo.md`.
 - Product dispatch on a manifest ticket is guarded: `bash docs/build/tools/check-supplement-guard.sh` must return `PASS` with a `DISPATCH — <id>` route for the ticket, before and after its dispatch boundaries ([docs/build/tools/README.md](docs/build/tools/README.md)). A `HOLD` route is RETURN PASS — a pending gate, not a missing implementation.
 
 ## Do

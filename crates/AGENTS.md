@@ -35,7 +35,7 @@
 | `hharness-embed-client-generated` | Generated Rust boundary client; never edit its generated.rs by hand |
 | `hharness-codegen` | Schema/client generation; hh-codegen executable |
 | `hharness-kernel` | hh-kernel command dispatch, serving and identity diagnostics |
-| `hharness-helper` | Out-of-process sandbox helper, protocol and seatbelt/Podman backends |
+| `hharness-helper` | Out-of-process sandbox helper, protocol and seatbelt/Podman backends; also builds the static-musl `hh-cell-relay` mediated-egress binary |
 | `hharness-cli` | hh terminal client and renderer over the kernel boundary |
 | `hharness-lab` | Experiment, benchmark and analysis records plus canonical exemplars |
 | `hharness-experiment` | Experiment engine and durable experiment-document lifecycle |
@@ -45,7 +45,7 @@
 | `hharness-eval` | Metric/oracle catalogue, evaluation, comparison and typed n/a outcomes |
 | `hharness-bench` | Benchmark-adapter contracts and the committed benchmark fixture corpus |
 | `hharness-bundle` | Reproducible bundle manifests, validation, import and export |
-| `hharness-hosting` | Hosted-participant ABI, adapters and event projection/lifting |
+| `hharness-hosting` | Hosted-participant ABI, adapters and event projection/lifting; also builds the `hh-model-proxy` mediating provider boundary |
 | `hharness-mcp` | MCP protocol edge, artifacts, client/executor and fixture server |
 | `hharness-mcp-lab` | Lab MCP instrument, caller binding, launches and surface-session records |
 | `hharness-acp` | ACP session/client boundary and A2A task/agent-card records |
