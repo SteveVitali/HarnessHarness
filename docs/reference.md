@@ -18,6 +18,9 @@ explains definitions, runs, and sessions.
 | `hh-compile` | `hharness-compiler` | Compile definitions through the process boundary |
 | `hh-codegen` | `hharness-codegen` | Generate schemas and clients |
 | `hh-xcheck` | `hharness-xcheck` | Export and verify the cross-implementation replay corpus |
+| `hh-runner` | `hharness-runner` | Coordinate experiment windows through slot workers |
+| `hh-model-proxy` | `hharness-hosting` | Mediate provider model calls for hosted harnesses |
+| `hh-cell-relay` | `hharness-helper` | The static-musl mediated-egress relay for experiment cells |
 
 The [workspace manifest](../Cargo.toml) and [crate map](../crates/AGENTS.md)
 cover the additional development, evaluation, and plugin binaries. The release

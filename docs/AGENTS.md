@@ -24,12 +24,15 @@ bash scripts/check-position.sh
 bash scripts/check-examples.sh
 bash scripts/check-trace.sh
 bash scripts/check-contributing.sh
+bash scripts/check-site.sh --profile internal
+bash scripts/check-site.sh --profile public
 bash scripts/check-bm-tools.sh
 bash scripts/check-live-evidence.sh
 bash scripts/gen-revisit-triggers.sh --check
 ```
 
 - The four doc-surface checkers pin the reader spine (`check-position.sh`: evidence-card states, unmet and honesty legs), the example cards (`check-examples.sh`: card contract, recomputed pins, displayed-block equivalence), the annotated trace and four families (`check-trace.sh`), and the contribution lanes (`check-contributing.sh`: routes, gated lanes, `no_ritual`). Each also takes `--head` to validate committed HEAD in a clean clone — run that mode after committing a docs change that touches its surface. `scripts/check-quickstart.sh` exercises README's marked quickstart block on committed HEAD; `scripts/run-examples.sh` executes the committed offline cards on scratch stores.
+- `scripts/check-site.sh --profile internal|public` (plus `--head`) renders the results site and validates its claims, per-member provenance, availability states, publication-record gating, and dataset-link rules against the committed `hh-site-data/1` layer and `hh-site-publication/1` records. Run it when `docs/results/` or `scripts/site/` changes; regenerate `site-data/` with `python3 scripts/site/build.py --emit`, never by hand. `scripts/check-publication.sh` validates publication records.
 
 - For build-ticket records, run the external build-memory and backlog checks described in [MAINTAINING.md](../MAINTAINING.md#build-memory-tools). Repo-local row-tool checks are not substitutes.
 - Check relative links and anchors in every changed living document. Execute documented offline examples before claiming they work; record prerequisites and actual results. Live examples follow ADR-0363's evidence workflow.
