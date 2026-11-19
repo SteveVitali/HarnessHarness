@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_233 ADRs: 181 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_235 ADRs: 183 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -217,6 +217,8 @@ _233 ADRs: 181 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0447 | Revisit if a future deny source reports partial or non-host-level denies (a denied shape the `denied_hosts` field cannot name), or if the re-fold of Wc4–Wc8 reveals a member whose `denied_hosts` was non-empty — its exclusion re-enters review honestly. |
 | ADR-0448 | Revisit if the pinned Harbor version's deadline semantics change at a re-pin, if a task family ships `task.toml` values outside the admitted bounds (the above-ceiling/malformed refusal path), or if overlapping-attempt evidence surfaces again after the fix — a new defect, not this correction's failure. |
 | ADR-0449 | Revisit immediately if any committed requirement is found to mandate in-repo raw trees (the caveat: keep current behavior and surface), if the private archive's `archive_verified` index is ever unavailable for a window (the raw tree then has no retention guarantee — stop and record), or at CAP6.2's retention review (REQ-XH-106). |
+| ADR-0450 | Any corpus member with a complete (non-truncated) recording that cannot reach `submitted` under the armed stop rule, or a future corpus where submission carries a content payload — then the `channel:"content"` arm and payload equality become the gating comparison and this ADR's marker-channel normalization no longer suffices alone. |
+| ADR-0451 | A later-pass corpus where branch coverage must be attributed to natural recordings (not authored fixtures), a corpus member whose on-disk bytes differ from its digested bytes, or a canon version bump — then the manifest members and digest must be re-emitted and the pass id re-minted on an unused partition (REQ-XD-106). |
 
 ## Fired-and-answered triggers (BL-48)
 

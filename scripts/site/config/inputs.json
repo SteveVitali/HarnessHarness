@@ -81,7 +81,7 @@
     },
     {
       "id": "p3-l1",
-      "path": "docs/build/reports/compute/2026-11-18-fp-ws1-l1-conformance.json",
+      "path": "docs/build/reports/l1/2026-11-18-fp-ws1-l1-conformance.json",
       "phase": "phase-3",
       "schema": "hh-l1-conformance/1"
     },
