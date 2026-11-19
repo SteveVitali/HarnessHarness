@@ -299,6 +299,45 @@ fn main() {
     let mut args = std::env::args().skip(1);
     let cmd = args.next().unwrap_or_else(|| "emit".into());
     let repo = PathBuf::from(args.next().unwrap_or_else(|| ".".into()));
+
+    // `freeze` — R6.49: apply HUMAN-H16's flagged-review dispositions
+    // verbatim and mint the frozen packet copies the site consumes.
+    // Committed inputs only; no retained store, no seal checks.
+    if cmd == "freeze" {
+        let scan_rel = "docs/build/reports/2026-11-19-fp-answer-scan.json";
+        let review_rel = "docs/build/reports/2026-11-19-fp-flagged-review.json";
+        let scan = load(&repo, scan_rel);
+        let scan_sha = sha256_file(&repo.join(scan_rel));
+        let review = flagged_review_record(
+            &scan,
+            "docs/build/readouts/HUMAN-H16.md",
+            &scan_sha,
+            "2026-11-19T00:00Z",
+        )
+        .unwrap_or_else(|e| panic!("freeze refused: {e}"));
+        write_record(&repo, review_rel, &review);
+        for src in [
+            "2026-11-19-fp-results-p2-fp",
+            "2026-11-19-fp-results-p4-fp",
+            "2026-11-19-fp-results-p3-l2",
+            "2026-11-19-fp-l2-audit",
+            "2026-11-19-fp-l3",
+        ] {
+            let pkt = load(&repo, &format!("docs/build/reports/{src}.json"));
+            let fz = freeze_packet(
+                &pkt,
+                review_rel,
+                scan_rel,
+                &scan_sha,
+                "re-scope{end-first-pass-early}",
+                "2026-11-19T00:00Z",
+            )
+            .unwrap_or_else(|e| panic!("freeze {src}: {e}"));
+            write_record(&repo, &format!("docs/build/reports/{src}-frozen.json"), &fz);
+        }
+        return;
+    }
+
     let manifest_path = std::env::var("HH_FP_RESULTS_INPUTS").unwrap_or_else(|_| {
         repo.join("scripts/fp-results-inputs.txt")
             .display()

@@ -140,6 +140,8 @@ def main():
         (SITE / "config" / "inputs.json").read_text())["inputs"]
     fp_entry = [e for e in fixture_inputs if e["id"] == "p2-fp"][0]
     sealed_entry = dict(fp_entry)
+    sealed_entry.pop("frozen", None)
+    sealed_entry["fixture"] = True
     sealed_entry["path"] = "scripts/site/fixtures/phase2-fp-sealed.json"
     inp = packets.Input(sealed_entry, ROOT)
     tasks = project._grid_tasks(inp)

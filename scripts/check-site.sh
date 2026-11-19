@@ -371,11 +371,24 @@ def walk_vals(o, where):
     if isinstance(o, dict):
         ks = set(o)
         if ks & {"lo", "hi", "interval"}:
-            if not (isinstance(o.get("lo"), int)
-                    and isinstance(o.get("hi"), int)
-                    and isinstance(o.get("interval"), dict)
-                    and isinstance(o["interval"].get("kind"), str)
-                    and isinstance(o["interval"].get("level_ppm"), int)):
+            strict = (isinstance(o.get("lo"), int)
+                      and isinstance(o.get("hi"), int)
+                      and isinstance(o.get("interval"), dict)
+                      and isinstance(o["interval"].get("kind"), str)
+                      and isinstance(
+                          o["interval"].get("level_ppm"), int))
+            # A refused/withheld estimate keeps its estimate shape with
+            # typed absents at the value members — the marker is the
+            # evidence, never a bare null (REQ-XF-122).
+            def _abs(v):
+                return (isinstance(v, dict)
+                        and isinstance(v.get("absent_state"), str))
+            withheld = any(
+                _abs(o.get(k))
+                for k in ("lo", "hi", "lo_ppm", "hi_ppm", "interval"))                 or (isinstance(o.get("interval"), dict)
+                    and any(_abs(o["interval"].get(k))
+                            for k in ("kind", "level_ppm")))
+            if not (strict or withheld):
                 bad.append("%s: estimate missing lo/hi/interval-kind"
                            % where)
         for k, v in o.items():

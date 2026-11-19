@@ -1,112 +1,112 @@
 {
-  "schema": "hh-site-inputs/1",
-  "note": "R6.5 (F2-b) \u2014 every input the generator reads, named by path, schema and phase; never globbed (REQ-XF-119). The record participates with format markdown-bounds: its declared schema hh-p1-bounds-record/1 is the <!-- bounds --> block contract of REQ-XA-119, not JSON.",
   "inputs": [
     {
       "id": "parity-t3",
       "path": "docs/build/reports/2026-11-05-parity-tranche-3.json",
-      "schema": "hh-parity-tranche-report/1",
-      "phase": "phase-1"
+      "phase": "phase-1",
+      "schema": "hh-parity-tranche-report/1"
     },
     {
       "id": "s4-repairs",
       "path": "docs/build/reports/2026-11-06-s4-30slot-repairs.json",
-      "schema": "hh-s4-30slot-repairs/1",
-      "phase": "phase-1"
+      "phase": "phase-1",
+      "schema": "hh-s4-30slot-repairs/1"
     },
     {
       "id": "study-r559",
       "path": "docs/build/reports/2026-11-06-r5.59-study-report.json",
-      "schema": "hh-study-report/1",
-      "phase": "phase-1"
+      "phase": "phase-1",
+      "schema": "hh-study-report/1"
     },
     {
       "id": "study-r63",
       "path": "docs/build/reports/2026-11-07-r6.3-study-report.json",
-      "schema": "hh-study-report/1",
-      "phase": "phase-1"
+      "phase": "phase-1",
+      "schema": "hh-study-report/1"
     },
     {
       "id": "xcheck",
       "path": "docs/build/reports/2026-11-07-p1-surface-xcheck.json",
-      "schema": "hh-surface-xcheck/1",
-      "phase": "phase-1"
+      "phase": "phase-1",
+      "schema": "hh-surface-xcheck/1"
     },
     {
       "id": "estimators",
       "path": "docs/build/reports/2026-11-07-p1-estimators.json",
-      "schema": "hh-p1-estimators/1",
-      "phase": "phase-1"
+      "phase": "phase-1",
+      "schema": "hh-p1-estimators/1"
     },
     {
       "id": "deviations",
       "path": "docs/build/reports/2026-11-07-s4-protocol-deviations.json",
-      "schema": "hh-protocol-deviations/1",
-      "phase": "phase-1"
+      "phase": "phase-1",
+      "schema": "hh-protocol-deviations/1"
     },
     {
+      "format": "markdown-bounds",
       "id": "record",
       "path": "docs/results/phase1-execution-surface-replay.md",
-      "schema": "hh-p1-bounds-record/1",
       "phase": "phase-1",
-      "format": "markdown-bounds"
+      "schema": "hh-p1-bounds-record/1"
     },
     {
+      "frozen": true,
       "id": "p2-fp",
-      "path": "scripts/site/fixtures/phase2-fp-results.json",
-      "schema": "hh-comparative-results/1",
+      "path": "docs/build/reports/2026-11-19-fp-results-p2-fp-frozen.json",
       "phase": "phase-2",
-      "fixture": true
+      "schema": "hh-comparative-results/1"
     },
     {
-      "id": "p2-pilot",
-      "path": "scripts/site/fixtures/phase2-pilot.json",
-      "schema": "hh-pilot-measure/1",
-      "phase": "phase-2",
       "fixture": true,
-      "note": "declared fixture for the \u00a76.6 pilot packet \u2014 producer schema pending (R6.40); REQ-XD-043 fields only"
+      "id": "p2-pilot",
+      "note": "declared fixture for the \u00a76.6 pilot packet \u2014 producer schema pending (R6.40); REQ-XD-043 fields only",
+      "path": "scripts/site/fixtures/phase2-pilot.json",
+      "phase": "phase-2",
+      "schema": "hh-pilot-measure/1"
     },
     {
+      "fixture": true,
       "id": "p2-quote",
       "path": "scripts/site/fixtures/phase2-quote.json",
-      "schema": "comparative-quote/1",
       "phase": "phase-2",
-      "fixture": true
+      "schema": "comparative-quote/1"
     },
     {
-      "id": "p2-index",
-      "path": "scripts/site/fixtures/phase2-receipt-index.json",
-      "schema": "hh-receipt-index/1",
-      "phase": "phase-2",
       "fixture": true,
-      "note": "strict codec \u2014 the packet itself can carry no fixture member; dataset.visibility stays private so every trial renders withheld{dataset_private}"
+      "id": "p2-index",
+      "note": "strict codec \u2014 the packet itself can carry no fixture member; dataset.visibility stays private so every trial renders withheld{dataset_private}",
+      "path": "scripts/site/fixtures/phase2-receipt-index.json",
+      "phase": "phase-2",
+      "schema": "hh-receipt-index/1"
     },
     {
       "id": "p3-l1",
-      "path": "scripts/site/fixtures/phase3-l1.json",
+      "path": "docs/build/reports/compute/2026-11-18-fp-ws1-l1-conformance.json",
       "phase": "phase-3",
       "schema": "hh-l1-conformance/1"
     },
     {
+      "frozen": true,
       "id": "p3-l2",
-      "path": "scripts/site/fixtures/phase3-l2.json",
+      "path": "docs/build/reports/2026-11-19-fp-results-p3-l2-frozen.json",
       "phase": "phase-3",
-      "schema": "hh-fp-l2/1",
-      "fixture": true
+      "schema": "hh-fp-l2/1"
     },
     {
+      "frozen": true,
       "id": "p3-l3",
-      "path": "scripts/site/fixtures/phase3-l3.json",
+      "path": "docs/build/reports/2026-11-19-fp-l3-frozen.json",
       "phase": "phase-3",
-      "schema": "hh-fp-l3/1",
-      "fixture": true
+      "schema": "hh-fp-l3/1"
     },
     {
+      "frozen": true,
       "id": "p4-fp",
-      "path": "scripts/site/fixtures/phase4-fp.json",
+      "path": "docs/build/reports/2026-11-19-fp-results-p4-fp-frozen.json",
       "phase": "phase-4",
-      "schema": "hh-comparative-results/1",
-      "fixture": true
+      "schema": "hh-comparative-results/1"
     }
-  ]
+  ],
+  "note": "R6.5 (F2-b) \u2014 every input the generator reads, named by path, schema and phase; never globbed (REQ-XF-119). The record participates with format markdown-bounds: its declared schema hh-p1-bounds-record/1 is the <!-- bounds --> block contract of REQ-XA-119, not JSON.",
+  "schema": "hh-site-inputs/1"
 }

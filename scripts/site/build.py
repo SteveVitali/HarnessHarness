@@ -48,11 +48,13 @@ def check_python():
             % (sys.version.split()[0], ".".join(str(x) for x in MIN_PYTHON)))
 
 
-def emit_bodies(repo_root=ROOT):
+def emit_bodies(repo_root=ROOT, cfg_path=None):
     """Load named inputs and project every site-data file body.
-    Returns {file_name: canonical_json_text}."""
-    cfg, inputs = packets.load_inputs(SITE / "config" / "inputs.json",
-                                      repo_root)
+    Returns {file_name: canonical_json_text}. ``cfg_path`` lets the
+    test batteries project the declared-fixture spelling of a sealed
+    input while the committed config names its frozen record."""
+    cfg, inputs = packets.load_inputs(
+        cfg_path or SITE / "config" / "inputs.json", repo_root)
     digest = packets.inputs_digest(inputs)
     by_id = {i.id: i for i in inputs}
     bodies = {}

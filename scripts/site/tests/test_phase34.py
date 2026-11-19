@@ -83,9 +83,33 @@ def _render_p3(l1_rel, l2_rel, l3_rel):
     return sitepages.phase3_page(sd, _pkts(ins), "0" * 40)
 
 
-def _page(tmp, profile="internal"):
+FIXTURE_PATHS = {
+    "p2-fp": "scripts/site/fixtures/phase2-fp-results.json",
+    "p3-l1": "scripts/site/fixtures/phase3-l1.json",
+    "p3-l2": "scripts/site/fixtures/phase3-l2.json",
+    "p3-l3": "scripts/site/fixtures/phase3-l3.json",
+    "p4-fp": "scripts/site/fixtures/phase4-fp.json"}
+
+
+def _fixture_cfg(tmp):
+    """The declared-fixture spelling of the sealed inputs — the page
+    legs render the stage-(a) fixture surfaces while the committed
+    config names the frozen records."""
+    cfg = json.loads((SITE / "config" / "inputs.json").read_text())
+    for e in cfg["inputs"]:
+        if e["id"] in FIXTURE_PATHS:
+            e.pop("frozen", None)
+            e["fixture"] = True
+            e["path"] = FIXTURE_PATHS[e["id"]]
+    p = Path(tmp) / "inputs-fixture.json"
+    p.write_text(json.dumps(cfg))
+    return p
+
+
+def _page(tmp, profile="internal", fixture=False):
     out = Path(tmp) / ("site-" + profile)
-    inputs, digest, bodies = build.emit_bodies()
+    cfg = _fixture_cfg(tmp) if fixture else None
+    inputs, digest, bodies = build.emit_bodies(cfg_path=cfg)
     pubs = build.load_publications(inputs)
     sitepages.build(out, inputs, digest, bodies, profile=profile,
                     publications=pubs)
@@ -135,7 +159,7 @@ def leg_seal(tmp):
 
 # ── labels + baseline fold over the committed fixture build ────────────
 def leg_labels(tmp):
-    texts = _page(tmp)
+    texts = _page(tmp, fixture=True)
     p3 = texts.get("phase-3/index.html", "")
     p4 = texts.get("phase-4/index.html", "")
     for rel, t in (("phase-3/index.html", p3), ("phase-4/index.html", p4)):
@@ -235,7 +259,7 @@ def leg_public(tmp):
 
 
 def leg_withheld(tmp):
-    texts = _page(tmp)
+    texts = _page(tmp, fixture=True)
     w = _render_p3(*VARI["phase3-withheld-l1"])
     i = _render_p3(*VARI["phase3-inconclusive"])
     # same structure: the verdict stamp is a real disposition stamp in
@@ -260,7 +284,7 @@ def _check_tree(site_dir):
 
 
 def leg_mutations(tmp):
-    texts = _page(tmp)
+    texts = _page(tmp, fixture=True)
     site = Path(tmp) / "site-internal"
     # (a) 'parity-verified baseline' beside a first-pass L2 surface
     mut = texts["phase-3/index.html"].replace(

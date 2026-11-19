@@ -605,7 +605,11 @@ def _iv3(inp, unit, kind, level, point_ptr, lo_ptr, hi_ptr, label=None):
     so every rendered numeral carries resolvable provenance."""
     lo_raw, lo_src = field(inp, lo_ptr)
     hi_raw, hi_src = field(inp, hi_ptr)
-    iv = {"kind": kind, "level_ppm": level}
+    iv = {"kind": kind,
+          "level_ppm": (level if level is not None else
+                        {"absent_state": "not_computed",
+                         "reason": "packet interval carries no "
+                                   "level_ppm member"})}
     # Wrapper keys are "low"/"high" — a container must never reuse the
     # value-object member names lo/hi/interval (the intervals leg would
     # read the container itself as an estimate).
@@ -861,6 +865,29 @@ def tfp(inputs):
     i = _by_id(inputs)
     pkt = i["p2-fp"]
 
+    if _is_withheld(pkt):
+        # The first-pass tranche withheld every arm — the page projects
+        # the packet's full computed structure verbatim (REQ-XH-020).
+        return {
+            "withheld": True,
+            "claim": _t(pkt, "/claim"),
+            "executed_evidence": _t(pkt, "/executed_evidence"),
+            "expected_precision": _t(pkt, "/expected_precision"),
+            "exploratory_family": _tree(pkt, "/exploratory_family"),
+            "family": _tree(pkt, "/family"),
+            "fixture": bool(pkt.doc.get("fixture")),
+            "harnesses": _fp_arm_rows(pkt),
+            "labels": {k: _t(pkt, "/labels/%s" % _esc(k))
+                       for k in sorted(pkt.resolve("/labels"))},
+            "metric": _t(pkt, "/metric"),
+            "packet_disposition": _t(pkt, "/packet_disposition"),
+            "seal_open_ref": _t(pkt, "/seal_open_ref"),
+            "sources": [{"path": _t(pkt, "/sources/%d/path" % n),
+                         "sha256": _t(pkt, "/sources/%d/sha256" % n)}
+                        for n in range(len(pkt.resolve("/sources")))],
+            "tranche": _tree(pkt, "/tranche"),
+        }
+
     rows = [_harness_row(pkt, hid)
             for hid in sorted(pkt.resolve("/harnesses"))]
     sortable = [{"id": r["id"], "theta": r["theta"]["point"]["v"]}
@@ -1044,10 +1071,7 @@ def _tree(inp, ptr):
         out = _absent_of(raw)
         for k in sorted(raw):
             if k != "state" and k not in out:
-                out[k] = text(str(raw[k]),
-                              {"path": src["path"],
-                               "ptr": "%s/%s" % (ptr, _esc(k)),
-                               "sha256": src["sha256"]})
+                out[k] = _tree(inp, "%s/%s" % (ptr, _esc(k)))
         return out
     if isinstance(raw, dict):
         return {k: _tree(inp, "%s/%s" % (ptr, _esc(k))) for k in raw}
@@ -1085,7 +1109,7 @@ def _est_member(inp, ptr):
     iv = raw["interval"]
     vkey = "ppm" if isinstance(raw.get("ppm"), int) else "micros"
     unit = {"ppm": "ppm", "micros": "micros_usd"}[vkey]
-    out = _iv3(inp, unit, iv["kind"], iv["level_ppm"],
+    out = _iv3(inp, unit, iv["kind"], iv.get("level_ppm"),
                "%s/%s" % (ptr, vkey) if isinstance(raw.get(vkey), int)
                else None,
                "%s/interval/lo_ppm" % ptr, "%s/interval/hi_ppm" % ptr)
@@ -1105,7 +1129,7 @@ def _est_deep(inp, ptr):
         return _tree(inp, ptr)
     if isinstance(raw, dict):
         iv = raw.get("interval")
-        if isinstance(iv, dict) and {"kind", "level_ppm", "lo_ppm",
+        if isinstance(iv, dict) and {"kind", "lo_ppm",
                                      "hi_ppm"} <= set(iv):
             return _est_member(inp, ptr)
         return {k: _est_deep(inp, "%s/%s" % (ptr, _esc(k)))
@@ -1232,14 +1256,18 @@ def phase3(inputs):
     }
 
 
-def phase4(inputs):
-    """phase4.json — the configuration-experiments page: the Holm family,
-    the exploratory family and the per-arm result rows verbatim; the
-    baseline label folds the phase-3 L2 packet's verdict (REQ-XD-222
-    carries REQ-XD-126's label into the phase-4 surface)."""
-    i = _by_id(inputs)
-    pkt, l2 = i["p4-fp"], i["p3-l2"]
+def _is_withheld(pkt):
+    """A packet whose overall disposition is a typed withhold/refusal
+    renders its full computed structure — never a bare null page
+    (REQ-XH-020)."""
+    d = pkt.doc.get("packet_disposition")
+    return isinstance(d, str) and (
+        d.startswith("withheld{") or d.startswith("refused{"))
 
+
+def _fp_arm_rows(pkt):
+    """The per-arm rows of an hh-comparative-results/1 packet, verbatim —
+    shared by phase4.json and the withheld tfp.json body."""
     rows = []
     for hid in sorted(pkt.resolve("/harnesses")):
         b = "/harnesses/%s" % _esc(hid)
@@ -1267,6 +1295,16 @@ def phase4(inputs):
                 pkt, "%s/secondary_populations" % b),
             "theta": _est_deep_or_absent(pkt, "%s/theta" % b),
         })
+    return rows
+
+
+def phase4(inputs):
+    """phase4.json — the configuration-experiments page: the Holm family,
+    the exploratory family and the per-arm result rows verbatim; the
+    baseline label folds the phase-3 L2 packet's verdict (REQ-XD-222
+    carries REQ-XD-126's label into the phase-4 surface)."""
+    i = _by_id(inputs)
+    pkt, l2 = i["p4-fp"], i["p3-l2"]
 
     return {
         "baseline_label": _baseline_label(l2),
@@ -1276,7 +1314,7 @@ def phase4(inputs):
         "exploratory_family": _tree(pkt, "/exploratory_family"),
         "family": _tree(pkt, "/family"),
         "fixture": bool(pkt.doc.get("fixture")),
-        "harnesses": rows,
+        "harnesses": _fp_arm_rows(pkt),
         "labels": {k: _t(pkt, "/labels/%s" % _esc(k))
                    for k in sorted(pkt.resolve("/labels"))},
         "metric": _t(pkt, "/metric"),
@@ -1306,6 +1344,20 @@ def trials_fp(inputs):
                      if ds.get("revision") else absent(
                          "not_yet_available",
                          reason="withheld{dataset_private}"))}
+
+    if _is_withheld(pkt):
+        # No tranche trial executed — the index renders zero rows and
+        # the packet's own withhold + executed-evidence text verbatim.
+        return {
+            "dataset": dataset,
+            "scans": {
+                "secret_scan_ref": _t(idx, "/scans/secret_scan_ref"),
+                "contamination_scan_ref": _t(
+                    idx, "/scans/contamination_scan_ref")},
+            "packet_disposition": _t(pkt, "/packet_disposition"),
+            "executed_evidence": _t(pkt, "/executed_evidence"),
+            "trials": [],
+        }
 
     files = {}
     for n, a in enumerate(idx.resolve("/attempts")):

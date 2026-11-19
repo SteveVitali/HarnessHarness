@@ -29,6 +29,31 @@ records=(
   2026-11-19-fp-results-p3-l2
   2026-11-19-fp-l2-audit
   2026-11-19-fp-l3
+  2026-11-19-fp-flagged-review
+  2026-11-19-fp-results-p2-fp-frozen
+  2026-11-19-fp-results-p4-fp-frozen
+  2026-11-19-fp-results-p3-l2-frozen
+  2026-11-19-fp-l2-audit-frozen
+  2026-11-19-fp-l3-frozen
+)
+
+# The records `emit` re-derives (the frozen copies come from `freeze`).
+emit_records=(
+  2026-11-19-fp-seal-open
+  2026-11-19-fp-answer-scan
+  2026-11-19-fp-results-p2-fp
+  2026-11-19-fp-results-p4-fp
+  2026-11-19-fp-results-p3-l2
+  2026-11-19-fp-l2-audit
+  2026-11-19-fp-l3
+)
+frozen_records=(
+  2026-11-19-fp-flagged-review
+  2026-11-19-fp-results-p2-fp-frozen
+  2026-11-19-fp-results-p4-fp-frozen
+  2026-11-19-fp-results-p3-l2-frozen
+  2026-11-19-fp-l2-audit-frozen
+  2026-11-19-fp-l3-frozen
 )
 
 # 1 — every emitted record's sha256 sidecar verifies.
@@ -36,8 +61,11 @@ for r in "${records[@]}"; do
   leg "sha256:$r" shasum -a 256 -c "docs/build/reports/$r.sha256"
 done
 
-# 2 — the packet validators pass over the committed records.
+# 2 — the packet validators + the freeze battery pass over the
+#     committed records (the freeze members' member-wise diff, the
+#     unreviewed-flag veto, verbatim review coverage).
 leg "r6_48-test-battery" cargo test -p hharness-runner --test r6_48
+leg "r6_49-test-battery" cargo test -p hharness-runner --test r6_49
 
 # 3 — the committed-inputs packets re-emit byte-identically.
 SCRATCH="$(mktemp -d)"
@@ -67,13 +95,27 @@ for r in \
     "$SCRATCH/docs/build/reports/$r.json"
 done
 
+# 3b — the freeze re-derives the review + frozen copies byte-identically
+#      from the committed scan + packets (no retained store needed).
+for r in 2026-11-19-fp-answer-scan; do
+  cp "$REPO/docs/build/reports/$r.json" \
+    "$SCRATCH/docs/build/reports/$r.json"
+done
+leg "reemit-freeze" bash -c \
+  "cd '$REPO' && ./target/debug/fp_results freeze '$SCRATCH'"
+for r in "${frozen_records[@]}"; do
+  leg "byte-identical:$r" cmp -s \
+    "$REPO/docs/build/reports/$r.json" \
+    "$SCRATCH/docs/build/reports/$r.json"
+done
+
 # 4 — the retained-store legs recompute where the store resolves.
 #     (requires `cargo build --release -p hharness-runner --bin fp_results`
 #     — the debug emit is correct but slow over the real corpus.)
 if [ -d "$HOME/hh-retained/ws1/harvest" ]; then
   leg "reemit-full" bash -c \
     "cd '$REPO' && ./target/release/fp_results emit '$SCRATCH' >/dev/null 2>&1"
-  for r in "${records[@]}"; do
+  for r in "${emit_records[@]}"; do
     leg "byte-identical-retained:$r" cmp -s \
       "$REPO/docs/build/reports/$r.json" \
       "$SCRATCH/docs/build/reports/$r.json"

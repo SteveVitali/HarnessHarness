@@ -65,7 +65,15 @@ def main():
 
         # ── AC-1: noise ───────────────────────────────────────────
         no = texts.get("phase-2/fp/noise/index.html", "")
-        if not no:
+        tfpb2 = json.loads(bodies["tfp.json"])["body"]
+        if tfpb2.get("withheld"):
+            if "withheld{" not in no or "pass@k" not in no:
+                fail("noise", "withheld noise page lacks the typed "
+                     "withhold")
+            else:
+                ok("noise", "withheld noise page carries the typed "
+                   "withhold + pass@k markers")
+        elif not no:
             fail("noise", "noise page absent")
         else:
             if "not computed — R=1" not in no:
@@ -81,7 +89,17 @@ def main():
 
         # ── AC-1: refusal + undefined ─────────────────────────────
         lb = texts.get("phase-2/fp/index.html", "")
-        if "refused — UnresolvedCell" not in lb \
+        tfpb = json.loads(bodies["tfp.json"])["body"]
+        if tfpb.get("withheld"):
+            # Frozen withheld packet — typed markers carry the
+            # disposition at every estimate cell.
+            if "withheld{" not in lb or 'class="absent-token"' not in lb:
+                fail("refusal", "withheld leaderboard lacks the typed "
+                     "markers")
+            else:
+                ok("refusal", "withheld leaderboard renders typed "
+                   "markers verbatim")
+        elif "refused — UnresolvedCell" not in lb \
                 or "all-planned" not in lb:
             fail("refusal", "typed refusal/bounds missing on leaderboard")
         elif "undefined (0 solves)" not in lb:
@@ -157,20 +175,38 @@ def main():
 
         # ── AC-4/5: trial pages ───────────────────────────────────
         tr = texts.get("phase-1/trial/fix-git/index.html", "")
-        fr = texts.get("phase-2/fp/trial/fp-alpha-hermes-agent/"
-                       "index.html", "")
-        if 'name="robots" content="noindex"' not in tr \
-                or 'name="robots" content="noindex"' not in fr:
-            fail("trials", "noindex absent")
-        if sitepages.CANARY not in tr or sitepages.CANARY not in fr:
-            fail("trials", "canary absent")
-        if "withheld{dataset_private}" not in fr \
-                or "huggingface.co" in fr:
-            fail("trials", "private index leaks a link")
-        if "transcript" not in fr or "sha256" not in fr:
-            fail("trials", "receipt sha256 absent")
+        tfi = json.loads(bodies["trials-fp.json"])["body"]
+        if tfi.get("packet_disposition"):
+            # The frozen first-pass packet withheld every arm: no
+            # tranche trial executed, so the fp trial index is the
+            # typed withhold — noindex, canary, no dataset link.
+            fr = texts.get("phase-2/fp/trial/index.html", "")
+            if 'name="robots" content="noindex"' not in tr \
+                    or 'name="robots" content="noindex"' not in fr:
+                fail("trials", "noindex absent")
+            if sitepages.CANARY not in tr or sitepages.CANARY not in fr:
+                fail("trials", "canary absent")
+            if "withheld{" not in fr or "huggingface.co" in fr:
+                fail("trials", "withheld trial index wrong")
+            else:
+                ok("trials", "noindex + canary + typed withhold, no "
+                   "dataset link")
         else:
-            ok("trials", "noindex + canary + withheld sha256, no link")
+            fr = texts.get(
+                "phase-2/fp/trial/fp-alpha-hermes-agent/index.html", "")
+            if 'name="robots" content="noindex"' not in tr \
+                    or 'name="robots" content="noindex"' not in fr:
+                fail("trials", "noindex absent")
+            if sitepages.CANARY not in tr or sitepages.CANARY not in fr:
+                fail("trials", "canary absent")
+            if "withheld{dataset_private}" not in fr \
+                    or "huggingface.co" in fr:
+                fail("trials", "private index leaks a link")
+            if "transcript" not in fr or "sha256" not in fr:
+                fail("trials", "receipt sha256 absent")
+            else:
+                ok("trials", "noindex + canary + withheld sha256, no "
+                   "link")
 
         # ── AC-4: dormant viewer source contract ──────────────────
         js = (SITE / "assets" / "viewer.js").read_text()
@@ -203,11 +239,22 @@ def main():
         else:
             ok("golden", "p1 grid byte-equal committed golden")
 
-        # fp grid sanity
+        # fp grid sanity — the committed config names the frozen
+        # first-pass packet: every arm withheld, so the tasks/trial
+        # pages render the typed withhold instead of the grid
+        # (REQ-XH-020). A computed packet restores the 60-cell check.
+        tfp = json.loads(bodies["tfp.json"])["body"]
         fg = texts.get("phase-2/fp/tasks/index.html", "")
-        if fg.count("grid-cell") < 60 or 'data-variant' in fg \
-                and "withheld{dataset_private}" not in texts.get(
-                    "phase-2/fp/trial/index.html", ""):
+        tr = texts.get("phase-2/fp/trial/index.html", "")
+        if tfp.get("withheld"):
+            if "withheld{" not in fg or "withheld{" not in tr:
+                fail("fp-grid", "withheld fp pages lack the typed "
+                     "disposition")
+            else:
+                ok("fp-grid", "withheld fp pages carry the typed "
+                   "disposition")
+        elif fg.count("grid-cell") < 60 or 'data-variant' in fg \
+                and "withheld{dataset_private}" not in tr:
             fail("fp-grid", "fp grid/links wrong")
         else:
             ok("fp-grid", "60 linked cells")
