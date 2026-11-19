@@ -222,3 +222,40 @@ ruling, recorded verbatim.
 <!-- agent-drafted:end -->
 
 > **Signature (Reading 3, 2026-11-18)** — verbatim "I rule full. I sign off on any spend under $50 per day in advance. If there is any other blocked or deferred work that needs my authorization to unblock or queue up, let me know. Otherwise I'd like you to proceed through the entire plan and after completion vet and complete any deferred work as well, again raising anything interactively with me that you need from me to unblock you at any stage" (operator, interactive, 2026-11-18T22:57Z) in response to the GATE-G29 return presentation (agent-drafted block sha256 `876c8d1031a8`). Disposition: **`full`** — `hh-l1-conformance/1` records `result: pass` for the exact frozen H (`h_identity.digest sha256:c451ed97d0206821bedd6e2255e5f6bba4736646d7170601b4085492e711a8b9`), pass id `l1-pass:sha256:80bfafee35ac9dd669d80f786ee54deca9948049bcd8559dd7a6dee8d06dd8ef` bound to `corpus_digest sha256:072de1f3…`, coverage BM1–BM19 complete, census 7, rule table `hh-l1-canon/1` frozen, 0 gated diffs; the HH-native arms may run in W4 under REQ-XD-102, and R6.46's FP-E quote runs the `full` arm set (five arms). **DEFERRALS rule 4 disposition:** the ruling of `full` on this record decides the scope question — DF-R6.23-1 and DF-R6.45l-1 do not block this gate; both rows stay OPEN verbatim for their own scopes (W3/Wc archive citations; transitive verify-host derivation), never closed or waived by this signature. **Standing authorizations recorded verbatim:** (a) spend under $50 per day is signed off in advance — each metered window still declares its ceiling and records billed-vs-declared honestly; (b) directed completion — proceed through the remaining chain and vet/complete deferred work, raising interactively only what genuinely needs the operator. GATE DECISIONS row appended; PHASE LOG entry lands at the R6.46 boundary.
+
+---
+
+## Evidence location correction — 2026-11-19T00:09:47Z (PR #407 CI repair)
+
+The seven files below moved byte-for-byte from `docs/build/reports/compute/`
+to `docs/build/reports/l1/`. They are L1 conformance/corpus evidence, not
+`hh-compute-receipt/1` or `hh-compute-cost/1` records; placing their JSON at
+the compute directory root made `scripts/check-compute-receipts.sh` reject
+their unrelated schemas. The compute validator and all receipt records
+remain unchanged. No L1 result, pass ID, corpus digest, operator signature,
+or prior presentation text was changed or re-executed.
+
+The earlier citations resolve through this relocation table. Both the
+current pass evidence and the superseded first re-fold remain retained.
+The original corpus `.sha256` sidecar is preserved verbatim, including its
+historical `compute/` pathname; its digest now verifies the identically
+named corpus under `l1/`. Use `shasum -a 256 docs/build/reports/l1/<filename>`
+and compare with the byte hashes below.
+
+| Filename (old `compute/`, current `l1/`) | SHA-256 before and after relocation |
+|---|---|
+| `2026-11-18-fp-ws1-l1-conformance.json` | `bdbb0bc93a66988947e7f1712f9c9c397ba6ebbb9642d568fcf29c594e763218` |
+| `2026-11-18-fp-ws1-l1-corpus.json` | `072de1f36f3ddc6bd8387bfde992554e7c892b05f2e5d9590c30e221f028cb0d` |
+| `2026-11-18-fp-ws1-l1-coverage.json` | `82edc68f804e7d59b419f8ab65fab04bd3952e93ae29178d4e59860d0183333a` |
+| `2026-11-18-fp-ws1r-refold-conformance.json` | `b8e1ca7a2c74c635bc5f9cf6e63b8d7b5a7021d7e56124a098108d07f9191e74` |
+| `2026-11-18-fp-ws1r-refold-diffs.json` | `4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945` |
+| `2026-11-18-fp-ws1r-refold-summary.json` | `79c6c70fd1c7cb40be29462b8a81cbcc5b994f74e93b072d38d1d45c3cd2b956` |
+| `2026-11-18-fp-ws1-l1-corpus.sha256` | `3a5a72c2986709544d0743e704712576f76276e9a67b397141892486ad056d85` |
+
+Validation: all seven before/after byte hashes match; the corpus byte hash
+remains `072de1f36f3ddc6bd8387bfde992554e7c892b05f2e5d9590c30e221f028cb0d`,
+matching the current conformance record and retained sidecar. No tracked
+mutable consumer references these filenames; only the historical
+presentation above and the retained checksum sidecar used the old paths.
+
+Harness: codex/gpt-6/subagent
