@@ -1,0 +1,2 @@
+11aca12dfd8dd4abf1caf6fde7473122c52a4e6b93cb2c799c7dae8d8014ab82  docs/build/reports/compute/2026-11-19-fp-w4-cost.json
+# recompute: shasum -a 256 -c docs/build/reports/compute/2026-11-19-fp-w4-cost.json.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)
