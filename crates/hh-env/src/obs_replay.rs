@@ -1,5 +1,5 @@
 //! `obs_replay` — the observation-replay exec double on the
-//! [`executor::ToolExecutor`] seam (spec §7.4 REQ-XD-103 L1.1; design/36
+//! [`crate::executor::ToolExecutor`] seam (spec §7.4 REQ-XD-103 L1.1; design/36
 //! §1.2 Part 7 K2): "an observation-replay executor fed O's raw
 //! observations." The recorded `(output, returncode, exception_info)`
 //! triples serve positionally — one per exec call — a typed
