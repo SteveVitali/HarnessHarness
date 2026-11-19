@@ -250,6 +250,11 @@ def home_page(sd, pkts, commit, published=None):
         if published is not None and ph not in published:
             state = stamp("withheld", "Not yet published")
             detail = "publication gate pending"
+        elif published is not None and ph != "phase-1":
+            # a published first-pass phase: the page renders — every
+            # outcome a typed withhold under GATE-G31's decided scope
+            state = stamp("withheld", "first pass — withheld")
+            detail = "published — GATE-G31"
         body.append('<section class="card span-3 tile"><h3>%s</h3>'
                     '<p>%s</p><p class="micro">%s</p>'
                     '<p class="small"><a href="%s">open →</a></p></section>'
@@ -2235,11 +2240,13 @@ def build(out_dir, inputs, digest, bodies, profile="internal",
                          "p2-index"} <= {i.id for i in inputs}
     # Phase-3/4 share the same shape: internal renders when the inputs
     # are declared (fixtures at stage (a), frozen records at stage (b));
-    # the public profile stays publication-pending until a record pins
-    # the set (REQ-XF-129).
-    p3_live = (not public) and {"p3-l1", "p3-l2",
-                              "p3-l3"} <= {i.id for i in inputs}
-    p4_live = (not public) and {"p4-fp", "p3-l2"} <= {i.id for i in inputs}
+    # the public profile renders a phase only when a committed
+    # hh-site-publication/1 record pins its exact input set — GATE-G31's
+    # decided scope (REQ-XF-129, R6.50).
+    p3_live = (not public or "phase-3" in published) \
+        and {"p3-l1", "p3-l2", "p3-l3"} <= {i.id for i in inputs}
+    p4_live = (not public or "phase-4" in published) \
+        and {"p4-fp", "p3-l2"} <= {i.id for i in inputs}
     p1_tasks_live = (not public) or (published
                                    and "phase-1" in published)
 

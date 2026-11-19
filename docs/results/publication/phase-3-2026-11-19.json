@@ -1,0 +1,50 @@
+{
+  "schema": "hh-site-publication/1",
+  "phase": "phase-3",
+  "pages": [
+    "/phase-3/"
+  ],
+  "inputs": [
+    {
+      "path": "docs/build/reports/compute/2026-11-18-fp-ws1-l1-conformance.json",
+      "sha256": "bdbb0bc93a66988947e7f1712f9c9c397ba6ebbb9642d568fcf29c594e763218"
+    },
+    {
+      "path": "docs/build/reports/2026-11-19-fp-results-p3-l2-frozen.json",
+      "sha256": "01db3d7f0bf9e01ae663d5d41bfa1617156eeab42b3279ec7b8d23344b514415"
+    },
+    {
+      "path": "docs/build/reports/2026-11-19-fp-l3-frozen.json",
+      "sha256": "9869c9042a1370dd303d21f367a7273954c8386fb0a5132721b3004a033e02d2"
+    }
+  ],
+  "inputs_digest": "sha256:1ecaf168ab5ca9ac5309d4e0e9353b0f5802ff4d0b5ab0433783003db91b1924",
+  "gate_row": "317 GATE-G31 (317_GATE-G31__pub-fp.md)",
+  "readout": "docs/build/readouts/GATE-G31.md",
+  "labels": {
+    "evidence_class": "recorded execution",
+    "outside_verified": false
+  },
+  "dataset": {
+    "visibility": "private",
+    "revision": null,
+    "secret_scan_ref": null,
+    "contamination_scan_ref": null
+  },
+  "dataset_flip": "pending{human_h17}",
+  "scan_refs": [
+    {
+      "path": "docs/build/reports/2026-11-19-fp-answer-scan.json",
+      "sha256": "f836343a99c056a0567fb2027fb4c9f9db0f90f6728765bc2cb75bddf0b13853"
+    },
+    {
+      "path": "docs/build/reports/2026-11-19-fp-contamination-scan.json",
+      "sha256": "421399fd7025375b288ce7cc01ecd8cde39bb75ee0942a8996e90647f8284cdd"
+    }
+  ],
+  "dataset_card_ref": {
+    "path": "docs/build/reports/2026-11-19-fp-dataset-card.md",
+    "sha256": "50c417b3c252bafffdae7f460e6d83572ef197fec6d313f0b7cd8d3e7212737a"
+  },
+  "recorded_at": "2026-11-19"
+}

@@ -317,6 +317,37 @@ open(p, "w").write(t)
 PY2
 expect fail "(m) spine loses the site link" "$D"
 
+# --- first-pass card mutations (n)-(p), each expected to fail --------------
+D=$(seed mut-n)
+python3 - "$D/docs/evidence.md" <<'PY2'
+import re, sys
+p = sys.argv[1]; t = open(p).read()
+m = re.search(r"### Card — HIR parity, first pass \[hir-parity\].*?(?=\n### )",
+              t, re.S)
+t = t.replace(m.group(0), m.group(0).replace(
+    "- **State:** Available — internal record; not outside-verified",
+    "- **State:** Available — verified", 1))
+open(p, "w").write(t)
+PY2
+expect fail "(n) hir-parity promoted beyond the cap" "$D"
+
+D=$(seed mut-o)
+python3 - "$D/docs/evidence.md" <<'PY2'
+import re, sys
+p = sys.argv[1]; t = open(p).read()
+m = re.search(r"### Card — Configuration sweep, first pass "
+              r"\[config-sweep\].*?(?=\n### )", t, re.S)
+t = t.replace(m.group(0), m.group(0).replace(
+    "results/publication/phase-4-2026-11-19.json",
+    "results/README.md", 1))
+open(p, "w").write(t)
+PY2
+expect fail "(o) config-sweep loses the record link" "$D"
+
+D=$(seed mut-p)
+rm "$D/docs/results/publication/"phase-3-*.json
+expect fail "(p) hir-parity Available with no phase-3 record" "$D"
+
 # --- the shared lexicon (REQ-XF-134 / C-25) ---------------------------------
 D=$(seed no-lexicon)
 rm "$D/scripts/claims-lexicon.json"

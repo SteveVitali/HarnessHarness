@@ -33,12 +33,17 @@ CHECKLIST_REL = "docs/results/publication/CHECKLIST.md"
 MANIFEST_REL = "docs/tickets/00_MANIFEST.md"
 
 # Each publishing phase and the manifest gate row that authorizes it
-# (AC-9.6-6: a phase without a manifest gate cannot publish).
+# (AC-9.6-6: a phase without a manifest gate cannot publish). GATE-G31's
+# signed readout decided the first pass for the phase-3/4 pages only —
+# its verbatim scope was "phase-3/4 first-pass pages", so the same
+# manifest row authorizes those two records and nothing else (R6.50);
+# phase-2 stays gated until its own operator decision.
 PHASE_GATES = {
     "phase-1": "GATE-G22",
-    "phase-2": "GATE-G31",
+    "phase-3": "GATE-G31",
+    "phase-4": "GATE-G31",
 }
-PHASES = tuple(sorted(set(PHASE_GATES) | {"phase-3", "phase-4"}))
+PHASES = tuple(sorted(set(PHASE_GATES) | {"phase-2"}))
 
 # Manifest rows an agent can never perform (REQ-XF-130): enabling Pages,
 # the per-phase publication decisions, and the dataset visibility flip.

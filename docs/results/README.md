@@ -19,8 +19,12 @@ operator checklist in [publication/README.md](publication/README.md)).
 | Date | Phase | Publication record | Gate |
 |---|---|---|---|
 | 2026-11-09 | 1 | [phase-1-2026-11-09.json](publication/phase-1-2026-11-09.json) — the pinned phase-1 input set (`inputs_digest` `sha256:15f819883d372ebe…`) | [GATE-G22](../build/readouts/GATE-G22.md) PASSED |
+| 2026-11-19 | 3 | [phase-3-2026-11-19.json](publication/phase-3-2026-11-19.json) — the pinned phase-3 input set (`inputs_digest` `sha256:1ecaf168ab5ca9ac…`) | [GATE-G31](../build/readouts/GATE-G31.md) PASSED — publish |
+| 2026-11-19 | 4 | [phase-4-2026-11-19.json](publication/phase-4-2026-11-19.json) — the pinned phase-4 input set (`inputs_digest` `sha256:937aa94c7b0012aa…`) | [GATE-G31](../build/readouts/GATE-G31.md) PASSED — publish |
 
 The [results site](https://stevevitali.github.io/HarnessHarness/)
-renders the pinned phase-1 pages — an internal record; not
-outside-verified. Deployment follows only the operator's merge of
-the record to `main` through `pages.yml`.
+renders the pinned phase-1 and first-pass phase-3/4 pages — an
+internal record; not outside-verified. Phase 2 stays
+publication-gate pending and the dataset stays private
+(HUMAN-H17 pending). Deployment follows only the operator's merge
+of the record to `main` through `pages.yml`.

@@ -543,6 +543,10 @@ if ev:
             if rel in htmls and "phase-%d" % n not in published_here \
                     and "publication gate pending" not in htmls[rel]:
                 bad.append("%s unpublished but not gate-pending" % rel)
+            if rel in htmls and "phase-%d" % n in published_here \
+                    and "publication gate pending" in htmls[rel]:
+                bad.append("%s pinned by a record but renders "
+                           "gate-pending" % rel)
     # skeleton digits (mutation r): an absent state never carries one
     for rel, h in htmls.items():
         for body in components._skeleton_bodies(h):
