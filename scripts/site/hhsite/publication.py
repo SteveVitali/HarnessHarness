@@ -27,6 +27,8 @@ import json
 import re
 from pathlib import Path
 
+from . import publication_relocations
+
 SCHEMA = "hh-site-publication/1"
 PUB_DIR_REL = "docs/results/publication"
 CHECKLIST_REL = "docs/results/publication/CHECKLIST.md"
@@ -53,7 +55,11 @@ EVIDENCE_CLASSES = frozenset([
     "recorded execution", "fixture-verified", "live-executed",
     "foreign-run-verified", "environment-pending"])
 
-_FILENAME_RE = re.compile(r"^(phase-[0-9]+)-(\d{4}-\d{2}-\d{2})\.json$")
+# Record naming 2026-11-19 (DF-CAP6.1-5 / CAP6.2): the HUMAN-H17 dataset-flip
+# records are named <phase>-<YYYY-MM-DD>-flip.json — the -flip suffix marks the
+# superseding visibility-flip record minted by the HUMAN act (R6.50). The
+# suffix is optional and the record must then carry `supersedes`.
+_FILENAME_RE = re.compile(r"^(phase-[0-9]+)-(\d{4}-\d{2}-\d{2})(-flip)?\.json$")
 _SHA_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -90,16 +96,27 @@ def validate(doc, path, repo_root):
 
     m = _FILENAME_RE.match(Path(path).name)
     need(m is not None,
-         "filename %r is not <phase>-<YYYY-MM-DD>.json" % Path(path).name)
+         "filename %r is not <phase>-<YYYY-MM-DD>[-flip].json" % Path(path).name)
 
     phase = doc.get("phase")
     need(phase in PHASES, "phase %r not a known phase" % phase)
     if m and phase is not None:
         need(m.group(1) == phase,
              "filename phase %r != record phase %r" % (m.group(1), phase))
-        need(doc.get("recorded_at") == m.group(2),
-             "recorded_at %r != filename date %r"
-             % (doc.get("recorded_at"), m.group(2)))
+        if m.group(3):
+            # -flip record: recorded_at opens with the filename date and may
+            # carry the flip-act annotation ("… (HUMAN-H17 flip 04:23Z)").
+            ra = doc.get("recorded_at")
+            need(isinstance(ra, str) and ra.startswith(m.group(2)),
+                 "recorded_at %r does not open with filename date %r"
+                 % (doc.get("recorded_at"), m.group(2)))
+            need(isinstance(doc.get("supersedes"), str)
+                 and bool(doc["supersedes"]),
+                 "-flip record lacks a supersedes reference")
+        else:
+            need(doc.get("recorded_at") == m.group(2),
+                 "recorded_at %r != filename date %r"
+                 % (doc.get("recorded_at"), m.group(2)))
 
     gate = PHASE_GATES.get(phase)
     need(gate is not None,
@@ -180,11 +197,16 @@ def validate(doc, path, repo_root):
 
     sup = doc.get("supersedes")
     if sup is not None:
-        need(isinstance(sup, str) and sup.startswith(PUB_DIR_REL + "/"),
+        # supersedes may be a repo-relative docs/results/publication path or a
+        # bare basename resolved inside the publication dir (the committed
+        # -flip records use the basename form; repaired 2026-11-19).
+        sup_rel = sup if isinstance(sup, str) and "/" in sup else (
+            PUB_DIR_REL + "/" + sup if isinstance(sup, str) else sup)
+        need(isinstance(sup_rel, str) and sup_rel.startswith(PUB_DIR_REL + "/"),
              "supersedes %r is not a docs/results/publication path" % sup)
-        if isinstance(sup, str):
-            sp = repo_root / sup
-            need(sp.is_file(), "superseded record %s absent" % sup)
+        if isinstance(sup_rel, str):
+            sp = repo_root / sup_rel
+            need(sp.is_file(), "superseded record %s absent" % sup_rel)
             if sp.is_file():
                 try:
                     old = json.loads(sp.read_text())
@@ -206,16 +228,39 @@ def load_dir(repo_root):
     closed, never silently skipped."""
     d = Path(repo_root) / PUB_DIR_REL
     records, errors = [], []
+    try:
+        relocations = publication_relocations.load(repo_root)
+    except (OSError, ValueError, TypeError) as e:
+        return [], [str(e)]
     if d.is_dir():
         for f in sorted(d.glob("*.json")):
             rel = "%s/%s" % (PUB_DIR_REL, f.name)
             try:
-                doc = json.loads(f.read_text())
+                raw = f.read_bytes()
+                doc = json.loads(raw)
             except (OSError, ValueError) as e:
                 errors.append("%s: not JSON: %s" % (rel, e))
                 continue
+            if not isinstance(doc, dict):
+                errors.extend("%s: %s" % (rel, e)
+                              for e in validate(doc, rel, repo_root))
+                continue
+            if rel in relocations:
+                try:
+                    publication_relocations.verify_record(raw, relocations[rel])
+                    if record_digest(doc["inputs"]) != doc.get("inputs_digest"):
+                        raise ValueError("original input digest mismatch")
+                    publication_relocations.relocated_inputs(
+                        doc, relocations[rel], repo_root)
+                except (OSError, ValueError, TypeError, KeyError) as e:
+                    errors.append("%s: %s" % (rel, e))
+                    continue
             for e in validate(doc, rel, repo_root):
                 errors.append("%s: %s" % (rel, e))
+            # The owner-supported basename form names the same predecessor.
+            # Use its canonical identity in the archive/supersession graph.
+            if isinstance(doc.get("supersedes"), str) and "/" not in doc["supersedes"]:
+                doc["supersedes"] = PUB_DIR_REL + "/" + doc["supersedes"]
             records.append((rel, doc))
     records.sort(key=lambda r: (r[1].get("recorded_at", ""), r[0]))
     return records, errors
@@ -244,13 +289,36 @@ def pin_errors(record, current_inputs):
     return errors
 
 
-def published_phases(records, current_inputs):
+def checked_pin_errors(rel, record, current_inputs, repo_root):
+    """Apply a verified relocation for comparison only; retain archived pins."""
+    try:
+        entry = publication_relocations.load(repo_root).get(rel)
+        if entry is None:
+            return pin_errors(record, current_inputs)
+        raw_bytes = (Path(repo_root) / rel).read_bytes()
+        publication_relocations.verify_record(raw_bytes, entry)
+        raw = json.loads(raw_bytes)
+        view = dict(raw)
+        if isinstance(view.get("supersedes"), str) and "/" not in view["supersedes"]:
+            view["supersedes"] = PUB_DIR_REL + "/" + view["supersedes"]
+        if view != record:
+            return ["record view differs from the immutable record"]
+        if record_digest(raw["inputs"]) != raw.get("inputs_digest"):
+            return ["original input digest mismatch"]
+        comparison = dict(record)
+        comparison["inputs"] = publication_relocations.relocated_inputs(raw, entry, repo_root)
+        return pin_errors(comparison, current_inputs)
+    except (OSError, ValueError, TypeError, KeyError) as e:
+        return [str(e)]
+
+
+def published_phases(records, current_inputs, repo_root):
     """The phases a public build may render: those pinned by a valid
     record whose input set matches exactly. A record for a phase whose
     pins mismatch is a caller-side refusal (never a silent skip)."""
     out = set()
     for _rel, doc in records:
-        if not pin_errors(doc, current_inputs):
+        if not checked_pin_errors(_rel, doc, current_inputs, repo_root):
             out.add(doc["phase"])
     return out
 
