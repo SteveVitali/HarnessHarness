@@ -23,7 +23,7 @@ GAP-01 ledger GATE-DECISIONS-region misplacement (11 decision rows invisible to 
 
 ## Verification (verbatim results — COMPOSED_E2E_REPORT.md)
 
-pass 9 · fail 9 · informational 2; all non-green routed to CAP6.2 via proposed DF-CAP6.1-1…5 text in the gap report (coordinator-owned files untouched). Batteries: 114 r6 tests green, 0 failed, 6 ignored; full-workspace `cargo test` **skipped(budget)** — honest bound, owed leg to CAP6.2.
+pass 9 · fail 9 · informational 2; all non-green routed to CAP6.2 via proposed DF-CAP6.1-1…5 text in the gap report (coordinator-owned files untouched). Batteries: 114 r6 tests green (41+73), 0 failed, 6 ignored; full-workspace `cargo test` and `check-removability.sh` **skipped(budget/heavy-rebuild)** — honest bounds, owed legs folded into DF-CAP6.1-5 — honest bound, owed leg to CAP6.2.
 
 **CI read (BM-CI-01, `ci-boundary.sh --stack --no-wait`, `read_at: 2026-11-19T04:56:14Z`):** stack verdict `blockedOn: CI fail on #416` — #416/#415/#414 fail build·test·fmt·drift (ubuntu+macos), #407–#412 pass, #410/#413 not in the stack read. No production-state claim beyond this cited read.
 

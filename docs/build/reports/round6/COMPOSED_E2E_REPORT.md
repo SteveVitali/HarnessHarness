@@ -27,12 +27,13 @@ Stage-1 verdicts and artifacts (COVERAGE_MATRIX.csv, CAPSTONE_GAP_ANALYSIS.md, g
 | 17 | `bash $AGENT_SKILLS_ROOT/skills/build-memory/scripts/check-build-memory.sh .` | **1 violation / 3 warnings** | `docs/adr/README.md` stale vs fresh adr-index regeneration (ADR-0450/0451 admitted without regen — same family as GAP-08) → GAP-15 |
 | 18 | `bash ~/agent-skills/skills/orchestrate-build/scripts/ci-boundary.sh --stack --no-wait --ledger docs/build/LEDGER.md` | **blockedOn** | record `ci-boundary/1`, `read_at: 2026-11-19T04:56:14Z` — see §2 |
 | 19 | `cargo test -p hharness-runner --test r6_33 --test r6_48 --test r6_49 --test r6_16` | **PASS** | 41 tests, 0 failed (r6_33:11, r6_48:10, r6_49:15, r6_16:5) |
-| 20 | `cargo test -p hharness-runner --test r6_8 --test r6_22 --test r6_23 --test r6_26 --test r6_27 --test r6_29 --test r6_30 --test r6_45k` | see §3 | bounded r6 battery |
+| 20 | `cargo test -p hharness-runner --test r6_8 --test r6_22 --test r6_23 --test r6_26 --test r6_27 --test r6_29 --test r6_30 --test r6_45k` | **PASS** | 73 tests, 0 failed, 6 ignored |
+| 21 | `bash scripts/check-removability.sh` | **skipped(heavy-rebuild)** | tier-combination rebuild exceeds this session's bound; owed leg → DF-CAP6.1-5 |
 
 ## 1. Totals
 
-- checks run: 20 (script/cargo legs listed; the guard's internal legs counted once)
-- passed: 9 · failed: 9 · informational: 2
+- checks run: 20 + 1 skipped(heavy-rebuild) (script/cargo legs listed; the guard's internal legs counted once)
+- passed: 10 · failed: 9 · informational: 2 · skipped: 1
 - Every non-green result is a **typed finding** in `CAPSTONE_GAP_ANALYSIS.md` §2 and carries a proposed DF row (DF-CAP6.1-1…5); none is silently waived and none blocks the analysis artifacts themselves. They are pre-existing base-state seams, not CAP6.1 regressions (`git status` clean over base + artifacts only).
 
 ## 2. CI read of the open stack (BM-CI-01)
@@ -54,7 +55,7 @@ Verdict verbatim: `blockedOn: CI fail on #416 (build · test · fmt · drift (ub
 
 ## 3. Bounded Round-6 battery scope statement
 
-`cargo test -p hharness-runner` r6-targets run: r6_33, r6_48, r6_49, r6_16 (41 tests green) plus the r6_8/22/23/26/27/29/30/45k batch (result recorded in the run record; any not-yet-complete leg is marked `skipped(budget)` — never a pass). Full workspace `cargo test` was **skipped(budget)** — honest bound: CAP6.1's verdicts rest on committed records + the checkers above, not on a full-workspace re-run; owed leg if required → CAP6.2.
+`cargo test -p hharness-runner` r6-targets run: r6_33, r6_48, r6_49, r6_16 (41 tests green) plus the r6_8/22/23/26/27/29/30/45k batch (73 tests green, 0 failed, 6 ignored). Full workspace `cargo test` was **skipped(budget)** — honest bound: CAP6.1's verdicts rest on committed records + the checkers above, not on a full-workspace re-run; owed leg if required → CAP6.2.
 
 ## 4. Environment blocks routed to the operator
 
