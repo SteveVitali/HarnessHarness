@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket: HUMAN-H18
-lastCompleted:   HUMAN-H17
+nextTicket: CAP6.1
+lastCompleted:   HUMAN-H18
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -34,7 +34,7 @@ autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           6
 harness:         devin-cli/swe-2-high/subagent
-updatedAt:       2026-11-19T04:25Z
+updatedAt:       2026-11-19T04:45Z
 ```
 
 ## OPEN FINDINGS
@@ -1340,6 +1340,7 @@ updatedAt:       2026-11-19T04:25Z
 
 ## PHASE LOG — Round 6
 
+- 2026-11-19T04:45Z · **HUMAN-H18 done — billing reconcile PASSED (manifest 320)** — operator console "$4.52 Ollama month-to-date" confirmed identical via provider usage API (trailing 7d/30d = $4.52). Entries: W1 within · W2 model within / compute unavailable · W3 compute unavailable / model N/A (model_line none) · Wc model within / compute unavailable · W4 N/A{unused scope_end, deletion receipt 02:01:58Z}. GCP billed compute has no API read (project deleted, no export) — recorded `unavailable`, not fabricated; CAP6.2 folds. nextTicket → CAP6.1 · devin-cli/swe-2-high/coordinator
 - 2026-11-19T04:25Z · **HUMAN-H17 done — dataset visibility flip PASSED (manifest 318)** — operator verbatim "you do everything via HF_TOKEN" authorized agent execution: card `50c417b3…` uploaded to `SteveVitali/harnessharness-archive` (commit a11591e9), `PUT settings {private:false}` confirmed `private: false` at 04:23Z; post-flip revision **`a11591e931442908c34a5bc7a65e8e664f4752d7`** pinned; token provided yes/never stored. Superseding publication records `*-flip.json` (visibility public) emitted; DF-R6.50-1 discharged. nextTicket → HUMAN-H18 · devin-cli/swe-2-high/coordinator
 - 2026-11-19T04:10Z · **R6.50 done — first-pass publication records (manifest 319; offline, $0)** — branch `codex/harnessharness-r6.50` (PR #416) · base `codex/harnessharness-r6.49`. Two append-only `hh-site-publication/1` records land for GATE-G31's verbatim scope: `docs/results/publication/phase-3-2026-11-19.json` (a363530c…; pins p3-l1/p3-l2/p3-l3) + `phase-4-2026-11-19.json` (17cf9784…; pins p4-fp) — both cite the gate readout, both scans + card revision, carry labels + `dataset_flip: pending{human_h17}`; phase-2's premature G31 mapping dropped (fails closed until its own gate); site publishes phase-3/4 w/ `published — GATE-G31` tile; check-site gains record/page-disagreement leg. DF-R6.50-1 OPEN (H17 withholds transcript viewer + public dataset). Verify: check-publication 3 valid · check-site 15/15 ×4 profiles incl. --head · position 14 legs · 8 site batteries green. chainTip → codex/harnessharness-r6.50 · nextTicket → HUMAN-H17 · engineered (offline, $0.00) · devin-cli/swe-2-high/subagent
 - 2026-11-19T03:52Z · **GATE-G31 done — first-pass publication PASSED — publish (manifest 317)** — verbatim rulings: scope "yes, publish" (presented scope, packets pinned); Q-X43 "(b) links only"; task-derived policy "sanitized publish only"; Q-H1-6 "I've read hugging face and ollama terms". Dataset flip stays a separate act — HUMAN-H17 next after R6.50. nextTicket → R6.50 · devin-cli/swe-2-high/coordinator
