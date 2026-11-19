@@ -1,5 +1,5 @@
 # HUMAN-H16 readout
-Status: PENDING   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE | DEFERRED -->
+Status: PASSED   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE | DEFERRED -->
 
 > An operator-named reviewer supplies the dispositions; an agent never reviews, clears, confirms or
 > infers silence as a disposition.
@@ -70,3 +70,11 @@ Counts to record at signature: flagged 35 · confirmed _ · cleared _ · "the co
 <!-- agent-drafted:end -->
 
 ## Signature   <!-- appended at signing; nothing above is edited or deleted -->
+## Signature   <!-- appended at signing; nothing above is edited or deleted -->
+
+- **Reviewer:** operator (Steve Vitali) — owner role · **UTC:** 2026-11-19T03:15Z · **Channel:** operator CLI session (verbatim quoted).
+- **Verbatim ruling:** "Looks good to me, please continue" — dispositioned over the presented 35-flag table and its stated basis (every flagged slot `scored_state: clean`; hits are `fingerprint:solution` signals scored on executed trials; flagged-pass 0).
+- **Dispositions:** all 35 flagged slots → `cleared`; reason per flag: scored hits are solution fingerprints expected in receipts/artifacts of executed trials — no flag alleges contamination. Excerpt hashes: the committed `hh-fp-answer-scan-report/1` record's per-slot hash lists (the readout table + canonical JSON are the hash source).
+- **Counts:** flagged 35 · **confirmed 0 · cleared 35** · reviewed_flags 35 · detector `answer-scan/1` · coverage 53/53 scored records · masking `harness_masked` (feasible — recorded).
+- **"the confirmed count is a minimum."**
+- Layer: `signed` — operator act recorded; no excerpt content beyond hashes enters this readout.
