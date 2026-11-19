@@ -67,7 +67,7 @@ case "$*" in
     for a in "$@"; do
       [ "$prev" = "--command" ] && rcmd="$a"; prev="$a"
     done
-    nk="$(norm "$rcmd")"
+    nk="$(norm "$rcmd" | python3 -c 'import hashlib, sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())')"
     [ -f "$S/ssh_rc/$nk" ] && exit "$(cat "$S/ssh_rc/$nk")"
     [ -f "$S/ssh/$nk" ] && cat "$S/ssh/$nk"
     exit 0 ;;
@@ -250,7 +250,7 @@ printf '[{"name":"hh-iap-ssh","allowed":[{"IPProtocol":"tcp","ports":["22"]}],"s
 cp "$STATE/new_instance_describe.json" "$LIVE/instance_describe.json"
 printf '[{"name":"hh-p1-w1x","status":"RUNNING"}]\n' > "$LIVE/instances_list.json"
 
-snorm() { printf '%s' "$1" | tr -cs 'A-Za-z0-9' '_' | sed 's/_$//'; }
+snorm() { printf '%s' "$1" | tr -cs 'A-Za-z0-9' '_' | sed 's/_$//' | python3 -c 'import hashlib, sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())'; }
 sshf() { printf '%s' "$2" > "$STATE/ssh/$(snorm "$1")"; }
 sshf 'curl -fs --unix-socket /run/podman/podman.sock http://d/_ping' 'OK'
 sshf 'podman version --format json' '{"Client":{"Version":"4.3.1+ds1-8+deb12u1"}}'
@@ -265,7 +265,7 @@ sshf 'df -B1 --output=avail /var | tail -1' '240000000000'
 sshf 'stat -c %a:%U:%G /run/podman/podman.sock' '660:root:hh'
 sshf 'sh -c "ss -tln 2>/dev/null | grep -c podman || true"' '0'
 sshf "hh-runner drain --window 'w1x' --inconclusive teardown" ''
-sshf 'journalctl --no-pager -o short-iso' 'journal-line'
+sshf 'sudo journalctl --no-pager -o short-iso' 'journal-line'
 sshf 'cat /proc/uptime; df -BG --output=avail / | tail -1' 'uptime'
 DIG="sha256:$(printf '1%.0s' $(seq 64))"
 sshf "podman pull 'reg.invalid/hh/cell@$DIG'" 'pulled'
@@ -276,7 +276,7 @@ printf 'slot-1 receipt\n' > "$T/runroot/slot-1.txt"
 printf 'runner log\n'      > "$T/runroot/runner.log"
 ( cd "$T/runroot" && { sha256sum slot-1.txt runner.log 2>/dev/null || shasum -a 256 slot-1.txt runner.log; } > "$STATE/scp_src/hh-manifest.sha256" )
 ( cd "$T/runroot" && tar czf "$STATE/scp_src/hh-harvest.tar.gz" . )
-HREMOTE="mkdir -p '/var/lib/hh/runs/run-root-w1x' && cd '/var/lib/hh/runs/run-root-w1x' && find . -type f -print0 | sort -z | xargs -0 --no-run-if-empty sha256sum > /tmp/hh-manifest.sha256 && tar czf /tmp/hh-harvest.tar.gz . && sha256sum /tmp/hh-manifest.sha256 /tmp/hh-harvest.tar.gz"
+HREMOTE="sudo sh -c 'rm -f /tmp/hh-manifest.sha256; mkdir -p \"/var/lib/hh/runs/run-root-w1x\" && cd \"/var/lib/hh/runs/run-root-w1x\" && find . -type f -print0 | sort -z | xargs -0 --no-run-if-empty sha256sum > /tmp/hh-manifest.sha256 && tar czf /tmp/hh-harvest.tar.gz . && sha256sum /tmp/hh-manifest.sha256 /tmp/hh-harvest.tar.gz'"
 sshf "$HREMOTE" "$(cd "$STATE/scp_src" && { sha256sum hh-manifest.sha256 hh-harvest.tar.gz 2>/dev/null || shasum -a 256 hh-manifest.sha256 hh-harvest.tar.gz; })"
 
 SCAN="$REPO/target/debug/hh-secret-scan"
