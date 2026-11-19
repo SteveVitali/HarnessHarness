@@ -428,6 +428,7 @@ pub fn planned_population(
 
 /// The typed (non-scored) arm row — disposition + served/completion
 /// counts parameterize the same member set the withheld row carries.
+#[allow(clippy::too_many_arguments)] // the arity is the record's member set — the packet's shape is the signature's.
 pub fn typed_arm_row(
     participant: &str,
     intended_participant: &str,
@@ -636,6 +637,7 @@ pub fn typed_arm_row(
 
 /// The landed mini-swe-agent row — real cells, real costs, the joint
 /// population's veto-pending passes scored as failures.
+#[allow(clippy::too_many_arguments)] // the arity is the record's member set — the packet's shape is the signature's.
 pub fn landed_arm_row(
     participant: &str,
     intended_participant: &str,
@@ -923,6 +925,7 @@ pub fn landed_arm_row(
 
 /// The superseding `hh-comparative-results/1` packet — same member set
 /// as the withheld form plus `supersedes`/`supersession`.
+#[allow(clippy::too_many_arguments)] // the arity is the record's member set — the packet's shape is the signature's.
 pub fn w4_results_packet(
     claim: &str,
     reference: &str,
@@ -1029,6 +1032,7 @@ pub fn family_member(m: &FamilyMember) -> Json {
 /// pairs launched coupled; the O side (mini-swe-agent) scored, the H
 /// side produced no verifier outcome — admission, TOST and the
 /// conjunction land `unavailable{h_side_verdicts_absent}`.
+#[allow(clippy::too_many_arguments)] // the arity is the record's member set — the packet's shape is the signature's.
 pub fn w4_l2_packet(
     gl1_pass_id: &str,
     h_identity_digest: &str,

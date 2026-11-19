@@ -453,7 +453,7 @@ fn packets(repo: &Path, m: &[(String, String)]) -> Vec<(String, Json)> {
             .collect(),
     );
 
-    let w4_sha = sha256_file(&repo.join(&rel_of("w4_window")));
+    let w4_sha = sha256_file(&repo.join(rel_of("w4_window")));
     let outcomes = load(repo, "docs/build/reports/2026-11-19-fp-w4-outcomes.json");
     let scan = load(repo, "docs/build/reports/2026-11-19-fp-w4-answer-scan.json");
     let rows = slot_outcomes(&outcomes);
@@ -1054,6 +1054,7 @@ fn emit_audit_addendum(repo: &Path, m: &[(String, String)]) {
 /// `typed_arm_row` is module-private in fp_w4 — the bin wraps it via
 /// the public re-export (`typed_arm_row_pub` is the module's own
 /// `#[doc(hidden)]` shim).
+#[allow(clippy::too_many_arguments)] // the arity is the record's member set — the packet's shape is the signature's.
 fn typed_arm_row_pub(
     participant: &str,
     intended_participant: &str,
@@ -1251,7 +1252,7 @@ fn main() {
                 .into(),
         ));
         s.push((
-            format!("retained:run-root-w4/proxy-store/runs/fp-w4-main/events.wal"),
+            "retained:run-root-w4/proxy-store/runs/fp-w4-main/events.wal".to_string(),
             format!("sha256:{}", sha256_hex(&wal_bytes)),
         ));
         s
