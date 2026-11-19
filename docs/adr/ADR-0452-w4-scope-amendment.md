@@ -38,3 +38,7 @@ amended to admit W4's executable arms:
 - Spend bound: operator's standing ≤$50/day + "increase the budget if that is a constraint".
 - All window invariants unchanged (quotes never authorize; withholds verbatim; no fabricated
   frozen/pass/settlement).
+
+## Revisit trigger
+
+Any proposal to re-run an arm the operator recorded `not_run{admission}` without new PP0 admission evidence, or a request to extend this amendment's supersession beyond the W4 scope — then the narrow-supersession boundary (GATE-G30's `end-first-pass-early` stands for every other scope) must be re-ruled explicitly rather than inferred.
