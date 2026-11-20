@@ -1,0 +1,228 @@
+{
+  "authorization": {
+    "ceiling_micros": 7988890,
+    "gate": "ADR-0453",
+    "quote_id": "pq-feb61167ae35dd0f",
+    "readout_path": "docs/adr/ADR-0453-w4x-extension-unblock-rulings.md",
+    "verbatim_sha256": "ad92a45346d3440877020e06e016754499169148f4d5d2d811759ab12077549e"
+  },
+  "commands": [
+    {
+      "argv_redacted": [
+        "auth",
+        "list",
+        "--format=value(account)"
+      ],
+      "ended_at": "2026-11-20T11:20:20Z",
+      "exit": 0,
+      "started_at": "2026-11-20T11:20:20Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "14stevevitali@gmail.com\n",
+      "stdout_sha256": "664266223ad53c9a2e5c5b893f89cc7a92975b49c96485cff8ed26ecaa89e950"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "ssh",
+        "hh-fp-w4x",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "--tunnel-through-iap",
+        "--command",
+        "hh-runner drain --window 'w4x' --inconclusive teardown"
+      ],
+      "ended_at": "2026-11-20T11:20:22Z",
+      "exit": 127,
+      "started_at": "2026-11-20T11:20:20Z",
+      "stderr_excerpt": "WARNING: \n\nTo increase the performance of the tunnel, consider installing NumPy. For instructions,\nplease see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth\n\nbash: line 1: hh-runner: command not found\n",
+      "stdout_excerpt": "",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "instances",
+        "list",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-20T11:20:23Z",
+      "exit": 0,
+      "started_at": "2026-11-20T11:20:22Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[\n  {\n    \"canIpForward\": false,\n    \"cpuPlatform\": \"AMD Rome\",\n    \"creationTimestamp\": \"2026-11-19T18:26:45.762-08:00\",\n    \"deletionProtection\": false,\n    \"disks\": [\n      {\n        \"architecture\": \"X86_64\",\n        \"autoDelete\": true,\n        \"boot\": true,\n        \"deviceName\": \"persistent-disk-0\",\n        \"diskSizeGb\": \"300\",\n        \"guestOsFeatures\": [\n          {\n            \"type\": \"UEFI_COMPATIBLE\"\n          },\n          {\n            \"type\": \"VIRTIO_SCSI_MULTIQUEUE\"\n          },\n          {\n            \"type\": \"GVNIC\"\n          },\n          {\n            \"type\": \"SEV_CAPABLE\"\n          },\n          {\n            \"type\": \"SEV_LIVE_MIGRATABLE_V2\"\n          },\n          {\n            \"type\": \"SUSPEND_SAFE_FPR\"\n          }\n        ],\n        \"index\": 0,\n        \"interface\": \"SCSI\",\n        \"kind\": \"compute#attachedDisk\",\n        \"licenses\": [\n          \"https://www.googleapis.com/compute/v1/projects/debian-cloud/global/licenses/debian-12-bookworm\"\n        ],\n        \"mode\": \"READ_WRITE\",\n        \"source\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/zones/us-central1-a/disks/hh-fp-w4x\",\n        \"type\": \"PERSISTENT\"\n      }\n    ],\n    \"fingerprint\": \"fnix63nwxkU=\",\n    \"id\": \"8497150545378808074\",\n    \"kind\": \"compute#instance\",\n    \"labelFingerprint\": \"tmlrejS_Tyo=\",\n    \"labels\": {\n      \"hh-phase\": \"fp\",\n      \"hh-ticket\": \"r6-56\",\n      \"hh-window\": \"w4x\",\n      \"ttl\": \"window\"\n    },\n    \"lastStartTimestamp\": \"2026-11-19T18:26:54.153-08:00\",\n    \"machineType\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/zones/us-central1-a/machineTypes/e2-standard-8\",\n    \"metadata\": {\n      \"fingerprint\": \"lDQuGH56nyg=\",\n      \"items\": [\n        {\n          \"key\": \"hh_deadman_minutes\",\n          \"value\": \"1365\"\n        },\n        {\n          \"key\": \"hh_packages\",\n          \"value\": \"podman=4.3.1+ds1-8+deb12u1+b3 crun=1.8.1-1+deb12u1 conmon=2.1.6+ds1-1 netavark=1.4.0-3 podman-compose=1.0.3-3\\n\"\n        },\n        {\n          \"key\": \"startup-script\",\n          \"value\": \"#!/usr/bin/env bash\\n# startup.sh \u2014 in-guest bootstrap for a hh compute window VM\\n# (manifest 266/R6.13; spec \u00a73.9; ADR-0431/AR-15; REQ-XB-204/209/220).\\n#\\n# Passed to `instances create` as `--metadata-from-file startup-script=`.\\n# NO SECRETS: this file is recorded by sha256 in every provision receipt and\\n# leak-swept before use. The only inputs are instance metadata keys set by\\n# gce-backend.sh: `hh_packages` (name=version pins) and\\n# `hh_deadman_minutes` (D + 15 \u2014 REQ-XB-209's in-guest timer).\\nset -euo pipefail\\nset +x # belt: tracing never exposes metadata contents\\n\\nMETA=\\\"http://metadata.google.internal/computeMetadata/v1/instance/attributes\\\"\\nmh() { curl -fs -H \\\"Metadata-Flavor: Google\\\" \\\"$META/$1\\\"; }\\n\\nDEADMAN_MIN=\\\"$(mh hh_deadman_minutes)\\\"   # minutes until in-guest poweroff\\nPACKAGES=\\\"$(mh hh_packages)\\\"            # whitespace-sep name=version pins\\n\\n# \u2500\u2500 REQ-XB-220: disable unattended upgrades for the window \u2014 the package\\n# set must not move mid-run (a podman restart kills in-flight cells).\\nsystemctl disable --now unattended-upgrades.service 2>/dev/null || true\\nsystemctl disable --now apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true\\nsystemctl mask apt-daily.service apt-daily-upgrade.service 2>/dev/null || true\\n\\n# \u2500\u2500 pinned package set (podman, crun, conmon, netavark, compose frontend)\\nexport DEBIAN_FRONTEND=noninteractive\\napt-get update -y\\napt-get install -y --allow-downgrades $PACKAGES\\nmkdir -p /var/log/hh\\ndpkg-query -W -f='${Package}=${Version}\\\\n' \\\\\\n  | sort > /var/log/hh/dpkg-pins.txt\\n\\n# \u2500\u2500 rootful podman socket, group-restricted (never TCP-bound, never\\n# forwarded \u2014 REQ-XB-205). The `hh` group owns the local socket.\\ngroupadd -f hh\\nmkdir -p /etc/systemd/system/podman.socket.d\\ncat > /etc/systemd/system/podman.socket.d/10-hh.conf <<'UNIT'\\n[Socket]\\nSocketMode=0660\\nSocketGroup=hh\\nUNIT\\nsystemctl daemon-reload\\nsystemctl enable --now podman.socket\\n\\n# \u2500\u2500 REQ-XB-209: in-guest dead-man timer at D + 15 min \u2014 the second physical\\n# layer. Runs e",
+      "stdout_sha256": "7211512ecd121e0ed2839f99b568bea9f2004c187101fe2cd16638ba95adced5"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "ssh",
+        "hh-fp-w4x",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "--tunnel-through-iap",
+        "--command",
+        "sudo sh -c 'rm -f /tmp/hh-manifest.sha256; mkdir -p \"/var/lib/hh/runs/run-root-w4x\" && cd \"/var/lib/hh/runs/run-root-w4x\" && find . -type f -print0 | sort -z | xargs -0 --no-run-if-empty sha256sum > /tmp/hh-manifest.sha256 && tar czf /tmp/hh-harvest.tar.gz . && sha256sum /tmp/hh-manifest.sha256 /tmp/hh-harvest.tar.gz'"
+      ],
+      "ended_at": "2026-11-20T11:22:05Z",
+      "exit": 0,
+      "started_at": "2026-11-20T11:20:23Z",
+      "stderr_excerpt": "WARNING: \n\nTo increase the performance of the tunnel, consider installing NumPy. For instructions,\nplease see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth\n\ntar: ./w4x-main-attempt1/slots/w4-claude-code-largest-eigenval-r1/model.sock: socket ignored\ntar: ./w4x-main-attempt1/slots/w4-claude-code-largest-eigenval-r1/egress.sock: socket ignored\ntar: ./w4x-main-attempt1/slots/w4-pi-largest-eigenval-r1/model.sock: socket ignored\ntar: ./w4x-main-attempt1/slots/w4-pi-largest-eigenval-r1/egress.sock: socket ignored\ntar: ./w4x-a3-stopped/slots/w4-claude-code-largest-eigenval-r1/model.sock: socket ignored\ntar: ./w4x-a3-stopped/slots/w4-claude-code-largest-eigenval-r1/egress.sock: socket ignored\ntar: ./w4x-a3-stopped/slots/w4-pi-largest-eigenval-r1/model.sock: socket ignored\ntar: ./w4x-a3-stopped/slots/w4-pi-largest-eigenval-r1/egress.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-build-cython-ext-r3/model.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-build-cython-ext-r3/egress.sock: socket ignored\ntar: ./w4x-a4/slots/w4-pi-gcode-to-text-r5/model.sock: socket ignored\ntar: ./w4x-a4/slots/w4-pi-gcode-to-text-r5/egress.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-headless-terminal-r2/model.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-headless-terminal-r2/egress.sock: socket ignored\ntar: ./w4x-a4/slots/w4-pi-regex-log-r2/model.sock: socket ignored\ntar: ./w4x-a4/slots/w4-pi-regex-log-r2/egress.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-multi-source-data-merger-r1/model.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-multi-source-data-merger-r1/egress.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-largest-eigenval-r1/model.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-largest-eigenval-r1/egress.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-overfull-hbox-r3/model.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-overfull-hbox-r3/egress.sock: socket ignored\ntar: ./w4x-a4/slots/w4-pi-largest-eigenval-r3/model.sock: socket ignored\ntar: ./w4x-a4/slots/w4-pi-largest-eigenval-r3/egress.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-write-compressor-r1/model.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-write-compressor-r1/egress.sock: socket ignored\ntar: ./w4x-a4/slots/w4-pi-multi-source-data-merger-r4/model.sock: socket ignored\ntar: ./w4x-a4/slots/w4-pi-multi-source-data-merger-r4/egress.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-sanitize-git-repo-r5/model.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-sanitize-git-repo-r5/egress.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-gcode-to-text-r1/model.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-gcode-to-text-r1/egress.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-regex-log-r3/model.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-regex-log-r3/egress.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-sanitize-git-repo-r3/model.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-sanitize-git-repo-r3/egress.sock: socket ignored\ntar: ./w4x-a4/slots/w4-pi-fix-code-vulnerability-r2/model.sock: socket ignored\ntar: ./w4x-a4/slots/w4-pi-fix-code-vulnerability-r2/egress.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-overfull-hbox-r4/model.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-overfull-hbox-r4/egress.sock: socket ignored\ntar: ./w4x-a4/slots/w4-pi-largest-eigenval-r5/model.sock: socket ignored\ntar: ./w4x-a4/slots/w4-pi-largest-eigenval-r5/egress.sock: socket ignored\ntar: ./w4x-a4/slots/w4-pi-sanitize-git-repo-r2/model.sock: socket ignored\ntar: ./w4x-a4/slots/w4-pi-sanitize-git-repo-r2/egress.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-sanitize-git-repo-r1/model.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-sanitize-git-repo-r1/egress.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-headless-terminal-r1/model.sock: socket ignored\ntar: ./w4x-a4/slots/w4-claude-code-headless-terminal-r1/egress.sock: socket ignored\ntar: ./w4x-a4/sl",
+      "stdout_excerpt": "6a466cf866d117563d55515daf238d5c7f6e0f5f31ae5d6216ded8dd39225d59  /tmp/hh-manifest.sha256\nc5afd9ce0f74b02ad8769cc0450d2210b96b0ad7b35c3674291525428b9596da  /tmp/hh-harvest.tar.gz\n",
+      "stdout_sha256": "041dab7ee0b6ca5ac5f9b60990985a8f0bbf779d2bd90a205aa12925e32ec198"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "scp",
+        "--tunnel-through-iap",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "hh-fp-w4x:/tmp/hh-harvest.tar.gz",
+        "/private/tmp/hh-r6.53-wt/docs/build/reports/compute/harvest/fp-w4x/run-root.tar.gz"
+      ],
+      "ended_at": "2026-11-20T11:22:26Z",
+      "exit": 0,
+      "started_at": "2026-11-20T11:22:05Z",
+      "stderr_excerpt": "WARNING: \n\nTo increase the performance of the tunnel, consider installing NumPy. For instructions,\nplease see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth\n\n",
+      "stdout_excerpt": "",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "scp",
+        "--tunnel-through-iap",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "hh-fp-w4x:/tmp/hh-manifest.sha256",
+        "/private/tmp/hh-r6.53-wt/docs/build/reports/compute/harvest/fp-w4x/MANIFEST.sha256"
+      ],
+      "ended_at": "2026-11-20T11:22:29Z",
+      "exit": 0,
+      "started_at": "2026-11-20T11:22:26Z",
+      "stderr_excerpt": "WARNING: \n\nTo increase the performance of the tunnel, consider installing NumPy. For instructions,\nplease see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth\n\n",
+      "stdout_excerpt": "",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "ssh",
+        "hh-fp-w4x",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "--tunnel-through-iap",
+        "--command",
+        "sudo journalctl --no-pager -o short-iso"
+      ],
+      "ended_at": "2026-11-20T11:22:55Z",
+      "exit": 0,
+      "started_at": "2026-11-20T11:22:53Z",
+      "stderr_excerpt": "WARNING: \n\nTo increase the performance of the tunnel, consider installing NumPy. For instructions,\nplease see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth\n\n",
+      "stdout_excerpt": "2026-11-20T02:27:06+0000 localhost kernel: Linux version 6.1.0-53-cloud-amd64 (debian-kernel@lists.debian.org) (gcc-12 (Debian 12.2.0-14+deb12u1) 12.2.0, GNU ld (GNU Binutils for Debian) 2.40) #1 SMP PREEMPT_DYNAMIC Debian 6.1.187-1 (2026-09-07)\n2026-11-20T02:27:06+0000 localhost kernel: Command line: BOOT_IMAGE=/boot/vmlinuz-6.1.0-53-cloud-amd64 root=PARTUUID=1d183993-812e-44f6-a0fc-f3cece6a9e86 ro console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 consoleblank=0 intel_iommu=off\n2026-11-20T02:27:06+0000 localhost kernel: [Firmware Bug]: TSC doesn't count with P0 frequency!\n2026-11-20T02:27:06+0000 localhost kernel: BIOS-provided physical RAM map:\n2026-11-20T02:27:06+0000 localhost kernel: BIOS-e820: [mem 0x0000000000000000-0x000000000009ffff] usable\n2026-11-20T02:27:06+0000 localhost kernel: BIOS-e820: [mem 0x0000000000100000-0x00000000be2e9fff] usable\n2026-11-20T02:27:06+0000 localhost kernel: BIOS-e820: [mem 0x00000000be2ea000-0x00000000be2f4fff] ACPI data\n2026-11-20T02:27:06+0000 localhost kernel: BIOS-e820: [mem 0x00000000be2f5000-0x00000000bf8ecfff] usable\n2026-11-20T02:27:06+0000 localhost kernel: BIOS-e820: [mem 0x00000000bf8ed000-0x00000000bfb6cfff] reserved\n2026-11-20T02:27:06+0000 localhost kernel: BIOS-e820: [mem 0x00000000bfb6d000-0x00000000bfb7efff] ACPI data\n2026-11-20T02:27:06+0000 localhost kernel: BIOS-e820: [mem 0x00000000bfb7f000-0x00000000bfbfefff] ACPI NVS\n2026-11-20T02:27:06+0000 localhost kernel: BIOS-e820: [mem 0x00000000bfbff000-0x00000000bffdffff] usable\n2026-11-20T02:27:06+0000 localhost kernel: BIOS-e820: [mem 0x00000000bffe0000-0x00000000bfffffff] reserved\n2026-11-20T02:27:06+0000 localhost kernel: BIOS-e820: [mem 0x0000000100000000-0x000000083fffffff] usable\n2026-11-20T02:27:06+0000 localhost kernel: printk: bootconsole [earlyser0] enabled\n2026-11-20T02:27:06+0000 localhost kernel: NX (Execute Disable) protection: active\n2026-11-20T02:27:06+0000 localhost kernel: efi: EFI v2.70 by EDK II\n2026-11-20T02:27:06+0000 localhost kernel: efi: TPMFinalLog=0xbfbf7000 ACPI=0xbfb7e000 ACPI 2.0=0xbfb7e014 SMBIOS=0xbf9ca000 MEMATTR=0xbe328018 MOKvar=0xbf9bf000 RNG=0xbfb73018 TPMEventLog=0xbe2ea018 \n2026-11-20T02:27:06+0000 localhost kernel: random: crng init done\n2026-11-20T02:27:06+0000 localhost kernel: Kernel is locked down from EFI Secure Boot; see man kernel_lockdown.7\n2026-11-20T02:27:06+0000 localhost kernel: secureboot: Secure boot enabled\n2026-11-20T02:27:06+0000 localhost kernel: SMBIOS 2.4 present.\n2026-11-20T02:27:06+0000 localhost kernel: DMI: Google Google Compute Engine/Google Compute Engine, BIOS Google 11/06/2026\n2026-11-20T02:27:06+0000 localhost kernel: Hypervisor detected: KVM\n2026-11-20T02:27:06+0000 localhost kernel: kvm-clock: Using msrs 4b564d01 and 4b564d00\n2026-11-20T02:27:06+0000 localhost kernel: kvm-clock: using sched offset of 9879618806 cycles\n2026-11-20T02:27:06+0000 localhost kernel: clocksource: kvm-clock: mask: 0xffffffffffffffff max_cycles: 0x1cd42e4dffb, max_idle_ns: 881590591483 ns\n2026-11-20T02:27:06+0000 localhost kernel: tsc: Detected 2249.998 MHz processor\n2026-11-20T02:27:06+0000 localhost kernel: e820: update [mem 0x00000000-0x00000fff] usable ==> reserved\n2026-11-20T02:27:06+0000 localhost kernel: e820: remove [mem 0x000a0000-0x000fffff] usable\n2026-11-20T02:27:06+0000 localhost kernel: last_pfn = 0x840000 max_arch_pfn = 0x400000000\n2026-11-20T02:27:06+0000 localhost kernel: x86/PAT: Configuration [0-7]: WB  WC  UC- UC  WB  WP  UC- WT  \n2026-11-20T02:27:06+0000 localhost kernel: last_pfn = 0xbffe0 max_arch_pfn = 0x400000000\n2026-11-20T02:27:06+0000 localhost kernel: Using GB pages for direct mapping\n2026-11-20T02:27:06+0000 localhost kernel: RAMDISK: [mem 0x3be64000-0x3cc83fff]\n2026-11-20T02:27:06+0000 localhost kernel: ACPI: Early table checksum verification disabled\n2026-11-20T02:27:06+0000 localhost kernel: ACPI: RSDP 0x00000000BFB7E014 000024 (v02 Google)\n2026-11-20T02:27:06+0000 localhost kernel: ACPI: XSDT 0x00000000BFB7D0E8 00005C (v01 Google GOOGFACP 00000001      01000013)\n2026-11-20T02:27:06+0000 localhost kernel: ACPI: FACP 0x00000000BFB7800",
+      "stdout_sha256": "8dd0dd1ca3c4d21f6108e5780705a74c0e812014a550bd5932c20c5ba4b8d012"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "instances",
+        "get-serial-port-output",
+        "hh-fp-w4x",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a"
+      ],
+      "ended_at": "2026-11-20T11:22:56Z",
+      "exit": 0,
+      "started_at": "2026-11-20T11:22:55Z",
+      "stderr_excerpt": "\nSpecify --start=870952 in the next get-serial-port-output invocation to get only the new output starting from here.\n",
+      "stdout_excerpt": "\u001b[2J\u001b[01;01H\u001b[=3h\u001b[2J\u001b[01;01H\u001b[2J\u001b[01;01H\u001b[=3h\u001b[2J\u001b[01;01HBdsDxe: loading Boot0001 \"UEFI Google PersistentDisk \" from PciRoot(0x0)/Pci(0x3,0x0)/Scsi(0x1,0x0)\r\nBdsDxe: starting Boot0001 \"UEFI Google PersistentDisk \" from PciRoot(0x0)/Pci(0x3,0x0)/Scsi(0x1,0x0)\r\n\r\nUEFI: Attempting to start image.\r\nDescription: UEFI Google PersistentDisk \r\nFilePath: PciRoot(0x0)/Pci(0x3,0x0)/Scsi(0x1,0x0)\r\nOptionNumber: 1.\r\n\r\n\u001b[0m\u001b[30m\u001b[47mWelcome to GRUB!\n\r\n\r\u001b[0m\u001b[37m\u001b[40m\u001b[0m\u001b[30m\u001b[40m\u001b[2J\u001b[01;01H\u001b[0m\u001b[37m\u001b[40m\u001b[H\u001b[J\u001b[1;1H\u001b[H\u001b[J\u001b[1;1H\u001b[0m\u001b[30m\u001b[40m\u001b[2J\u001b[01;01H\u001b[0m\u001b[37m\u001b[40m    Booting `Debian GNU/Linux'Booting `Debian GNU/Linux'\n\r\n\r\n\r\n\rLoading Linux 6.1.0-53-cloud-amd64 ...Loading Linux 6.1.0-53-cloud-amd64 ...\n\r\n\rLoading initial ramdisk ...Loading initial ramdisk ...\n\r\n\rEFI stub: UEFI Secure Boot is enabled.\r\n[    0.000000] Linux version 6.1.0-53-cloud-amd64 (debian-kernel@lists.debian.org) (gcc-12 (Debian 12.2.0-14+deb12u1) 12.2.0, GNU ld (GNU Binutils for Debian) 2.40) #1 SMP PREEMPT_DYNAMIC Debian 6.1.187-1 (2026-09-07)\r\n[    0.000000] Command line: BOOT_IMAGE=/boot/vmlinuz-6.1.0-53-cloud-amd64 root=PARTUUID=1d183993-812e-44f6-a0fc-f3cece6a9e86 ro console=tty0 console=ttyS0,115200 earlyprintk=ttyS0,115200 consoleblank=0 intel_iommu=off\r\n[    0.000000] [Firmware Bug]: TSC doesn't count with P0 frequency!\r\n[    0.000000] BIOS-provided physical RAM map:\r\n[    0.000000] BIOS-e820: [mem 0x0000000000000000-0x000000000009ffff] usable\r\n[    0.000000] BIOS-e820: [mem 0x0000000000100000-0x00000000be2e9fff] usable\r\n[    0.000000] BIOS-e820: [mem 0x00000000be2ea000-0x00000000be2f4fff] ACPI data\r\n[    0.000000] BIOS-e820: [mem 0x00000000be2f5000-0x00000000bf8ecfff] usable\r\n[    0.000000] BIOS-e820: [mem 0x00000000bf8ed000-0x00000000bfb6cfff] reserved\r\n[    0.000000] BIOS-e820: [mem 0x00000000bfb6d000-0x00000000bfb7efff] ACPI data\r\n[    0.000000] BIOS-e820: [mem 0x00000000bfb7f000-0x00000000bfbfefff] ACPI NVS\r\n[    0.000000] BIOS-e820: [mem 0x00000000bfbff000-0x00000000bffdffff] usable\r\n[    0.000000] BIOS-e820: [mem 0x00000000bffe0000-0x00000000bfffffff] reserved\r\n[    0.000000] BIOS-e820: [mem 0x0000000100000000-0x000000083fffffff] usable\r\n[    0.000000] printk: bootconsole [earlyser0] enabled\r\n[    0.000000] NX (Execute Disable) protection: active\r\n[    0.000000] efi: EFI v2.70 by EDK II\r\n[    0.000000] efi: TPMFinalLog=0xbfbf7000 ACPI=0xbfb7e000 ACPI 2.0=0xbfb7e014 SMBIOS=0xbf9ca000 MEMATTR=0xbe328018 MOKvar=0xbf9bf000 RNG=0xbfb73018 TPMEventLog=0xbe2ea018 \r\n[    0.000000] random: crng init done\r\n[    0.000000] Kernel is locked down from EFI Secure Boot; see man kernel_lockdown.7\r\n[    0.000000] secureboot: Secure boot enabled\r\n[    0.000000] SMBIOS 2.4 present.\r\n[    0.000000] DMI: Google Google Compute Engine/Google Compute Engine, BIOS Google 11/06/2026\r\n[    0.000000] Hypervisor detected: KVM\r\n[    0.000000] kvm-clock: Using msrs 4b564d01 and 4b564d00\r\n[    0.000005] kvm-clock: using sched offset of 9879618806 cycles\r\n[    0.000838] clocksource: kvm-clock: mask: 0xffffffffffffffff max_cycles: 0x1cd42e4dffb, max_idle_ns: 881590591483 ns\r\n[    0.003421] tsc: Detected 2249.998 MHz processor\r\n[    0.004287] last_pfn = 0x840000 max_arch_pfn = 0x400000000\r\n[    0.005292] x86/PAT: Configuration [0-7]: WB  WC  UC- UC  WB  WP  UC- WT  \r\nMemory KASLR using RDRAND RDTSC...\r\n[    0.006904] last_pfn = 0xbffe0 max_arch_pfn = 0x400000000\r\n[    0.008268] Using GB pages for direct mapping\r\n[    0.009229] RAMDISK: [mem 0x3be64000-0x3cc83fff]\r\n[    0.009917] ACPI: Early table checksum verification disabled\r\n[    0.011181] ACPI: RSDP 0x00000000BFB7E014 000024 (v02 Google)\r\n[    0.011946] ACPI: XSDT 0x00000000BFB7D0E8 00005C (v01 Google GOOGFACP 00000001      01000013)\r\n[    0.013219] ACPI: FACP 0x00000000BFB78000 0000F4 (v02 Google GOOGFACP 00000001 GOOG 00000001)\r\n[    0.014426] ACPI: DSDT 0x00000000BFB79000 001A93 (v01 Google GOOGDSDT 00000001 GOOG 00000001)\r\n[    0.016016] ACPI: FACS 0x00000000BFBF2000 000040\r\n[    0.016698] ACPI: SSDT 0x00000000BFB7C000 000316 (v02 GOOGLE Tpm2Tabl 00001000 INTL 20250807)\r\n[    0.018391] ACPI: TPM2 0x00000000BFB7B000 000034",
+      "stdout_sha256": "00a3cd41edeb7c3218247310449ae7a14a23f110cf6b9e10b5d08b010e3a4d81"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "ssh",
+        "hh-fp-w4x",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "--tunnel-through-iap",
+        "--command",
+        "cat /proc/uptime; df -BG --output=avail / | tail -1"
+      ],
+      "ended_at": "2026-11-20T11:22:58Z",
+      "exit": 0,
+      "started_at": "2026-11-20T11:22:56Z",
+      "stderr_excerpt": "WARNING: \n\nTo increase the performance of the tunnel, consider installing NumPy. For instructions,\nplease see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth\n\n",
+      "stdout_excerpt": "32157.03 242553.27\n 267G\n",
+      "stdout_sha256": "9de3ab2b9a25fc76aa1ecf99cc66ab760cd469323fb1515890acd78c4c26f7e9"
+    }
+  ],
+  "declaration": {
+    "path": "scripts/gce-backend/declarations/fp-w4x-r656.json",
+    "sha256": "dd68d6ab75efc56511acef9cf4f1704fc4df31c6f36fb2536dc8fe9332c2f21d"
+  },
+  "harvest": {
+    "journald": {
+      "path": "/private/tmp/hh-r6.53-wt/docs/build/reports/compute/harvest/fp-w4x/journald.log",
+      "sha256": "8dd0dd1ca3c4d21f6108e5780705a74c0e812014a550bd5932c20c5ba4b8d012"
+    },
+    "manifest": {
+      "path": "/private/tmp/hh-r6.53-wt/docs/build/reports/compute/harvest/fp-w4x/MANIFEST.sha256",
+      "sha256": "6a466cf866d117563d55515daf238d5c7f6e0f5f31ae5d6216ded8dd39225d59"
+    },
+    "run_root_tar": {
+      "path": "/private/tmp/hh-r6.53-wt/docs/build/reports/compute/harvest/fp-w4x/run-root.tar.gz",
+      "sha256": "c5afd9ce0f74b02ad8769cc0450d2210b96b0ad7b35c3674291525428b9596da"
+    },
+    "serial": {
+      "path": "/private/tmp/hh-r6.53-wt/docs/build/reports/compute/harvest/fp-w4x/serial.log",
+      "sha256": "00a3cd41edeb7c3218247310449ae7a14a23f110cf6b9e10b5d08b010e3a4d81"
+    },
+    "verified_locally": true
+  },
+  "kind": "harvest",
+  "phase": "fp",
+  "provided": {
+    "OLLAMA_API_KEY": "yes",
+    "gcloud_auth": "yes"
+  },
+  "recipe": {
+    "git_head": "c939e2fdd68437dcd46d5cd4e525b2586bd9c22f",
+    "path": "scripts/gce-backend.sh",
+    "sha256": "7a415c041c6660f6e1f1fa7814eff0f62c721e64ed67d2a4acbeeb32ae138590"
+  },
+  "recorded_at": "2026-11-20T11:22:59Z",
+  "resources": {
+    "creation_timestamp": null,
+    "deletion_operation_end": null,
+    "disks": [],
+    "external_ipv4": "absent",
+    "instance_id": null,
+    "instance_name": null,
+    "machine_type": "e2-standard-8",
+    "project_id": "hh-fp-a1b2c3",
+    "project_number": null,
+    "zone": "us-central1-a"
+  },
+  "schema": "hh-compute-receipt/1",
+  "ticket": "R6.56",
+  "verification": null,
+  "window": "w4x"
+}
