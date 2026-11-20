@@ -74,7 +74,6 @@ SCRATCH="$(mktemp -d)"
 trap 'rm -rf "$SCRATCH" /tmp/fp-w4-leg.$$.log' EXIT
 for f in \
     scripts/fp-w4-results-inputs.txt \
-    docs/adr/ADR-0452-w4-scope-amendment.md \
     docs/build/reports/2026-11-19-fp-w4-window.json \
     docs/build/reports/2026-11-19-fp-e.json \
     docs/build/reports/compute/2026-11-18-fp-ws1-l1-conformance.json \
@@ -91,6 +90,16 @@ for f in \
   mkdir -p "$SCRATCH/$(dirname "$f")"
   cp "$REPO/$f" "$SCRATCH/$f"
 done
+# ADR-0452 was append-only amended after the packets minted
+# (165183b8 mint-time blob sha256:d0423c6e… — the packets' sources/8
+# pin). Stage the pinned mint-time bytes so the re-emit proves
+# byte-identical determinism against the inputs the records cite,
+# then assert the staged bytes are exactly the pinned blob.
+mkdir -p "$SCRATCH/docs/adr"
+git -C "$REPO" show 165183b8:docs/adr/ADR-0452-w4-scope-amendment.md \
+  > "$SCRATCH/docs/adr/ADR-0452-w4-scope-amendment.md"
+leg "adr-0452-mint-time-blob" bash -c \
+  "[ \"\$(shasum -a 256 '$SCRATCH/docs/adr/ADR-0452-w4-scope-amendment.md' | cut -d' ' -f1)\" = 'd0423c6e7943ec665fe86acb2ce9084c1871938538eea168b55861832b065def' ]"
 leg "reemit-packets" bash -c \
   "cd '$REPO' && ./target/debug/fp_w4_results emit-packets '$SCRATCH'"
 for r in \
