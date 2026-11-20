@@ -7,19 +7,28 @@
 # `task-selection/1` manifest; sidecar hashes verify; the declared
 # envelope, the verbatim stop set, the byte-pinned §8.5 rule, the
 # label spellings and the packet's exclusion/hash-ordering members all
-# hold.
+# hold. The GATE-G35 leg: the p4x `hh-compute-decl/1` validates, its
+# `hh-compute-quote/1` + `pq-` id recompute through receipt_lib's one
+# §3.10 path, and the `comparative-quote/1` + `hh-p4-x-quote-inputs/1`
+# records recompute byte-identical through `fp_p4x_quote` (C-11 — the
+# single quote artifact; the packet authorizes nothing).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 REPO="$(mktemp -d)"
 trap 'rm -rf "$REPO"' EXIT
-mkdir -p "$REPO/scripts" "$REPO/docs/build/reports"
+mkdir -p "$REPO/scripts/gce-backend/declarations" \
+         "$REPO/docs/build/reports/live"
 cp scripts/fp-p4x-inputs.txt "$REPO/scripts/"
+cp scripts/gce-backend/declarations/fp-p4x.json \
+   "$REPO/scripts/gce-backend/declarations/"
+cp docs/build/reports/live/pricing.json "$REPO/docs/build/reports/live/"
 for f in \
   2026-11-20-fp-p4-sweep-registry.json \
   2026-11-20-fp-p4-levels.json \
   2026-11-20-fp-p4-w-rule.json \
   2026-11-20-fp-p4-admissibility.json \
+  2026-11-20-fp-p4x-compute-quote.json \
   2026-11-08-fp-selection.json; do
   cp "docs/build/reports/$f" "$REPO/docs/build/reports/"
 done
@@ -39,7 +48,10 @@ echo "emit-identical OK"
 echo "== leg 2: sha256 sidecars =="
 for f in \
   2026-11-20-fp-p4x-prereg.sha256 \
-  2026-11-20-fp-p4x-selection-rule.sha256; do
+  2026-11-20-fp-p4x-selection-rule.sha256 \
+  2026-11-20-fp-p4x-compute-quote.sha256 \
+  2026-11-20-fp-p4x-quote.sha256 \
+  2026-11-20-fp-p4x-quote-inputs.sha256; do
   shasum -a 256 -c "docs/build/reports/$f"
 done
 
@@ -155,7 +167,86 @@ assert 'x2' in pre['cohort']
 print('shape OK: envelope 24 + 440 executable slots, V8/V9 withheld')
 PY
 
-echo "== leg 4: lab acceptance batteries =="
+echo "== leg 4: GATE-G35 quote — compute + comparative recompute =="
+# The declaration validates through the closed-schema validator.
+python3 -I scripts/gce-backend/validate_decl.py \
+  scripts/gce-backend/declarations/fp-p4x.json
+# The compute quote recomputes byte-identical through receipt_lib's
+# one §3.10 path, and its pq- id recomputes from the declaration.
+python3 -I scripts/gce-backend/receipt_lib.py quote \
+  "$REPO/scripts/gce-backend/declarations/fp-p4x.json" "$REPO" \
+  > "$REPO/recomputed-compute-quote.json"
+cmp -s docs/build/reports/2026-11-20-fp-p4x-compute-quote.json \
+  "$REPO/recomputed-compute-quote.json" || {
+  echo "FAIL: compute quote does not recompute byte-identical"; exit 1; }
+PQ="$(python3 -I scripts/gce-backend/receipt_lib.py quoteid \
+  "$REPO/scripts/gce-backend/declarations/fp-p4x.json" "$REPO")"
+[ "$PQ" = "pq-59a49747bfa5bdf0" ] || {
+  echo "FAIL: quoteid recompute $PQ"; exit 1; }
+# The comparative-quote/1 + inputs records recompute byte-identical
+# through the one quote path (fp_p4x_quote → comparative_quote).
+QBIN=./target/debug/fp_p4x_quote
+[ -x "$QBIN" ] || cargo build -q -p hharness-runner --bins
+"$QBIN" emit "$REPO" >/dev/null
+for f in \
+  2026-11-20-fp-p4x-quote.json \
+  2026-11-20-fp-p4x-quote-inputs.json; do
+  cmp -s "docs/build/reports/$f" "$REPO/docs/build/reports/$f" || {
+    echo "FAIL: $f does not recompute byte-identical"; exit 1; }
+done
+python3 - <<'PY'
+import json
+
+q = json.loads(open('docs/build/reports/2026-11-20-fp-p4x-quote.json').read())
+i = json.loads(open('docs/build/reports/2026-11-20-fp-p4x-quote-inputs.json').read())
+pre = json.loads(open('docs/build/reports/2026-11-20-fp-p4x-prereg.json').read())
+
+assert q['schema'] == 'comparative-quote/1'
+assert q['envelope_label'] == 'pre-quote'
+assert q['t'] == 1 and q['k'] == 1 and q['concurrency_c'] == 4
+
+# Slot-level rows: X0 = 24 lines, X1 = 440 executable lines — the
+# withheld V8/V9 are never priced.
+rows = {r['row_id']: r for r in q['rows']}
+assert set(rows) == {'p4x-x0', 'p4x-x1'}
+assert rows['p4x-x0']['n_trials'] == 24 and rows['p4x-x1']['n_trials'] == 440
+assert rows['p4x-x0']['h'] == 24 and rows['p4x-x1']['h'] == 440
+levels = [a['arm_id'] for a in pre['design']['x0']['experiment']['arms']]
+assert len(levels) == 8 and 'V8' not in levels and 'V9' not in levels
+x0 = rows['p4x-x0']; x1 = rows['p4x-x1']
+assert all(a.split(':')[0] in levels for a in x0['arms'])
+assert all(a.split(':')[0] in levels for a in x1['arms'])
+# Every model figure is the declared §10.4 top-point prior — the
+# measure_ref labels it, never a measurement.
+for r in (x0, x1):
+    assert 'DECLARED planning prior' in r['measure_refs'][0]
+    assert r['verdict'] == 'unresolved{sim_absent}'
+assert x0['model']['expected_micros'] == 24 * 340_000
+assert x1['model']['expected_micros'] == 440 * 340_000
+assert x0['model']['ceiling_micros'] == 24 * 510_000 * 12 // 10
+assert x1['model']['ceiling_micros'] == 440 * 510_000 * 12 // 10
+
+# The compute line is a verbatim citation — never re-priced.
+assert q['compute'] == [{'ceiling_micros': 13_486_340,
+                        'quote_id': 'pq-59a49747bfa5bdf0',
+                        'window': 'p4x'}]
+assert q['compute_ceiling_micros'] == 13_486_340
+
+# The inputs record: committed inputs with hashes, declared priors,
+# the honesty members — the packet authorizes nothing.
+assert i['schema'] == 'hh-p4-x-quote-inputs/1'
+assert i['records']['compute_quote']['quote_id'] == 'pq-59a49747bfa5bdf0'
+assert i['declared_model_priors']['p_hat_micros_per_slot'] == 340_000
+assert i['declared_model_priors']['p90_micros_per_slot'] == 510_000
+assert i['envelope']['x0_slots'] == 24 and i['envelope']['x1_slots'] == 440
+assert i['envelope']['nominal_x1_slots'] == 550
+assert {w['level_id'] for w in i['envelope']['withheld']} == {'V8', 'V9'}
+assert i['honesty']['authorizes_nothing'] is True
+print('quote OK: comparative-quote/1', q['quote_id'][:16],
+      '— 24 + 440 slots at the declared top point; compute cited')
+PY
+
+echo "== leg 5: lab acceptance batteries =="
 cargo test -q -p hharness-lab --test r7_2 -- --test-threads=1
 cargo test -q -p hharness-lab --test r7_1 -- --test-threads=1
 cargo test -q -p hharness-lab --test r6_43
