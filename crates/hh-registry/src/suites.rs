@@ -1295,3 +1295,249 @@ pub fn evolution_proposer_suite(class_version_id: &str) -> ConformanceSuite {
         ]),
     }
 }
+
+// ── the Stage-1 kernel seed (moved verbatim from hh-embed's service.rs, R6.55) ──
+//
+// `EmbedService::build` seeds this set at store open; the lab's offline
+// correction mint (W4x V5 reseal) resolves against the same records so a
+// sealed `version_id` pin is content-identical to what a slot's store
+// holds. One implementation, two callers — never a second seed.
+
+/// The `(class, name, extra capability_declaration)` rows the kernel
+/// publishes at open — `hh/…` names, `Placement::InProcess`, provenance
+/// `hh-kernel`. The variant content address is `impl-hh-<name>` under
+/// `application/vnd.hh.variant` — deterministic, so the `version_id`s
+/// are content-derived constants every seeded store reproduces.
+pub fn stage1_seed_rows() -> Vec<(ClassRecord, String, BTreeMap<String, Json>)> {
+    vec![
+        (control_strategy_class(), "round_robin".to_string(), BTreeMap::new()),
+        (
+            control_strategy_class(),
+            "react-steerable".to_string(),
+            BTreeMap::from([
+                (
+                    "steer_mode".to_string(),
+                    Json::str("interrupt_at_decision_point"),
+                ),
+                ("concurrent_input".to_string(), Json::str("steer")),
+            ]),
+        ),
+        (
+            control_strategy_class(),
+            // The Stage-1 default loop — `variant_for` has always
+            // answered `hh/react-minimal` (`REACT_MINIMAL_VARIANT`);
+            // the seed never published the name, so a sealed slot
+            // binding it could not resolve (R6.45q L1 drives).
+            "react-minimal".to_string(),
+            BTreeMap::new(),
+        ),
+        (
+            control_strategy_class(),
+            // R2.6: the `queue_next_turn` declaration — the same
+            // `ReactSteerable` interpreter (`variant_for`), a
+            // different steer-mode declaration (the durable wakeup
+            // seam is the queue — DF-S2.11-1).
+            "react-steerable-queue".to_string(),
+            BTreeMap::from([
+                ("steer_mode".to_string(), Json::str("queue_next_turn")),
+                ("concurrent_input".to_string(), Json::str("steer")),
+            ]),
+        ),
+        (context_policy_class(), "full_window".to_string(), BTreeMap::new()),
+        // R3.4 (DF-S1.19-1) — the §5c `context_policy` family's
+        // non-`default` variants publish under `hh/` so a sealed
+        // slot binds them through `resolve` like any other variant;
+        // the runtime half is `policy_for_variant`'s one mapping
+        // (`hh/<name>` → the kernel's first-party `ContextPolicy` —
+        // `full_window`/`default` stay the C0 floor).
+        (
+            context_policy_class(),
+            "priority_eviction".to_string(),
+            BTreeMap::new(),
+        ),
+        (
+            context_policy_class(),
+            "world_state_diff".to_string(),
+            BTreeMap::new(),
+        ),
+        (context_policy_class(), "jit_handles".to_string(), BTreeMap::new()),
+        (
+            context_policy_class(),
+            "recency_plus_pins".to_string(),
+            BTreeMap::new(),
+        ),
+        (
+            context_policy_class(),
+            "retrieval_augmented".to_string(),
+            BTreeMap::new(),
+        ),
+        (
+            // R-2.7 — the `router` slot's scripted-lane variant: the
+            // arm decodes the slot's sealed `policy` document and
+            // runs the offline-decidable policy arms (DF-S1.18-1).
+            routing_policy_class(),
+            "router_static".to_string(),
+            BTreeMap::new(),
+        ),
+        (
+            // R4.5b — the `model_port` slot's live lane: the arm
+            // decodes `dialect`/`endpoint`/`model` (+ optional
+            // `provider_params`/`substitution_allowed`) into the
+            // gateway-backed `GatewayModel` (DF-S1.18-1; ADR-0364).
+            model_port_class(),
+            "gateway_http".to_string(),
+            BTreeMap::new(),
+        ),
+        // R6.41 (G16a; REQ-XE-122) — the `compaction_strategy` slot's
+        // first-party C1 family (`hh-context::compact_family`'s own
+        // refs, the `@1` part of the registered name). The runtime
+        // half is `compaction_strategy_for`'s one mapping; the
+        // kernel's `evict_oldest` floor stays the packaged variant
+        // (`plugins/hh-compact-evict-oldest`) and needs no seed —
+        // the slot binds none of these for absent-not-null.
+        (
+            compaction_strategy_class(),
+            "summarize-rolling@1".to_string(),
+            BTreeMap::from([
+                ("deterministic".to_string(), Json::Bool(false)),
+                (
+                    "op_kinds".to_string(),
+                    Json::Arr(vec![
+                        Json::str("evict"),
+                        Json::str("summarize"),
+                    ]),
+                ),
+            ]),
+        ),
+        (
+            compaction_strategy_class(),
+            "offload-then-summarize@1".to_string(),
+            BTreeMap::from([
+                ("deterministic".to_string(), Json::Bool(false)),
+                (
+                    "op_kinds".to_string(),
+                    Json::Arr(vec![
+                        Json::str("evict"),
+                        Json::str("offload"),
+                        Json::str("summarize"),
+                    ]),
+                ),
+            ]),
+        ),
+        (
+            compaction_strategy_class(),
+            "structured-checkpoint@1".to_string(),
+            BTreeMap::from([
+                ("deterministic".to_string(), Json::Bool(true)),
+                (
+                    "op_kinds".to_string(),
+                    Json::Arr(vec![
+                        Json::str("evict"),
+                        Json::str("restructure"),
+                    ]),
+                ),
+            ]),
+        ),
+        (
+            compaction_strategy_class(),
+            "fresh-window-with-notes@1".to_string(),
+            BTreeMap::from([
+                ("deterministic".to_string(), Json::Bool(false)),
+                (
+                    "op_kinds".to_string(),
+                    Json::Arr(vec![
+                        Json::str("evict"),
+                        Json::str("offload"),
+                        Json::str("summarize"),
+                    ]),
+                ),
+            ]),
+        ),
+        (
+            compaction_strategy_class(),
+            "world-state-refresh@1".to_string(),
+            BTreeMap::from([
+                ("deterministic".to_string(), Json::Bool(true)),
+                (
+                    "op_kinds".to_string(),
+                    Json::Arr(vec![Json::str("evict")]),
+                ),
+            ]),
+        ),
+        (
+            compaction_strategy_class(),
+            "provider-compaction@1".to_string(),
+            BTreeMap::from([
+                ("deterministic".to_string(), Json::Bool(false)),
+                (
+                    "op_kinds".to_string(),
+                    Json::Arr(vec![
+                        Json::str("evict"),
+                        Json::str("provider_compact"),
+                    ]),
+                ),
+            ]),
+        ),
+    ]
+}
+
+/// Seed the embedded registry with the kernel's Stage-1 suite — the
+/// two hot-path classes (`control_strategy`, `context_policy`) plus
+/// one `Placement::InProcess` variant each, published under `hh/…`.
+/// Idempotent: a store that already carries a variant's version id is
+/// left alone (the check is the deterministic `version_id`, never a
+/// name probe).
+pub fn seed_stage1(registry: &mut crate::store::RegistryStore) {
+    use hharness_identity::idp::address;
+    use hharness_provenance::ProvenanceRecord;
+
+    use crate::kinds::Placement;
+    use crate::records::{AppliesTo, Implementation, RegistryRecord, VariantRecord};
+
+    let prov = ProvenanceRecord::kernel("hharness-embed", 0);
+    for (class, name, extra_decl) in stage1_seed_rows() {
+        let class_rec = RegistryRecord::Class(class);
+        let class_vid = crate::identity::version_id(&class_rec);
+        if registry.get(&class_vid).is_none() {
+            let _ = registry.register(class_rec, &prov, None);
+        }
+        let variant = VariantRecord {
+            variant_id: format!("hh/{name}"),
+            class_ref: class_vid.clone(),
+            contract_range: "1.0".to_string(),
+            version_label: Some("1.0.0".to_string()),
+            param_schema: BTreeMap::new(),
+            implementation: Implementation {
+                content: address(
+                    format!("impl-hh-{name}").as_bytes(),
+                    "application/vnd.hh.variant",
+                ),
+                placement: Placement::InProcess,
+                host_requirements: Json::Null,
+            },
+            capability_declaration: {
+                let mut d = BTreeMap::from([("deterministic".to_string(), Json::Bool(true))]);
+                d.extend(extra_decl);
+                d
+            },
+            conditioned_rules: vec![],
+            applies_to: AppliesTo {
+                participant_classes: BTreeSet::from(["native".to_string()]),
+                families: vec![],
+            },
+            declared_costs: None,
+            summary: hharness_hir::leaves::Text::new(
+                format!("kernel {name} variant"),
+                "hh-kernel",
+                prov.clone(),
+            ),
+            dialect_range: "registry/1".to_string(),
+        };
+        let variant_rec = RegistryRecord::Variant(variant);
+        let variant_vid = crate::identity::version_id(&variant_rec);
+        if registry.get(&variant_vid).is_none() {
+            let _ = registry.register(variant_rec, &prov, None);
+        }
+        let _ = registry.publish("hh", &name, &variant_vid, None, None, &prov);
+    }
+}
