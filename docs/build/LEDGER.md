@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket: DONE
-lastCompleted:   R6.54a
+nextTicket: R7.1
+lastCompleted:   R6.57
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -32,12 +32,16 @@ chainTip:        codex/harnessharness-r6.53
 benchmarkSet:    (unset; HUMAN-H8 must bind actual inputs)
 autonomy:        checkpoint
 mergePolicy:     OPERATOR
-round:           6
+round:           7
 harness:         devin-cli/swe-2-high/subagent
-updatedAt:       2026-11-19T22:30Z
+updatedAt:       2026-11-20T19:30Z
 ```
 
 ## OPEN FINDINGS
+
+- 2026-11-20 · **Guard round-keyed legs inert under round:7.** `supplement_guard.py`'s `check_markers6` / `check_window6` / `LATER_ROUND_ID6` legs fire only when `round: 6`; under `round: 7` the stock build-memory validator and the contract skeleton discipline still bind (skeletons carry no `Run:`), but the round-6 paid-body/gate-PASSED and window-cfg checks do not cover R7.3/R7.5. A Round-7 guard extension is an engineering ticket, not this registration's scope — the coordinator/operator may mint one before the window bodies flesh.
+
+- 2026-11-20 · **Pre-existing guard residuals standing at the Round-7 registration (not caused by it).** `check-supplement-guard.sh` FAILs the diagnostic-baseline legs on committed W4x-landing evidence: 4 unexplained `size` warnings (`compute/harvest/fp-w4/journald.log`, `fp-w4x/journald.log`, `fp-w4xv/run-root.tar.gz`, `reports/2026-11-20-fp-w4x-answer-scan.json` — all >5 MB, committed by the R6.55–R6.57 landing) needing dated bounded-family amendments to `2026-10-30_evidence-legacy-baseline.json` (the fp-harvest-size-6 / wc-*-size precedent), and one `missing-historical-diagnostic` — the `index|BUILD_INDEX.md` column-count class legitimately vanished when the coordinator's backfill repaired those rows (resolved, not cleared — amendment records the repair). Coordinator scope: disposition both at the W4x closeout or with a dated baseline amendment; do not silently re-baseline. Route computes `DISPATCH — R7.1` despite the FAIL.
 
 - 2026-09-15 · **CC4 hygiene nit (minor).** `docs/build/reports/S0.3-measurement-sheet.md` names the E1 build tool ("cargo") once in prose describing how a gate was run. Arguably outside CC4's scope (a report, not a contract/data-model/criterion/stage) and it's the winning candidate's own tool — but flagged for the capstone's whole-build CC-recheck to adjudicate/scrub consistently. Not a per-ticket block; not reopening a landed ticket.
 - 2026-09-15 · **Accepted deviation to re-surface at GATE-ACCEPT.** GATE-G1 PASSED while carrying the DF-S0.3-3 **R2 cross-camp human-signature** residual OPEN, and treating the armed revalidation trigger (E2 kernel scores out of ±1) as ADR-0009 steps-5–7 **satisfied-by-analysis** (ADR-0226). Both are operator-accepted; list them in the CAP.3 ACCEPTED-deviations set for GATE-ACCEPT signing.
@@ -1526,3 +1530,7 @@ updatedAt:       2026-11-19T22:30Z
 
 - 2026-11-16T23:27Z · **GATE-G28l (PROV-Wc10) — recorded PASSED — `run`** — readout `docs/build/readouts/GATE-G28l.md` Status PASSED; signature Reading 1 — operator verbatim "ok, run and continue" (interactive, 2026-11-16T23:26:47Z; agent-drafted block sha256 `713df7089baa`). The tenth repair window's compute authorized: `fp-wc10.json` stamped (`verbatim_sha256` `1b8292c0487dd0…`, quote `pq-a2d99ef16c6c3814`, ceiling 3,193,860 µ$ ~$3.19, `model_line: none`); declared pinned commit `b3f72ab7` (verified machinery — exec-drain + transcripts + model-port guard, all smoke-verified); `model_port` 49152/49153 declared data; epoch-5 verbatim; 38 trials at D=8h under the R-8-shaped early-inspection checkpoint; the frozen-list outcome verbatim — never fabricated. Worst-case first-pass compute ~$23.62 ≤ $30. nextTicket → R6.45o dispatch · chainTip → codex/harnessharness-model-port-guard · devin-cli/swe-2-high
 - 2026-11-20T19:05Z · **R6.55/R6.56/R6.57 done — W4-extension chain landed (manifest 325d/325e/325f, ADR-0453)** — branch `codex/harnessharness-r6.53` (PR #424). **R6.55** (offline $0): corrected V5 sealed doc minted via the real registry seed path (new vid, original byte-untouched, supersession recorded); real Pi `pi-coding-agent@0.52.3` + Claude Code `claude-code@2.1.50` adapters (npm-pinned bundles, digest-pinned images, driver arm support); PP0 admission battery 10/10 all-gates on real receipts after two honest machinery repairs (bare `setsid` tore exec sessions → `setsid --wait` + regression goldens; protocol-invalid synthetic SSE recordings rebuilt + Claude side-call recorded); BL-49 facade exception landed+discharged. **R6.56** (live, ~$13.74 of $100): W4x window executed 150/150 slots 0 withheld — pi 50 rc=0 (31 pass), claude-code 50 rc=0 (30 pass), v5-corrected 50 settled; a5 verify-clone rerun repaired the verifier mount → v5 20 pass/30 fail real scores; teardown/compute-open/archive verified; settlement `settled_discrepant{unmetered_streaming_usage}` (pi/cc SSE usage-absent). **R6.57** (offline $0): outcomes fold → answer-scan 69 flags/34 flagged passes → HUMAN-H20 operator verbatim "all 69 cleared. continue" → post-review restored + frozen generations minted (pi θ 620000/Δ+40000/p843750, cc θ 600000/Δ+20000, mini 580000 ref, leader `hh/pi@0.52.3`; v5 Δ `unavailable{contrast_refused}`); zero `pending{` members; phase-2/3/4 `-flip` publication records re-pinned to W4x frozen packets under GATE-G31/ADR-0453; site re-emitted (typed absences for superseded shape); settlements landed — w4xv `settled_discrepant{concurrent_hour_unattributed}` (~$0.12 gap), w4x confirming read zero post-teardown usage, W4 ≥24h confirming read fully rolled off (figure stands). chainTip → codex/harnessharness-r6.53 · nextTicket → operator Round-7 ruling (O-1/O-2/O-3) + BL-50 · devin-cli/swe-2-high
+
+## PHASE LOG — Round 7
+
+- 2026-11-20T19:30Z · **Round 7 registered (decompose-spec mode=extend; records only, USD $0.00)** — manifest rows 326–338 appended under the `### Round 7` banner (`tail=minimal`) per GATE-G34 PASSED / ADR-0454 (operator verbatim "O1 approve, O-2 i'm not sure, O-3 approved, yes fold in BL-50. go"); 13 contract files written; no gate pre-signed; no existing file renamed or row superseded; the O-3 mint is conditional on the pass's honest terminal state (CAP7.1 → CAP7.2 → GATE-G37). Registration authorizes no spend, provisioning, publication or merge — window envelopes are declared in their skeletons and stop at GATE-G35/GATE-G36. Planning record `docs/build/planning/2026-11-20_round7-decomposition.md`. chainTip → codex/harnessharness-r6.53 · nextTicket → R7.1 · records-only · devin-cli/swe-2-high/subagent
