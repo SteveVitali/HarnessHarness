@@ -5,7 +5,7 @@
     "model_line": "authorized",
     "quote_id": "pq-59a49747bfa5bdf0",
     "readout_path": "docs/build/readouts/GATE-G35.md",
-    "verbatim_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    "verbatim_sha256": "ca8b1353cc3dcfbe68c8d135c1925419a866f12fbbbf6a898638b82f1511522b"
   },
   "boot_disk": {
     "size_gib": 300,
@@ -95,7 +95,7 @@
   },
   "runner": {
     "build": "source",
-    "commit": "0000000000000000000000000000000000000000"
+    "commit": "006c2c719e9e0e613d7ce1aaad4fce354fa512d4"
   },
   "schema": "hh-compute-decl/1",
   "service_account": "none",
