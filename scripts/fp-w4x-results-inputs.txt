@@ -1,0 +1,23 @@
+# fp-w4x-results emit inputs — the R6.57 executed-W4x re-fold
+# (manifest 325f). The committed repo-relative records plus the
+# retained W4x/W4xv harvest roots (the same manifest idiom as
+# fp-w4-results-inputs.txt; retained paths are read-only and cited by
+# sha256 inside the records). `emit-packets` reads only the committed
+# members; `emit`/`freeze` additionally read the retained harvest.
+w4x_window=docs/build/reports/2026-11-20-fp-w4x-window.json
+w4xv_window=docs/build/reports/2026-11-20-fp-w4xv-window.json
+w4_window=docs/build/reports/2026-11-19-fp-w4-window.json
+w4_outcomes=docs/build/reports/2026-11-19-fp-w4-outcomes.json
+w4_review=docs/build/reports/2026-11-19-fp-w4-flagged-review.json
+fp_e=docs/build/reports/2026-11-19-fp-e.json
+gl1=docs/build/reports/compute/2026-11-18-fp-ws1-l1-conformance.json
+prereg=docs/build/reports/2026-11-10-fp-prereg.json
+w4x_settlement=docs/build/reports/2026-11-20-fp-w4x-settlement.json
+w4x_settlement_2=docs/build/reports/2026-11-20-fp-w4x-settlement-2.json
+w4xv_settlement=docs/build/reports/2026-11-20-fp-w4xv-settlement.json
+admission_pi=docs/build/reports/2026-11-20-fp-w4x-admission-pi.json
+admission_cc=docs/build/reports/2026-11-20-fp-w4x-admission-claude-code.json
+# retained stores (the R6.55/R6.56 W4x + W4xv harvests — the outcomes
+# fold, the answer scan, and the freeze legs read these).
+retained_root=~/hh-retained/w4x/harvest
+retained_root_v=~/hh-retained/w4xv/harvest

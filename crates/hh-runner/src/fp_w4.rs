@@ -70,19 +70,19 @@ const FAMILY_ALPHA_PPM: i64 = 50_000;
 const L2_EPSILON_PPM: i64 = 200_000;
 const L2_PLANNED_N: i64 = 50;
 
-fn obj_dyn(pairs: impl IntoIterator<Item = (String, Json)>) -> Json {
+pub fn obj_dyn(pairs: impl IntoIterator<Item = (String, Json)>) -> Json {
     Json::Obj(pairs.into_iter().collect())
 }
 
-fn refused(reason: &str) -> Json {
+pub fn refused(reason: &str) -> Json {
     marker("refused", reason)
 }
 
-fn not_computed(reason: &str) -> Json {
+pub fn not_computed(reason: &str) -> Json {
     marker("not_computed", reason)
 }
 
-fn unavailable(reason: &str) -> Json {
+pub fn unavailable(reason: &str) -> Json {
     marker("not_applicable", reason)
 }
 
@@ -1542,7 +1542,7 @@ pub fn w4_audit_computed_packet(
 
 // ── the superseding L3 report ────────────────────────────────────────
 
-fn dist(vals: &[i64]) -> Json {
+pub fn dist(vals: &[i64]) -> Json {
     if vals.is_empty() {
         return unavailable("no folded values");
     }

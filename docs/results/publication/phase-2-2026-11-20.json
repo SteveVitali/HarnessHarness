@@ -1,0 +1,96 @@
+{
+ "dataset": {
+  "contamination_scan_ref": "docs/build/reports/2026-11-19-fp-contamination-scan.json",
+  "revision": "a11591e931442908c34a5bc7a65e8e664f4752d7",
+  "secret_scan_ref": "docs/build/reports/2026-11-19-fp-answer-scan.json",
+  "visibility": "public"
+ },
+ "dataset_card_ref": {
+  "path": "docs/build/reports/2026-11-19-fp-dataset-card.md",
+  "sha256": "50c417b3c252bafffdae7f460e6d83572ef197fec6d313f0b7cd8d3e7212737a"
+ },
+ "dataset_flip": "done{human_h17:2026-11-19T04:23Z}",
+ "gate_row": "325f (ADR-0453 ruling 3 \u2014 verbatim 'Publish \u2014 same terms as G31'; the phase-2 gate remains GATE-G31 per the manifest/README)",
+ "gate_verbatim": {
+  "policy": "sanitized publish only",
+  "scope": "yes, publish",
+  "terms": "I've read hugging face and ollama terms",
+  "transcript_option": "(b) links only"
+ },
+ "inputs": [
+  {
+   "path": "docs/build/reports/2026-11-19-fp-w4-results-p2-fp-frozen.json",
+   "sha256": "429ffd276464cbc64d6658fcb38eee4f6eff953d224ac00309835259877c3018"
+  },
+  {
+   "path": "scripts/site/fixtures/phase2-pilot.json",
+   "sha256": "76b4adc68e1a464dd95b32ba3ee1a7379681658785a81c657df478e8d447ca4d"
+  },
+  {
+   "path": "scripts/site/fixtures/phase2-quote.json",
+   "sha256": "c4e21d465fd0a71643b20317937bc6b8909039d15401d0e961b2263a2e70603f"
+  },
+  {
+   "path": "scripts/site/fixtures/phase2-receipt-index.json",
+   "sha256": "e17ab334733f9a4d4b577d5ba203549b0fd747bdf3da382fb69a0dcd7f8141c5"
+  }
+ ],
+ "inputs_digest": "sha256:47b94e794783d917110f2b557b29c85032743a545860e798845694e2a7ca244a",
+ "labels": {
+  "evidence_class": "recorded execution",
+  "outside_verified": false
+ },
+ "notes": "the ADR-0453 phase-2 ruling publishes under the same pins as the 2026-11-19 record \u2014 the frozen W4 p2-fp packet plus the declared fixtures. The W4x fold (R6.57) supersedes p2-fp's pi/claude-code not_run{admission:AG3} members with executed evidence; the w4x packets below are pinned as withheld{flagged_review} \u2014 the freeze veto holds until HUMAN-H20 dispositions the 34 flagged passes, so they are disclosed, never published (X-07 admits frozen records only).",
+ "pages": [
+  "/phase-2/"
+ ],
+ "phase": "phase-2",
+ "readout": "docs/build/readouts/GATE-G31.md",
+ "recorded_at": "2026-11-20",
+ "scan_refs": [
+  {
+   "path": "docs/build/reports/2026-11-19-fp-answer-scan.json",
+   "sha256": "f836343a99c056a0567fb2027fb4c9f9db0f90f6728765bc2cb75bddf0b13853"
+  },
+  {
+   "path": "docs/build/reports/2026-11-19-fp-contamination-scan.json",
+   "sha256": "421399fd7025375b288ce7cc01ecd8cde39bb75ee0942a8996e90647f8284cdd"
+  },
+  {
+   "path": "docs/build/reports/2026-11-19-fp-w4-answer-scan.json",
+   "sha256": "907f38d350dd0034b77fbdb6b6ed6cbad071b136209fba11c49bfd2215a42d88"
+  },
+  {
+   "path": "docs/build/reports/2026-11-19-fp-w4-flagged-review.json",
+   "sha256": "d56c0d91c16cca6a98c307246598ff457e3f00ce9e06cbbe748de632e50d312e"
+  },
+  {
+   "path": "docs/build/reports/2026-11-20-fp-w4x-answer-scan.json",
+   "sha256": "b132c026033718bac6a8282775482a300ffed438e2b343dbffe7f259de5cc1c3"
+  }
+ ],
+ "schema": "hh-site-publication/1",
+ "supersedes": "docs/results/publication/phase-2-2026-11-19.json",
+ "withheld": [
+  {
+   "path": "docs/build/reports/2026-11-20-fp-w4x-results-p2-fp.json",
+   "sha256": "802d171abb1bb10dc2b89a1c8acda6bddcda518cc35297af1610e3c5d3b5de78",
+   "state": "withheld{flagged_review} \u2014 69 flagged records (34 flagged passes) pending HUMAN-H20; the freeze refuses until review lands"
+  },
+  {
+   "path": "docs/build/reports/2026-11-20-fp-w4x-results-p4-fp.json",
+   "sha256": "1db596dc4cbc9204c69955a084309433d43c2ed4f831a43bd3ffe64479f0a7e8",
+   "state": "withheld{flagged_review} \u2014 69 flagged records (34 flagged passes) pending HUMAN-H20; the freeze refuses until review lands"
+  },
+  {
+   "path": "docs/build/reports/2026-11-20-fp-w4x-results-p3-l2.json",
+   "sha256": "c58c96f98f6f774ef3f49be4b09cf7b827a92821370f6678f69ddb911296473f",
+   "state": "withheld{flagged_review} \u2014 69 flagged records (34 flagged passes) pending HUMAN-H20; the freeze refuses until review lands"
+  },
+  {
+   "path": "docs/build/reports/2026-11-20-fp-w4x-l3.json",
+   "sha256": "6710073c764157fb9a4c4c048e27d69fffdcb44ae4841b461e0833ab90f8fb07",
+   "state": "withheld{flagged_review} \u2014 69 flagged records (34 flagged passes) pending HUMAN-H20; the freeze refuses until review lands"
+  }
+ ]
+}
