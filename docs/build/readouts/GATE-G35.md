@@ -181,3 +181,15 @@ GATE DECISIONS row: <date -u +%FT%TZ> | GATE-G35
 Operator confirmation of agent-drafted text (verbatim, <date -u +%FT%TZ>): "<words>" — covers sha256:<first 12>
 Signed by: the operator. Recorded by <harness/model>, which does not sign.
 -->
+
+## Operator deferral (2026-11-20)
+
+Operator verbatim (interactive, Devin CLI session, received 2026-11-20): "Ok, how about
+we make a note to mark this work as deferred and pick up Phase-4 after the initial
+publication of results is live on the web"
+
+Recorded: the gate stays **PENDING** — deferred, not dispositioned. No signature lines were
+written. The §8.x pass pauses at this spend gate; the frozen prereg (`ec27a278…`), selection
+rule (`67009098…`) and quotes (`e4b3ed49…`/`pq-59a49747bfa5bdf0`) stand committed and re-verify
+at re-presentation. Re-presentation trigger: initial publication of results live on the web
+(DF-G35-1).
