@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_237 ADRs: 185 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_238 ADRs: 186 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -221,6 +221,7 @@ _237 ADRs: 185 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0451 | A later-pass corpus where branch coverage must be attributed to natural recordings (not authored fixtures), a corpus member whose on-disk bytes differ from its digested bytes, or a canon version bump — then the manifest members and digest must be re-emitted and the pass id re-minted on an unused partition (REQ-XD-106). |
 | ADR-0452 | Any proposal to re-run an arm the operator recorded `not_run{admission}` without new PP0 admission evidence, or a request to extend this amendment's supersession beyond the W4 scope — then the narrow-supersession boundary (GATE-G30's `end-first-pass-early` stands for every other scope) must be re-ruled explicitly rather than inferred. |
 | ADR-0453 | Any proposal to run a further arm class (a fourth contrast arm, a new provider, or arms past the declared 150-slot geometry) — then this ADR's scope must be re-ruled explicitly; the $100 ceiling does not silently extend to arms not named in the verbatim ruling. |
+| ADR-0454 | Any proposal to extend the pass beyond the §8.x cluster (e.g., pulling §7.8 or §5.5 ids back into scope), to run further rounds after the O-3 closure record lands, or to treat the O-3 signature as effective before the pass's honest terminal state — then this ADR's scope must be re-ruled explicitly. |
 
 ## Fired-and-answered triggers (BL-48)
 
