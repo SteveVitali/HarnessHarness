@@ -104,6 +104,16 @@
     "obligation": "",
     "evidence": "",
     "message": "BUILD_INDEX.md: 2 row(s) do not have the header's column count — an unescaped '|' in a cell? (BM-INDEX-01) (first: line 56 (12/11))"
+   },
+   "resolved": {
+    "date": "2026-11-20",
+    "recorded_by": "coordinator DF-R7.1-1 discharge — append-only; the entry is preserved, never cleared",
+    "reason": "resolved-by-repair — CAP6.2's BUILD_INDEX backfill (build rows 322, 2026-11-19) repaired the 2 malformed rows this diagnostic reported; the class legitimately ceased emitting — a vanished diagnostic after repair is not missing history",
+    "provenance": {
+     "repair": "docs/build/runs/CAP6.2.md — register normalization + 12 missing BUILD_INDEX landings backfilled (DF-CAP6.1-5 closure)",
+     "deferral": "docs/tickets/DEFERRALS.md DF-R7.1-1 — opened by R7.1 when the required-emission rule could not reconcile the repair",
+     "guard": "docs/build/tools/supplement_guard.py — resolved member honored same date"
+    }
    }
   },
   {
