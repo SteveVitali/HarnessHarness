@@ -652,6 +652,9 @@ Source: [ratified experiments supplement](../experiments-spec.md) (canonical v0.
 | 325a | `325a_R6.52__w4-resurrect.md` | Round 6 addendum | ticket | W4 resurrection window (ADR-0452 operator amendment): undelete `hh-fp-a1b2c3`, provision+declare, run protected pair + V5, Pi/CC `not_run{admission}`, teardown+receipts | GATE-G32, ADR-0452 |
 | 325b | `325b_R6.53__w4-results-refold.md` | Round 6 addendum | ticket | W4 results re-fold: superseding P2-FP/P3-L2/P4-FP packets + publication records over executed evidence | 325a |
 | 325c | `325c_R6.54__w4-reconcile-addendum.md` | Round 6 addendum | ticket | W4 reconcile addendum: H18 billing entry superseding `N/A{scope_end}` + SETTLE-W4 confirming reads | 325b |
+| 325d | `325d_R6.55__w4x-adapters-pp0.md` | Round 6 addendum | ticket | W4-extension prep (ADR-0453): corrected V5 sealed doc (new vid, supersession recorded) + Pi/Claude-Code real adapters (harness configs, install wiring, headless invocation) + PP0 $0 smoke battery → AG3/AG5/AG6/AG8 admission evidence + BL-49 facade exception (offline, $0) | 325c, ADR-0453 |
+| 325e | `325e_R6.56__w4x-window.md` | Round 6 addendum | ticket | W4-extension window (ADR-0453, $100 ceiling): undelete `hh-fp-a1b2c3` → provision+declare → run Pi (50) + Claude-Code (50) + corrected-V5 (50) → teardown → receipts → settle → archive | 325d |
+| 325f | `325f_R6.57__w4x-fold.md` | Round 6 addendum | ticket | W4-extension fold + reconcile: outcomes/packets supersession, phase-2 `hh-site-publication/1` (publish — same terms as G31, verbatim ADR-0453), flagged review routing as needed, H18/settlement addenda, closure bookkeeping | 325e |
 
 ## Milestone gates
 **GATE-G1 — Stage-0 acceptance & ecosystem-decision revalidation** (Stage 0). Criterion (verbatim): S1/S2 gates pass and the revalidation rule is evaluated: any C5/C7/C12 score outside the assumed ±1 band, or a gate failure on the winning candidate, re-runs ADR-0009 steps 5–7 (§10.6; OQ-131).
