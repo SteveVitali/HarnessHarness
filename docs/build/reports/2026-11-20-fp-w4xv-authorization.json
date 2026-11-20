@@ -1,0 +1,12 @@
+{
+ "ceiling_micros": 4690420,
+ "gate": "ADR-0453",
+ "model_line": "authorized",
+ "note": "continuation under the SAME ADR-0453 USD-100 ceiling \u2014 V5-only re-run (50 slots) after the verifier-mount fix; a4's $10.93 stands recorded",
+ "quote_id": "pq-b70e6859db3f6011",
+ "readout_path": "docs/adr/ADR-0453-w4x-extension-unblock-rulings.md",
+ "recorded_at": "2026-11-20T13:19:13Z",
+ "schema": "hh-fp-authorization/1",
+ "verbatim_sha256": "ad92a45346d3440877020e06e016754499169148f4d5d2d811759ab12077549e",
+ "window": "w4xv"
+}
