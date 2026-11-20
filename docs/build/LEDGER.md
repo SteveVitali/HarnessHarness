@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket: R7.1
-lastCompleted:   R6.57
+nextTicket: R7.2
+lastCompleted:   R7.1
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -34,7 +34,7 @@ autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           7
 harness:         devin-cli/swe-2-high/subagent
-updatedAt:       2026-11-20T19:30Z
+updatedAt:       2026-11-20T20:30Z
 ```
 
 ## OPEN FINDINGS
@@ -42,6 +42,8 @@ updatedAt:       2026-11-20T19:30Z
 - 2026-11-20 · **Guard round-keyed legs inert under round:7.** `supplement_guard.py`'s `check_markers6` / `check_window6` / `LATER_ROUND_ID6` legs fire only when `round: 6`; under `round: 7` the stock build-memory validator and the contract skeleton discipline still bind (skeletons carry no `Run:`), but the round-6 paid-body/gate-PASSED and window-cfg checks do not cover R7.3/R7.5. A Round-7 guard extension is an engineering ticket, not this registration's scope — the coordinator/operator may mint one before the window bodies flesh.
 
 - 2026-11-20 · **Pre-existing guard residuals standing at the Round-7 registration (not caused by it).** `check-supplement-guard.sh` FAILs the diagnostic-baseline legs on committed W4x-landing evidence: 4 unexplained `size` warnings (`compute/harvest/fp-w4/journald.log`, `fp-w4x/journald.log`, `fp-w4xv/run-root.tar.gz`, `reports/2026-11-20-fp-w4x-answer-scan.json` — all >5 MB, committed by the R6.55–R6.57 landing) needing dated bounded-family amendments to `2026-10-30_evidence-legacy-baseline.json` (the fp-harvest-size-6 / wc-*-size precedent), and one `missing-historical-diagnostic` — the `index|BUILD_INDEX.md` column-count class legitimately vanished when the coordinator's backfill repaired those rows (resolved, not cleared — amendment records the repair). Coordinator scope: disposition both at the W4x closeout or with a dated baseline amendment; do not silently re-baseline. Route computes `DISPATCH — R7.1` despite the FAIL.
+
+- 2026-11-20 · **R7.1 disposition of the standing residual — half landed, half deferred.** Dated bounded-family amendment `fp-w4x-harvest-size-4` appended to `2026-10-30_evidence-legacy-baseline.json` (provenance → this finding + the fp-harvest-size-6 precedent; bound 4) dispositions the four >5 MB W4/W4x artifacts; the `missing-historical-diagnostic` stays recorded as **DF-R7.1-1** — discharging an expected `legacy` class needs a guard-owning amendment, which is not this ticket's surface.
 
 - 2026-09-15 · **CC4 hygiene nit (minor).** `docs/build/reports/S0.3-measurement-sheet.md` names the E1 build tool ("cargo") once in prose describing how a gate was run. Arguably outside CC4's scope (a report, not a contract/data-model/criterion/stage) and it's the winning candidate's own tool — but flagged for the capstone's whole-build CC-recheck to adjudicate/scrub consistently. Not a per-ticket block; not reopening a landed ticket.
 - 2026-09-15 · **Accepted deviation to re-surface at GATE-ACCEPT.** GATE-G1 PASSED while carrying the DF-S0.3-3 **R2 cross-camp human-signature** residual OPEN, and treating the armed revalidation trigger (E2 kernel scores out of ±1) as ADR-0009 steps-5–7 **satisfied-by-analysis** (ADR-0226). Both are operator-accepted; list them in the CAP.3 ACCEPTED-deviations set for GATE-ACCEPT signing.
@@ -1534,3 +1536,5 @@ updatedAt:       2026-11-20T19:30Z
 ## PHASE LOG — Round 7
 
 - 2026-11-20T19:30Z · **Round 7 registered (decompose-spec mode=extend; records only, USD $0.00)** — manifest rows 326–338 appended under the `### Round 7` banner (`tail=minimal`) per GATE-G34 PASSED / ADR-0454 (operator verbatim "O1 approve, O-2 i'm not sure, O-3 approved, yes fold in BL-50. go"); 13 contract files written; no gate pre-signed; no existing file renamed or row superseded; the O-3 mint is conditional on the pass's honest terminal state (CAP7.1 → CAP7.2 → GATE-G37). Registration authorizes no spend, provisioning, publication or merge — window envelopes are declared in their skeletons and stop at GATE-G35/GATE-G36. Planning record `docs/build/planning/2026-11-20_round7-decomposition.md`. chainTip → codex/harnessharness-r6.53 · nextTicket → R7.1 · records-only · devin-cli/swe-2-high/subagent
+
+- 2026-11-20T20:30Z · **R7.1 done — Phase-4 admissibility second pass landed (manifest 326, offline USD $0.00)** — branch `codex/harnessharness-r6.53`. New frozen `sweep-registry/1` under the `x2:` exploration identity (cross-identity merge refused vs `x1:`); V1–V7 declared from spec §8.1 and sealed through R6.43's enumerate→resolve→seal machinery (composite path added for multi-spelling conjunctions); V8/V9 `withheld{inert_at_admissible_window}` — committed-corpus W rule F(32768)=0.22 < 0.25, W never fabricated; REQ-XD-225 tier-2 admission (later identity only), REQ-XD-204 effort-pin fidelity, REQ-XD-205/REQ-XE-127 W rule, REQ-XD-208 activation fold, REQ-XD-209 inert forecast land in `crates/hh-lab/src/p4.rs` with r7_1 6/6 + full lab/runner suites green; token-corpus extractor + emitter + `check-fp-p4.sh` committed; guard: 4 size warnings dispositioned via `fp-w4x-harvest-size-4`, missing-historical → DF-R7.1-1. nextTicket → R7.2. | run docs/build/runs/R7.1.md |
