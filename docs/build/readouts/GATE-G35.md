@@ -4,7 +4,7 @@
   Signature block and never edits or deletes anything above it.
 -->
 # GATE-G35 readout — G-P4-X: authorize the phase-4 exploration window (X0 smoke + X1 OFAT sweep)
-Status: PENDING   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
+Status: PASSED   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
 
 > An operator or authorized human record supplies the decision; an agent must not sign or assume silence is
 > approval.
@@ -193,3 +193,33 @@ written. The §8.x pass pauses at this spend gate; the frozen prereg (`ec27a278�
 rule (`67009098…`) and quotes (`e4b3ed49…`/`pq-59a49747bfa5bdf0`) stand committed and re-verify
 at re-presentation. Re-presentation trigger: initial publication of results live on the web
 (DF-G35-1).
+
+## Signature
+
+Operator decision (verbatim, received 2026-11-20T21:55Z via Devin CLI session): "Oh okay.
+Let's actually just do Phase 4 now then" — **disposition `run`**, superseding the same-day
+deferral above (the deferral stands in history, never edited). The coordinator's stated
+precondition the operator endorsed by routing to `run` now: **a G-L1 leg on the declared
+baseline `sha256:88042f…` lands before any X0/X1 subject slot** — REQ-XD-102/XD-220's
+exact-H precondition; the leg is $0-model corpus conformance (W3-class, ~$2–3 compute) and
+fleshes inside R7.3's window body at dispatch.
+
+Authorizations recorded verbatim (REQ-XH-004 — model and compute separately):
+- **Model:** exploration X0+X1 authorized; hard cap `cap_h = slots_h × p̂_h` =
+  **157,760,000 µ$ ($157.76)** at the declared §10.4 top point (planning prior,
+  not a measurement); expected actual ≈ $40–60 at W4x observed rates.
+- **Compute:** `hh-compute-quote/1` **`pq-59a49747bfa5bdf0`**, ceiling
+  **13,486,340 µ$ ($13.49)** — e2-standard-8, debian-12, 300 GiB, D=40 h, C=4,
+  464 trials + 46 retries (W4-class posture).
+- **Exclusivity/teardown:** the established window posture — dead-man stop, h_r
+  teardown deadline, ≤1 h harvest-only restart inside the ceiling, teardown across
+  gate waits; quote prices re-verify at flesh time.
+- **Stop rules:** the §8.4 declared set verbatim (budget, infrastructure,
+  integrity, catalog identity).
+- **Scope:** this authorization is outside the $60 pilot authorization and outside
+  first-pass compute accounting (REQ-XD-221); it authorizes R7.3's X0+X1 body only —
+  the confirmation window re-presents at GATE-G36.
+
+verbatim_sha256 `ca8b1353cc3d` — to be stamped into the R7.3 declaration at flesh time.
+GATE DECISIONS row: 2026-11-20T21:55Z | GATE-G35
+Signed by: the operator. Recorded by devin-cli/swe-2-high, which does not sign.
