@@ -1,0 +1,29 @@
+{
+ "attribution": {
+  "conclusion": "the entire provider trailing-24h total sits INSIDE the W4 window hours. The 2,196,855 \u00b5$ delta vs harness-tracked 6,983,035 \u00b5$ is therefore CONCURRENT-HOUR UNATTRIBUTED usage on the shared Ollama account (other consumers within the same hourly buckets), NOT pre-window calls as settlement-3's boundary_flags inferred. Hour granularity cannot attribute inside the hour \u2014 the honest class is concurrent-hour unattributed, never laundered into the W4 metered figure.",
+  "hourly_sum_usd": 9.17989,
+  "nonzero_buckets": "08:00Z\u201317:00Z hourly buckets only \u2014 every bucket from 18:00Z onward is 0; all 25 buckets earlier than the window are 0",
+  "provider_trailing_24h_usd": 9.17989,
+  "window_span": "2026-11-19 ~07:33Z\u219217:50:38Z (last metered call 17:40:19Z; teardown DELETE_REQUESTED 17:50:38Z)"
+ },
+ "boundary_flags": [
+  "concurrent_hour_unattributed"
+ ],
+ "kind": "attribution_addendum",
+ "operator_early_settle": "ADR-0453 ruling 5 \u2014 the operator's verbatim 'get the final billing read and get unblocked early' records this window-scoped attribution as satisfying the W4 billing figure now; the \u226524h read (due \u22652026-11-20T17:50Z) lands as a confirming check, recorded honestly whichever way it reads",
+ "phase": "fp",
+ "read": {
+  "endpoint": "/api/usage?range=24h&group_by=model",
+  "granularity": "hour",
+  "provided": {
+   "OLLAMA_API_KEY": "yes"
+  },
+  "read_at": "2026-11-19T23:20:30Z",
+  "status": 200
+ },
+ "recorded_at": "2026-11-19T23:25:00Z",
+ "schema": "hh-settlement/1",
+ "status": "settled_discrepant{concurrent_hour_unattributed} \u2014 unchanged from settlement-3; w4 tracked figure 6,983,035 \u00b5$ ($6.98) stands as the metered evidence; $2.20 concurrent-unattributed recorded, not absorbed",
+ "supersedes_note": "amends the attribution reading of 2026-11-19-fp-w4-settlement-3.json \u2014 the standing `settled_discrepant` status is unchanged; this addendum corrects WHERE the delta sits in time",
+ "ticket": "R6.54a-records"
+}
