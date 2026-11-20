@@ -51,5 +51,6 @@ pub mod experiment;
 pub mod json_util;
 pub mod model;
 pub mod p4;
+pub mod p4x;
 pub mod procedure_test;
 pub mod sweep;

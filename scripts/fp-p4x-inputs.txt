@@ -1,0 +1,16 @@
+# fp-p4x-inputs.txt — the inputs manifest for the `p4_prereg` emitter
+# (manifest 327/R7.2). The reader rule keeps every docs/ relpath at
+# script level, never in crates/**. Format: name=relpath.
+# Inputs: the committed R7.1 x2 registry + levels + W-rule +
+# admissibility records, and the frozen band-A task-selection record.
+sweep_registry=docs/build/reports/2026-11-20-fp-p4-sweep-registry.json
+levels=docs/build/reports/2026-11-20-fp-p4-levels.json
+w_rule=docs/build/reports/2026-11-20-fp-p4-w-rule.json
+admissibility=docs/build/reports/2026-11-20-fp-p4-admissibility.json
+task_selection=docs/build/reports/2026-11-08-fp-selection.json
+# Outputs: the frozen exploration pre-registration + the byte-pinned
+# §8.5 frozen selection rule it cites (both with sha256 sidecars).
+prereg=docs/build/reports/2026-11-20-fp-p4x-prereg.json
+prereg_sha256=docs/build/reports/2026-11-20-fp-p4x-prereg.sha256
+selection_rule=docs/build/reports/2026-11-20-fp-p4x-selection-rule.json
+selection_rule_sha256=docs/build/reports/2026-11-20-fp-p4x-selection-rule.sha256

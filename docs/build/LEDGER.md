@@ -16,8 +16,8 @@
 
 ```
 projectStatus: IN_PROGRESS
-nextTicket: R7.2
-lastCompleted:   R7.1
+nextTicket: GATE-G35
+lastCompleted:   R7.2
 blockedOn:       (none)
 pauseRequested:  false
 returnPass:      (none)
@@ -34,10 +34,12 @@ autonomy:        checkpoint
 mergePolicy:     OPERATOR
 round:           7
 harness:         devin-cli/swe-2-high/subagent
-updatedAt:       2026-11-20T20:30Z
+updatedAt:       2026-11-20T21:00Z
 ```
 
 ## OPEN FINDINGS
+
+- 2026-11-20 · **R7.2 landed — deferral dispositions + guard state.** DF-R7.1-1 closed via the ledger's status-update row (same-day coordinator discharge under the row's named second unblocker — `supplement_guard.py` `resolved` member path + baseline `resolved-by-repair`); DF-R7.1-2 stays OPEN — it needs a metric-bearing activation corpus + per-call `tokens.input.uncached` coverage for V3/V4/V5, which R7.2's offline scope cannot produce. Guard verdict PASS — route `DISPATCH — R7.2` pre-landing, `HOLD — gate GATE-G35 pending — RETURN PASS` post-landing (a gate HOLD is the expected state). GATE-G35 stays pending — R7.2 produced only what the gate presents.
 
 - 2026-11-20 · **Guard round-keyed legs inert under round:7.** `supplement_guard.py`'s `check_markers6` / `check_window6` / `LATER_ROUND_ID6` legs fire only when `round: 6`; under `round: 7` the stock build-memory validator and the contract skeleton discipline still bind (skeletons carry no `Run:`), but the round-6 paid-body/gate-PASSED and window-cfg checks do not cover R7.3/R7.5. A Round-7 guard extension is an engineering ticket, not this registration's scope — the coordinator/operator may mint one before the window bodies flesh.
 
@@ -1538,3 +1540,5 @@ updatedAt:       2026-11-20T20:30Z
 - 2026-11-20T19:30Z · **Round 7 registered (decompose-spec mode=extend; records only, USD $0.00)** — manifest rows 326–338 appended under the `### Round 7` banner (`tail=minimal`) per GATE-G34 PASSED / ADR-0454 (operator verbatim "O1 approve, O-2 i'm not sure, O-3 approved, yes fold in BL-50. go"); 13 contract files written; no gate pre-signed; no existing file renamed or row superseded; the O-3 mint is conditional on the pass's honest terminal state (CAP7.1 → CAP7.2 → GATE-G37). Registration authorizes no spend, provisioning, publication or merge — window envelopes are declared in their skeletons and stop at GATE-G35/GATE-G36. Planning record `docs/build/planning/2026-11-20_round7-decomposition.md`. chainTip → codex/harnessharness-r6.53 · nextTicket → R7.1 · records-only · devin-cli/swe-2-high/subagent
 
 - 2026-11-20T20:30Z · **R7.1 done — Phase-4 admissibility second pass landed (manifest 326, offline USD $0.00)** — branch `codex/harnessharness-r6.53`. New frozen `sweep-registry/1` under the `x2:` exploration identity (cross-identity merge refused vs `x1:`); V1–V7 declared from spec §8.1 and sealed through R6.43's enumerate→resolve→seal machinery (composite path added for multi-spelling conjunctions); V8/V9 `withheld{inert_at_admissible_window}` — committed-corpus W rule F(32768)=0.22 < 0.25, W never fabricated; REQ-XD-225 tier-2 admission (later identity only), REQ-XD-204 effort-pin fidelity, REQ-XD-205/REQ-XE-127 W rule, REQ-XD-208 activation fold, REQ-XD-209 inert forecast land in `crates/hh-lab/src/p4.rs` with r7_1 6/6 + full lab/runner suites green; token-corpus extractor + emitter + `check-fp-p4.sh` committed; guard: 4 size warnings dispositioned via `fp-w4x-harvest-size-4`, missing-historical → DF-R7.1-1. nextTicket → R7.2. | run docs/build/runs/R7.1.md |
+
+- 2026-11-20T21:00Z · **R7.2 done — frozen exploration pre-registration + deterministic selection machinery landed (manifest 327, offline USD $0.00)** — branch `codex/harnessharness-r6.53`. `hh-p4-x-prereg/1` sha256 `ec27a278…6ba` declares the X0 smoke (3 band-A stratum tasks × 1 × 8 arms = 24 slots) and X1 OFAT (11 band-A dev tasks × k=5 × baseline+V1–V7 = 440 executable slots, seeded slot_schedule_randomization, 5 rounds — nominal 550-slot envelope honestly annotated for the W-rule withhold) over the committed x2 registry (`frozen_sha256 aeb366b4…` cited verbatim, V8/V9 `withheld{inert_at_admissible_window}`); the §8.4 stop set verbatim with typed outcome-stop / level-drop refusals; the §8.5 frozen selection rule byte-pinned `p4-selection-rule/1` sha256 `67009098…d3b35` — gates (a)–(f), Δ̂>0, one-per-factor, m_max=2, exact 1/(|D_A|·k) tie band, `withheld{no_candidate}` publishable — decoded and executed from the record's own member (byte drift → `refused{frozen_rule_mismatch}`); deterministic `hh-p4-selection/1` packet machinery enforcing held-out / phase-2-3 input exclusions and hash-before-confirmation ordering; selection label + simulated optimism ≈ +.03–+.10; confirmation-only C₁₂ with union-path declared-delta check ('combination; interaction not estimated'). `crates/hh-lab/src/p4x.rs` + 14 new `SweepRefusal` spellings, `p4_prereg` emitter + `check-fp-p4x.sh` (4 legs green); r7_2 8/8 + r7_1 6/6 + r6_43 4/4 + full lab suite green; fmt/clippy clean. GATE-G35 stays pending — no readout signed, no spend authorized. DF-R7.1-1 closed (ledger status-update row); DF-R7.1-2 carried OPEN. nextTicket → GATE-G35. | run docs/build/runs/R7.2.md |

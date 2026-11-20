@@ -202,6 +202,93 @@ pub enum SweepRefusal {
         /// The level id and the offending call detail.
         detail: String,
     },
+    /// A stop rule whose class is outside the §8.4 declared set
+    /// (budget, infrastructure, integrity, catalog identity —
+    /// REQ-XD-210).
+    StopClass {
+        /// The undeclared class.
+        detail: String,
+    },
+    /// An outcome-based stop — stopping or gating on a measured
+    /// outcome is never an exploration stop rule (REQ-XD-210).
+    OutcomeStop {
+        /// The offending member.
+        detail: String,
+    },
+    /// A level-dropping rule — exploration never drops a level on
+    /// observed evidence (REQ-XD-210).
+    LevelDrop {
+        /// The offending member.
+        detail: String,
+    },
+    /// A pooled estimand drawing records from two cohorts — X0 and
+    /// X1 never pool, exploration and confirmation never pool
+    /// (REQ-XD-206).
+    PoolAcrossCohorts {
+        /// The two cohorts.
+        detail: String,
+    },
+    /// A confirmatory label on an exploration figure — every
+    /// exploration figure is labelled exploratory (REQ-XD-207).
+    ConfirmatoryLabel {
+        /// The offending member.
+        detail: String,
+    },
+    /// A figure or display that must carry a label carries none.
+    MissingLabel {
+        /// The member path.
+        member: String,
+    },
+    /// A selection-packet input manifest named a held-out record
+    /// (REQ-XD-212 — enforced, never promised).
+    HeldOutInput {
+        /// The offending entry.
+        detail: String,
+    },
+    /// A selection-packet input manifest named a phase-2 or phase-3
+    /// outcome record (REQ-XD-212).
+    ForeignOutcomeInput {
+        /// The offending entry.
+        detail: String,
+    },
+    /// The selection packet's hash does not predate the confirmation
+    /// pre-registration (REQ-XD-212's ordering rule).
+    HashOrdering {
+        /// What was out of order.
+        detail: String,
+    },
+    /// A selected configuration's exploration estimate displayed
+    /// without its selection label and simulated expected optimism
+    /// (REQ-XD-213).
+    SelectionLabelAbsent {
+        /// What was absent.
+        detail: String,
+    },
+    /// A claim citing the exploration estimate — the confirmatory
+    /// estimate is the claim (REQ-XD-213).
+    ClaimCitesExploration {
+        /// The offending claim.
+        detail: String,
+    },
+    /// A combined configuration that was not pre-declared
+    /// (REQ-XD-214).
+    UndeclaredCombination {
+        /// What was undeclared.
+        detail: String,
+    },
+    /// A combined configuration admitted outside confirmation
+    /// (REQ-XD-214 — confirmation only).
+    CombinationContext {
+        /// The phase it was attempted in.
+        detail: String,
+    },
+    /// A pre-registration's frozen rule that is not byte-equal to the
+    /// §8.5 frozen selection rule the machinery executes
+    /// (REQ-XD-211).
+    FrozenRuleMismatch {
+        /// What differed.
+        detail: String,
+    },
 }
 
 impl std::fmt::Display for SweepRefusal {
@@ -254,6 +341,48 @@ impl std::fmt::Display for SweepRefusal {
             }
             SweepRefusal::MisPinned { detail } => {
                 write!(f, "ineligible{{mis_pinned:{detail}}}")
+            }
+            SweepRefusal::StopClass { detail } => {
+                write!(f, "refused{{stop_class:{detail}}}")
+            }
+            SweepRefusal::OutcomeStop { detail } => {
+                write!(f, "refused{{outcome_stop:{detail}}}")
+            }
+            SweepRefusal::LevelDrop { detail } => {
+                write!(f, "refused{{level_drop:{detail}}}")
+            }
+            SweepRefusal::PoolAcrossCohorts { detail } => {
+                write!(f, "refused{{pool_across_cohorts:{detail}}}")
+            }
+            SweepRefusal::ConfirmatoryLabel { detail } => {
+                write!(f, "refused{{confirmatory_label_on_exploration:{detail}}}")
+            }
+            SweepRefusal::MissingLabel { member } => {
+                write!(f, "refused{{missing_label:{member}}}")
+            }
+            SweepRefusal::HeldOutInput { detail } => {
+                write!(f, "refused{{held_out_input:{detail}}}")
+            }
+            SweepRefusal::ForeignOutcomeInput { detail } => {
+                write!(f, "refused{{foreign_outcome_input:{detail}}}")
+            }
+            SweepRefusal::HashOrdering { detail } => {
+                write!(f, "refused{{hash_ordering:{detail}}}")
+            }
+            SweepRefusal::SelectionLabelAbsent { detail } => {
+                write!(f, "refused{{selection_label_absent:{detail}}}")
+            }
+            SweepRefusal::ClaimCitesExploration { detail } => {
+                write!(f, "refused{{claim_cites_exploration:{detail}}}")
+            }
+            SweepRefusal::UndeclaredCombination { detail } => {
+                write!(f, "refused{{undeclared_combination:{detail}}}")
+            }
+            SweepRefusal::CombinationContext { detail } => {
+                write!(f, "refused{{combination_outside_confirmation:{detail}}}")
+            }
+            SweepRefusal::FrozenRuleMismatch { detail } => {
+                write!(f, "refused{{frozen_rule_mismatch:{detail}}}")
             }
         }
     }
