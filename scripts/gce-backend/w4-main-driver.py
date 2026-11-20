@@ -195,39 +195,156 @@ def podman_containers():
     except Exception:
         return []
 
-def run_verifier(slot_dir):
-    """Post-drive verify: the drive's `local_container` env leaves the
-    podman container alive under `PreserveUntil` custody; find the one
-    bind-mounting this slot's workspace, exec `/tests/test.sh`, then
-    remove it (honest teardown — never a leaked billable)."""
+def task_verify_deadline_s(tasks_dir, task, cfg):
+    """The D15 mirror in the driver's own narrow reader (task_toml.rs):
+    `[verifier].timeout_sec` out of the task's own task.toml when it
+    declares one, else the cfg's `verify_deadline_ms` bound recorded
+    `cfg_default`. A malformed declared value is a typed error, never
+    a silent default."""
+    toml_path = os.path.join(tasks_dir, task, "task.toml")
+    try:
+        in_verifier = False
+        for line in open(toml_path):
+            s = line.split("#", 1)[0].strip()
+            if s.startswith("["):
+                in_verifier = s == "[verifier]"
+                continue
+            if in_verifier and s.startswith("timeout_sec"):
+                v = float(s.split("=", 1)[1].strip())
+                if v <= 0:
+                    raise ValueError(
+                        f"{toml_path}: [verifier].timeout_sec {v} "
+                        "is not positive")
+                return v, "task_toml"
+    except FileNotFoundError:
+        pass
+    return ((cfg.get("verify_deadline_ms") or 600000) / 1000.0,
+            "cfg_default")
+
+
+def image_workdir(image):
+    """`podman image inspect … .Config.WorkingDir` — the hosted lane's
+    `image_workdir()` verbatim (empty declares → the caller's cfg
+    fallback, never a fabricated `/`)."""
+    if not image:
+        return None
+    try:
+        p = subprocess.run(["podman", "image", "inspect", image,
+                            "--format", "{{.Config.WorkingDir}}"],
+                           capture_output=True, text=True, timeout=30)
+        w = p.stdout.strip()
+        return w if p.returncode == 0 and w else None
+    except Exception:
+        return None
+
+
+def run_verifier(a, m, slot_dir):
+    """Post-drive verify — the commit-clone form (R6.56 continuation;
+    cell.rs ST5's ordering for the native lane). The slot's
+    `local_container` ran `--network none` under kernel_default and
+    nothing stages `/tests` into it during the agent phase — the
+    REQ-XB-106 phase boundary the hosted lane's ST5 staging honors.
+    Bare `podman exec … bash /tests/test.sh` therefore recorded 127 on
+    every native slot (W4 hh_native 50/50, W4x v5 50/50) — this leg
+    was the defect, not the task packages (the hosted slots staged the
+    same `tests/` trees into `staging/`).
+
+    After the drive settles, the still-live cell is `podman commit`ed
+    into a verify image (the agent's post-run rootfs, /work excluded
+    as a mount) and a verify clone runs with: the declared verify
+    egress — `bridge`, honestly recorded (the allowlist-mediated
+    verify profile is the hosted lane's mediator machinery, absent
+    from this lane); the task's `tests/` staged at `/tests` read-only
+    (tests enter the cell only at verify time); `/logs/verifier`
+    bind-mounted to the slot's `collect/` so reward + CTRF bytes land
+    through the host edge, never `/work`; and cwd = the task image's
+    declared WORKDIR (cfg fallback) — the hosted lane's verifier cwd.
+    Both cells are then removed (honest teardown — never a leaked
+    billable)."""
     ws = os.path.abspath(os.path.join(slot_dir, "ws"))
     hit = None
     for c in podman_containers():
-        if any(os.path.abspath(m) == ws for m in c["mounts"]):
+        if any(os.path.abspath(mm) == ws for mm in c["mounts"]):
             hit = c
             break
     if not hit:
         return {"disposition": "verifier_unavailable{env_closed_or_unmounted}"}
     cid = hit["id"]
+    vimg = None
     try:
-        p = subprocess.run(
-            ["podman", "exec", cid, "bash", "/tests/test.sh"],
-            capture_output=True, text=True, timeout=600)
-        row = {"disposition": "recorded", "returncode": p.returncode,
-               "stdout_tail": p.stdout[-4000:], "stderr_tail": p.stderr[-4000:]}
-        # the TB reward file — read it out of the same container when present
-        q = subprocess.run(
-            ["podman", "exec", cid, "bash", "-c",
-             "cat /logs/verifier/reward.txt 2>/dev/null || "
-             "cat /logs/verifier/reward.json 2>/dev/null || true"],
-            capture_output=True, text=True, timeout=60)
-        if q.stdout.strip():
-            row["reward_file"] = q.stdout.strip()[:2000]
+        tests_src = os.path.join(a.tasks_dir, m["task"], "tests")
+        if not (os.path.isdir(tests_src)
+                and os.path.isfile(os.path.join(tests_src, "test.sh"))):
+            return {"disposition":
+                    "verifier_unavailable{no_test_in_package}",
+                    "detail": tests_src}
+        # ST1 mirror — `/tests` present before the verify phase is a
+        # phase-boundary breach, never silently overwritten.
+        p = subprocess.run(["podman", "exec", cid, "test", "-e", "/tests"],
+                           capture_output=True, timeout=30)
+        if p.returncode == 0:
+            return {"disposition":
+                    "verifier_unavailable{phase_boundary:tests_present}"}
+        verify_s, src = task_verify_deadline_s(
+            a.tasks_dir, m["task"], a.cfg_obj)
+        tag = hashlib.sha256(m["slot_id"].encode()).hexdigest()[:16]
+        vimg = f"hh-verify-{tag}"
+        vname = f"hh-verify-run-{tag}"
+        p = subprocess.run(["podman", "commit", cid, vimg],
+                           capture_output=True, text=True, timeout=300)
+        if p.returncode != 0:
+            return {"disposition": "verifier_unavailable{commit_failed}",
+                    "stderr_tail": p.stderr[-2000:]}
+        collect = os.path.join(slot_dir, "collect")
+        os.makedirs(collect, exist_ok=True)
+        img_ref = a.task_images.get(m["task"])
+        if isinstance(img_ref, dict):
+            img_ref = img_ref.get("image")
+        workdir = (image_workdir(img_ref)
+                   or a.cfg_obj.get("workdir_default") or "/app")
+        run_argv = ["podman", "run", "--rm", "--name", vname,
+                    "--network", "bridge",
+                    "-v", f"{ws}:/work:rw",
+                    "-v", f"{tests_src}:/tests:ro",
+                    "-v", f"{collect}:/logs/verifier:rw",
+                    "--workdir", workdir,
+                    vimg, "bash", "/tests/test.sh"]
+        try:
+            p = subprocess.run(run_argv, capture_output=True, text=True,
+                               timeout=verify_s)
+            row = {"disposition": "recorded", "returncode": p.returncode,
+                   "stdout_tail": p.stdout[-4000:],
+                   "stderr_tail": p.stderr[-4000:],
+                   "verify_cell": "commit_clone",
+                   "verify_egress": "bridge",
+                   "workdir": workdir,
+                   "deadline_s": verify_s, "deadline_source": src}
+        except subprocess.TimeoutExpired:
+            subprocess.run(["podman", "stop", "-t", "5", vname],
+                           capture_output=True)
+            subprocess.run(["podman", "rm", "-f", vname],
+                           capture_output=True)
+            row = {"disposition":
+                   "verifier_unavailable{verifier_timeout}",
+                   "verify_cell": "commit_clone",
+                   "deadline_s": verify_s, "deadline_source": src}
+        # The reward + CTRF bytes landed host-side through the collect
+        # mount — report the reward file verbatim like the W4 leg did.
+        for name in ("reward.txt", "reward.json"):
+            rp = os.path.join(collect, name)
+            if os.path.isfile(rp):
+                with open(rp) as f:
+                    row["reward_file"] = f.read().strip()[:2000]
+                break
+        return row
     except Exception as e:
-        row = {"disposition": "verifier_unavailable{exec_error}",
-               "detail": str(e)}
-    subprocess.run(["podman", "rm", "-f", cid], capture_output=True)
-    return row
+        return {"disposition": "verifier_unavailable{exec_error}",
+                "detail": str(e)}
+    finally:
+        subprocess.run(["podman", "rm", "-f", cid], capture_output=True)
+        if vimg:
+            subprocess.run(["podman", "rmi", "-f", vimg],
+                           capture_output=True)
 
 def launch_member(a, sess, m, slot_dir):
     """Spawn one slot member; returns (proc, logfile_handle)."""
@@ -377,6 +494,7 @@ def main():
 
     tasks = a.tasks.split(",")
     cfg = read_json(a.cfg)
+    a.cfg_obj = cfg
     a.tasks_dir = cfg["tasks_dir"]
     a.task_images = read_json(cfg["images_file"])
     a.arm_layers = read_json(a.arm_layers) if a.arm_layers else None
@@ -503,7 +621,7 @@ def main():
                    "replicate": m["replicate"], "rc": rc,
                    "wall_ms": int((time.time() - st) * 1000)}
             if m["arm"] in ("hh_native", "v5"):
-                row["verifier"] = run_verifier(sd)
+                row["verifier"] = run_verifier(a, m, sd)
             evs = read_events(sess.get("store_root") or a.store_root)
             row["cost_micros"] = slot_cost_micros(evs, sid)
             with open(os.path.join(sd, "slot-result.json"), "w") as f:
