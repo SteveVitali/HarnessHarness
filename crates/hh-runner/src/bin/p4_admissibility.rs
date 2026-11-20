@@ -337,13 +337,78 @@ fn emit(repo: &Path, inputs: &BTreeMap<String, String>) {
     let _ = std::fs::remove_dir_all(&work);
 }
 
+/// `emit-docs <out-dir>` — the R7.3 drive surface (manifest 329): the
+/// same `seal_p4_levels` materialization the `emit` leg validates, this
+/// time writing each arm's drive-time document — the sealed baseline
+/// `document` member plus every sealed level's `document` — as canonical
+/// JSON files for the window driver's `--definition` inputs. The
+/// materialization is deterministic (frozen registry pins +
+/// `resolved_at 1763000000000`); the emitted baseline carries
+/// `definition_ref.version_id == baseline_ref` verbatim. Determinism is
+/// asserted: a doc that fails to re-produce its declared level_ref or
+/// the declared baseline_ref refuses, never a silently different doc.
+fn emit_docs(out_dir: &Path, inputs: &BTreeMap<String, String>) {
+    use hharness_lab::p4::*;
+    let _ = inputs;
+    let work = std::env::temp_dir().join(format!("p4-docs-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&work);
+    std::fs::create_dir_all(&work).unwrap();
+    let mat = seal_p4_levels(&work).unwrap_or_else(|e| panic!("pass-2 seal refused: {e}"));
+    std::fs::create_dir_all(out_dir).unwrap();
+    let base_doc = mat
+        .baseline_json
+        .get("document")
+        .cloned()
+        .unwrap_or_else(|| panic!("baseline_json lacks document"));
+    let base_def = mat
+        .baseline_json
+        .get("definition_ref")
+        .and_then(|r| r.get("version_id"))
+        .and_then(Json::as_str)
+        .unwrap_or("")
+        .to_string();
+    assert_eq!(
+        base_def, mat.baseline_version_id,
+        "baseline document does not bind the declared baseline_ref"
+    );
+    let base_p = out_dir.join("baseline.json");
+    std::fs::write(&base_p, format!("{}\n", base_doc.to_canonical_string())).unwrap();
+    println!(
+        "p4-docs: baseline.json definition_ref={}",
+        mat.baseline_version_id
+    );
+    for l in &mat.levels {
+        let sj = hharness_lab::sweep::sealed_json(&l.sealed.sealed);
+        let doc = sj
+            .get("document")
+            .cloned()
+            .unwrap_or_else(|| panic!("level {} lacks document", l.sealed.level_id));
+        let p = out_dir.join(format!("{}.json", l.sealed.level_id));
+        std::fs::write(&p, format!("{}\n", doc.to_canonical_string())).unwrap();
+        println!(
+            "p4-docs: {}.json level_ref={}",
+            l.sealed.level_id, l.sealed.version_id
+        );
+    }
+    let _ = std::fs::remove_dir_all(&work);
+}
+
 fn main() {
     let mut args = std::env::args().skip(1);
     let cmd = args.next().unwrap_or_else(|| "emit".to_string());
-    let repo = PathBuf::from(args.next().unwrap_or_else(|| ".".to_string()));
     let inputs = inputs();
     match cmd.as_str() {
-        "emit" => emit(&repo, &inputs),
+        "emit" => {
+            let repo = PathBuf::from(args.next().unwrap_or_else(|| ".".to_string()));
+            emit(&repo, &inputs)
+        }
+        "emit-docs" => {
+            let out = PathBuf::from(
+                args.next()
+                    .unwrap_or_else(|| panic!("usage: p4-admissibility emit-docs <out-dir>")),
+            );
+            emit_docs(&out, &inputs)
+        }
         other => panic!("unknown command: {other}"),
     }
 }
