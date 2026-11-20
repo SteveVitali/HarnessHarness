@@ -6,3 +6,7 @@ sweep_registry=docs/build/reports/2026-11-11-fp-sweep-registry.json
 sweep_registry_sha256=docs/build/reports/2026-11-11-fp-sweep-registry.sha256
 v5_level=docs/build/reports/2026-11-11-fp-sweep-v5.json
 v5_level_sha256=docs/build/reports/2026-11-11-fp-sweep-v5.sha256
+v5_corrected=docs/build/reports/2026-11-20-fp-sweep-v5-corrected.json
+v5_corrected_sha256=docs/build/reports/2026-11-20-fp-sweep-v5-corrected.sha256
+v5_supersession=docs/build/reports/2026-11-20-fp-v5-supersession.json
+v5_supersession_sha256=docs/build/reports/2026-11-20-fp-v5-supersession.sha256

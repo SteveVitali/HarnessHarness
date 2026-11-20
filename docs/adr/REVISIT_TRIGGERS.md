@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_236 ADRs: 184 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_237 ADRs: 185 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -220,6 +220,7 @@ _236 ADRs: 184 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0450 | Any corpus member with a complete (non-truncated) recording that cannot reach `submitted` under the armed stop rule, or a future corpus where submission carries a content payload — then the `channel:"content"` arm and payload equality become the gating comparison and this ADR's marker-channel normalization no longer suffices alone. |
 | ADR-0451 | A later-pass corpus where branch coverage must be attributed to natural recordings (not authored fixtures), a corpus member whose on-disk bytes differ from its digested bytes, or a canon version bump — then the manifest members and digest must be re-emitted and the pass id re-minted on an unused partition (REQ-XD-106). |
 | ADR-0452 | Any proposal to re-run an arm the operator recorded `not_run{admission}` without new PP0 admission evidence, or a request to extend this amendment's supersession beyond the W4 scope — then the narrow-supersession boundary (GATE-G30's `end-first-pass-early` stands for every other scope) must be re-ruled explicitly rather than inferred. |
+| ADR-0453 | Any proposal to run a further arm class (a fourth contrast arm, a new provider, or arms past the declared 150-slot geometry) — then this ADR's scope must be re-ruled explicitly; the $100 ceiling does not silently extend to arms not named in the verbatim ruling. |
 
 ## Fired-and-answered triggers (BL-48)
 

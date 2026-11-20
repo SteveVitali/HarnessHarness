@@ -1310,7 +1310,11 @@ pub fn evolution_proposer_suite(class_version_id: &str) -> ConformanceSuite {
 /// are content-derived constants every seeded store reproduces.
 pub fn stage1_seed_rows() -> Vec<(ClassRecord, String, BTreeMap<String, Json>)> {
     vec![
-        (control_strategy_class(), "round_robin".to_string(), BTreeMap::new()),
+        (
+            control_strategy_class(),
+            "round_robin".to_string(),
+            BTreeMap::new(),
+        ),
         (
             control_strategy_class(),
             "react-steerable".to_string(),
@@ -1343,7 +1347,11 @@ pub fn stage1_seed_rows() -> Vec<(ClassRecord, String, BTreeMap<String, Json>)> 
                 ("concurrent_input".to_string(), Json::str("steer")),
             ]),
         ),
-        (context_policy_class(), "full_window".to_string(), BTreeMap::new()),
+        (
+            context_policy_class(),
+            "full_window".to_string(),
+            BTreeMap::new(),
+        ),
         // R3.4 (DF-S1.19-1) — the §5c `context_policy` family's
         // non-`default` variants publish under `hh/` so a sealed
         // slot binds them through `resolve` like any other variant;
@@ -1360,7 +1368,11 @@ pub fn stage1_seed_rows() -> Vec<(ClassRecord, String, BTreeMap<String, Json>)> 
             "world_state_diff".to_string(),
             BTreeMap::new(),
         ),
-        (context_policy_class(), "jit_handles".to_string(), BTreeMap::new()),
+        (
+            context_policy_class(),
+            "jit_handles".to_string(),
+            BTreeMap::new(),
+        ),
         (
             context_policy_class(),
             "recency_plus_pins".to_string(),
@@ -1402,10 +1414,7 @@ pub fn stage1_seed_rows() -> Vec<(ClassRecord, String, BTreeMap<String, Json>)> 
                 ("deterministic".to_string(), Json::Bool(false)),
                 (
                     "op_kinds".to_string(),
-                    Json::Arr(vec![
-                        Json::str("evict"),
-                        Json::str("summarize"),
-                    ]),
+                    Json::Arr(vec![Json::str("evict"), Json::str("summarize")]),
                 ),
             ]),
         ),
@@ -1431,10 +1440,7 @@ pub fn stage1_seed_rows() -> Vec<(ClassRecord, String, BTreeMap<String, Json>)> 
                 ("deterministic".to_string(), Json::Bool(true)),
                 (
                     "op_kinds".to_string(),
-                    Json::Arr(vec![
-                        Json::str("evict"),
-                        Json::str("restructure"),
-                    ]),
+                    Json::Arr(vec![Json::str("evict"), Json::str("restructure")]),
                 ),
             ]),
         ),
@@ -1458,10 +1464,7 @@ pub fn stage1_seed_rows() -> Vec<(ClassRecord, String, BTreeMap<String, Json>)> 
             "world-state-refresh@1".to_string(),
             BTreeMap::from([
                 ("deterministic".to_string(), Json::Bool(true)),
-                (
-                    "op_kinds".to_string(),
-                    Json::Arr(vec![Json::str("evict")]),
-                ),
+                ("op_kinds".to_string(), Json::Arr(vec![Json::str("evict")])),
             ]),
         ),
         (
@@ -1471,10 +1474,7 @@ pub fn stage1_seed_rows() -> Vec<(ClassRecord, String, BTreeMap<String, Json>)> 
                 ("deterministic".to_string(), Json::Bool(false)),
                 (
                     "op_kinds".to_string(),
-                    Json::Arr(vec![
-                        Json::str("evict"),
-                        Json::str("provider_compact"),
-                    ]),
+                    Json::Arr(vec![Json::str("evict"), Json::str("provider_compact")]),
                 ),
             ]),
         ),

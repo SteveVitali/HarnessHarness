@@ -41,10 +41,20 @@ import argparse, hashlib, json, os, subprocess, sys, time, urllib.request
 ARMS = ["mini-swe-agent", "hh_native", "v5"]          # drop order: v5 last…
 DROP_ORDER = ["v5", "claude-code", "pi"]            # …protected pair never in it
 PROTECTED = ["mini-swe-agent", "hh_native"]
+# R6.55/W4x — the extension arm-set. `--arms` re-opens the hosted pair
+# (Pi, Claude Code) whose AG3 layer evidence W4 recorded
+# `not_run{admission:AG3}`. Each hosted arm runs through the SAME
+# `hh-w1 arm-run` lane as mini-swe-agent — a new admission file and a
+# per-(arm × task) layer image, never a second driver.
+HOSTED_ARMS = {"mini-swe-agent", "pi", "claude-code"}
+ADMISSION_ARG = {"mini-swe-agent": "admission_mini",
+                 "pi": "admission_pi", "claude-code": "admission_cc"}
 # fp-e projected per-trial priors (µ$/trial, ms/trial) — used until ≥10
 # measured trials of an arm land (the continuation rule's own prior leg).
-P_HAT_PRIOR = {"mini-swe-agent": 386_163, "hh_native": 374_000, "v5": 374_000}
-T_HAT_PRIOR = {"mini-swe-agent": 477_792, "hh_native": 477_792, "v5": 477_792}
+P_HAT_PRIOR = {"mini-swe-agent": 386_163, "hh_native": 374_000, "v5": 374_000,
+               "pi": 374_000, "claude-code": 374_000}
+T_HAT_PRIOR = {"mini-swe-agent": 477_792, "hh_native": 477_792, "v5": 477_792,
+               "pi": 477_792, "claude-code": 477_792}
 PROBE_SLICE_MICROS = 250_000
 
 def eprint(*a): print(*a, file=sys.stderr)
@@ -134,7 +144,7 @@ def run_lane_probe(a, sess, out_dir):
     token = grant.get("slot_token")
     if not token:
         rec = {"schema": "hh-lane-probe/1", "stage": "lane-probe",
-               "window": "W4", "gate": "FP-E",
+               "window": a.window, "gate": "FP-E",
                "disposition": "failed{no_slot_grant}",
                "evidence_label": "live-executed",
                "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
@@ -151,7 +161,7 @@ def run_lane_probe(a, sess, out_dir):
     last = (calls[-1].get("payload") or {}) if calls else {}
     disp = "pass" if 200 <= status < 300 else f"unreceipted{{http:{status}}}"
     rec = {"schema": "hh-lane-probe/1", "stage": "lane-probe",
-           "window": "W4", "gate": "FP-E",
+           "window": a.window, "gate": "FP-E",
            "slot": {"token_ref": f"slot:{probe_id}",
                     "slice_micros": PROBE_SLICE_MICROS},
            "plan": {"calls": 1, "cap_micros": PROBE_SLICE_MICROS},
@@ -235,14 +245,27 @@ def launch_member(a, sess, m, slot_dir):
     with open(tok_file, "w") as f:
         f.write(token)
     os.chmod(tok_file, 0o600)
-    image = a.task_images.get(m["task"])
+    if arm in HOSTED_ARMS:
+        # hosted arms take their per-(arm × task) layer image — the
+        # base task image only when no layer map was staged (the W4
+        # default; every staged layer is an `hh-admit/<arm>-<ver>-<t>`
+        # mint from layers-build).
+        image = (a.arm_layers.get(arm) or {}).get(m["task"]) \
+            if a.arm_layers else a.task_images.get(m["task"])
+    else:
+        image = a.task_images.get(m["task"])
     if not image:
         logf.write("withheld{corpus_infra:image_absent}\n")
         logf.flush()
         return None, logf
-    if arm == "mini-swe-agent":
+    if arm in HOSTED_ARMS:
+        admission = getattr(a, ADMISSION_ARG[arm], None)
+        if not admission:
+            logf.write(f"withheld{{corpus_infra:admission_absent:{arm}}}\n")
+            logf.flush()
+            return None, logf
         cmd = [a.w1_bin, "arm-run", "--cfg", a.cfg, "--task", m["task"],
-               "--image", image, "--admission", a.admission_mini,
+               "--image", image, "--admission", admission,
                "--slot-id", sid, "--slot-token-file", tok_file,
                "--model-upstream", str(a.model_upstream),
                "--slot-slice-micros", str(a.slot_slice_micros),
@@ -318,6 +341,14 @@ def main():
     ap.add_argument("--tasks", required=True)
     ap.add_argument("--replicates", type=int, default=5)
     ap.add_argument("--admission-mini", required=True)
+    ap.add_argument("--admission-pi", default=None)
+    ap.add_argument("--admission-cc", default=None)
+    ap.add_argument("--arms", default=",".join(ARMS),
+                    help="CSV arm-set — default preserves the W4 plan; "
+                         "the W4x set re-opens pi + claude-code")
+    ap.add_argument("--arm-layers", default=None,
+                    help="JSON arm→task→image map from layers-build "
+                         "(hosted arms take their layer image)")
     ap.add_argument("--hir-doc", required=True)
     ap.add_argument("--v5-doc", required=True)
     ap.add_argument("--mswea-pack", required=True)
@@ -339,6 +370,8 @@ def main():
     ap.add_argument("--seed", default="fp-w4-schedule-r6.33-2026-11-10")
     ap.add_argument("--model-budget-micros", type=int, default=64_188_120)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--window", default="W4",
+                    help="window label on emitted records (W4 / W4x)")
     ap.add_argument("--plan-only", action="store_true")
     a = ap.parse_args()
 
@@ -346,8 +379,18 @@ def main():
     cfg = read_json(a.cfg)
     a.tasks_dir = cfg["tasks_dir"]
     a.task_images = read_json(cfg["images_file"])
+    a.arm_layers = read_json(a.arm_layers) if a.arm_layers else None
     a.model_upstream = int(a.listen.rsplit(":", 1)[1])
-    rounds = plan_schedule(tasks, a.replicates, ARMS, a.seed)
+    # the active arm-set — W4's plan when --arms is not extended.
+    arms = a.arms.split(",")
+    for arm in arms:
+        if arm not in HOSTED_ARMS | {"hh_native", "v5"}:
+            eprint(f"unknown arm: {arm}")
+            return 2
+        if arm in HOSTED_ARMS and not getattr(a, ADMISSION_ARG[arm], None):
+            eprint(f"arm {arm} requires --{ADMISSION_ARG[arm].replace('_','-')}")
+            return 2
+    rounds = plan_schedule(tasks, a.replicates, arms, a.seed)
 
     if a.plan_only:
         print(json.dumps({"rounds": [
@@ -402,9 +445,9 @@ def main():
         return 2
 
     results = {}
-    window = {"schema": "hh-fp-window/1", "window": "W4", "gate": "FP-E",
+    window = {"schema": "hh-fp-window/1", "window": a.window, "gate": "FP-E",
               "run_id": a.run_id, "seed": a.seed,
-              "arms": ARMS, "drop_order": DROP_ORDER,
+              "arms": arms, "drop_order": DROP_ORDER,
               "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ",
                                           time.gmtime()),
               "dead_man_epoch": a.dead_man_epoch,
@@ -417,9 +460,13 @@ def main():
                   for ri, units in enumerate(rounds, start=1)
                   for u in units],
               "withheld": [], "checkpoint": None,
-              "lane_probe": None, "not_run": {
-                  "pi": "not_run{admission:AG3}",
-                  "claude-code": "not_run{admission:AG3}"}}
+              "lane_probe": None,
+              # the extension pair reads `not_run{admission:AG3}` ONLY
+              # when the arm-set leaves them out — when armed, their
+              # per-slot outcomes are the record.
+              "not_run": {
+                  arm: "not_run{admission:AG3}"
+                  for arm in ("pi", "claude-code") if arm not in arms}}
 
     probe_rec, probe_ok = run_lane_probe(a, sess, a.out)
     window["lane_probe"] = probe_rec
@@ -430,8 +477,8 @@ def main():
     running = {}      # slot_id -> (proc, logf, member, slot_dir, started)
     infra_native = [] # first-3 native-slot infra outcomes
     dropped = set()
-    measured_costs = {a_: [] for a_ in ARMS}
-    measured_walls = {a_: [] for a_ in ARMS}
+    measured_costs = {a_: [] for a_ in arms}
+    measured_walls = {a_: [] for a_ in arms}
 
     def slot_deadline_fits():
         return (time.time() + a.slot_deadline_s + a.harvest_reserve_s
@@ -485,7 +532,7 @@ def main():
                        for m in u["members"])
         remaining_units = [u for units in rounds[rounds_done:]
                            for u in units]
-        cur_arms = [a_ for a_ in ARMS if a_ not in dropped]
+        cur_arms = [a_ for a_ in arms if a_ not in dropped]
         def fits(arms_live):
             rem = [m for u in remaining_units for m in u["members"]
                    if m["arm"] in arms_live and

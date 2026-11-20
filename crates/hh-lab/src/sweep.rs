@@ -1235,6 +1235,202 @@ pub fn sealed_json(s: &SealedDefinition) -> Json {
     hharness_hir::wire::sealed_definition_json(s)
 }
 
+// ── the corrected V5 seal (R6.55; ADR-0453 extension ruling) ─────────────────
+//
+// W4's bound V5 document re-spelled the level's `version_id` pins as
+// `version_selector:"sha256:<vid>"` — a selector spelling the grammar
+// never admitted (`latest | label:<l> | version:<vid> | range: | deny:`),
+// so the slot's `resolve` refused `RefUnresolved` and the arm recorded
+// `verifier_unavailable`. The ADR-0453 ruling: the original sealed
+// artifact (`level_ref sha256:38d1389a…`) stays byte-untouched; the
+// correction is a NEW sealed document minted through the real
+// resolve→seal path whose authored selectors spell `version:<vid>`
+// against the **kernel's own Stage-1 seed set** (`suites::seed_stage1`
+// — the same content-derived `version_id`s a slot's store carries, so
+// the corrected seal's pins resolve on the window's probe/store without
+// a derived-selector rewrite).
+
+/// The corrected V5 materialization result.
+#[derive(Debug)]
+pub struct V5Correction {
+    /// The newly sealed `version_id` — the corrected artifact's identity.
+    pub version_id: String,
+    /// The sealed corrected document (canonical JSON).
+    pub sealed_json: Json,
+    /// The published `version_id`s the authored `version:<vid>` selectors
+    /// named (slot → vid — recorded so the supersession record cites the
+    /// concrete pins).
+    pub bound_vids: BTreeMap<String, String>,
+    /// The registry snapshot the resolve recorded.
+    pub snapshot_id: String,
+}
+
+/// The kernel Stage-1 seed's published `version_id` for `hh/<name>`.
+fn seeded_vid(store: &RegistryStore, variant_id: &str) -> Result<String, SweepRefusal> {
+    for vid in store.version_ids() {
+        if let Some((_, RegistryRecord::Variant(v))) = store.get(vid) {
+            if v.variant_id == variant_id {
+                return Ok(vid.clone());
+            }
+        }
+    }
+    Err(SweepRefusal::UnexpressibleSurface {
+        detail: format!("seed published no {variant_id}"),
+    })
+}
+
+/// The authored corrected V5 document — the `sweep_baseline_doc` shape
+/// with the W4 bound substitutions applied honestly: `model_port` binds
+/// `hh/gateway_http` (the env-mediated provider lane) under a
+/// `version:<vid>` selector naming the **published** vid; `context_policy`
+/// and `control_strategy` re-spell their pins as `version:<vid>`; the
+/// model-port params are the recorded W4 bound set (env: indirections +
+/// `transcript_render.assistant_replay.reasoning` still on the
+/// `$param:reasoning_replay` marker so the declared override flow is
+/// unchanged); the process environment names the window's `cell:task`.
+fn corrected_v5_doc(gw_vid: &str, rr_vid: &str, fw_vid: &str) -> HirDocument {
+    let mut doc = sweep_baseline_doc();
+    let mut a = Assembly::from_json(
+        doc.assembly.as_ref().expect("baseline carries assembly"),
+        "/assembly",
+        &ProvenanceRecord::kernel("sweep:seal", 0),
+        &mut Vec::new(),
+    )
+    .expect("baseline assembly decodes");
+    a.values
+        .insert("reasoning_replay".to_string(), Json::str("drop"));
+    // `model_port` — the env-mediated provider lane, version-pinned.
+    let mut mp = SlotBinding::of(ComponentVariantRef::selected(
+        "model_port",
+        "hh/gateway_http",
+        format!("version:{gw_vid}"),
+    ));
+    mp.params = BTreeMap::from([
+        ("credential_ref".to_string(), Json::str("env:HH_L1_API_KEY")),
+        ("dialect_ref".to_string(), Json::str("openai-compatible@1")),
+        ("endpoint".to_string(), Json::str("env:HH_L1_ENDPOINT")),
+        (
+            "provider_model_id".to_string(),
+            Json::str("env:HH_L1_MODEL"),
+        ),
+        ("provider_params".to_string(), Json::obj([])),
+        (
+            "retry".to_string(),
+            Json::obj([
+                ("attempts", Json::Int(10)),
+                (
+                    "classes",
+                    Json::Arr(vec![Json::str("rate_limited"), Json::str("server_error")]),
+                ),
+            ]),
+        ),
+        ("tool_choice".to_string(), Json::str("omit")),
+        (
+            "transcript_render".to_string(),
+            Json::obj([(
+                "assistant_replay",
+                Json::obj([("reasoning", Json::str("$param:reasoning_replay"))]),
+            )]),
+        ),
+        ("transport".to_string(), Json::str("non_stream")),
+    ]);
+    a.slots
+        .insert("model_port".to_string(), SlotBindings::One(mp));
+    a.slots.insert(
+        "control_strategy".to_string(),
+        SlotBindings::One(SlotBinding::of(ComponentVariantRef::selected(
+            "control_strategy",
+            "hh/round_robin",
+            format!("version:{rr_vid}"),
+        ))),
+    );
+    a.slots.insert(
+        "context_policy".to_string(),
+        SlotBindings::One(SlotBinding::of(ComponentVariantRef::selected(
+            "context_policy",
+            "hh/full_window",
+            format!("version:{fw_vid}"),
+        ))),
+    );
+    doc.assembly = Some(a.to_json());
+    // The root native's slots ride the same bindings (materialise would
+    // project them anyway) and the environment names the window cell —
+    // `env:sweep` never existed on the lane (the baseline bound doc's
+    // `cell:task` is the recorded window spelling).
+    let root_id = doc.root.semantic_id.clone();
+    for n in &mut doc.nodes {
+        if n.semantic_id() != root_id {
+            continue;
+        }
+        if let KindRecord::AgentProcess(ap) = &mut n.semantic {
+            if let AgentProcessBody::Native(nat) = &mut ap.body {
+                nat.slots = a.slots.clone();
+                nat.environment = EnvironmentRef {
+                    environment: "cell:task".to_string(),
+                };
+            }
+        }
+    }
+    doc
+}
+
+/// `corrected_v5(work_dir)` — mint the corrected V5 sealed document:
+/// seed a store with the kernel's own Stage-1 set, author the corrected
+/// doc with `version:<vid>` selectors naming the published heads, then
+/// run the real `resolve` (the same parser that refused `sha256:<vid>`
+//  as `RefUnresolved` in W4) and `hir::ops::seal`. Deterministic — the
+/// seed rows, the resolved_at stamp and the authored doc are fixed.
+pub fn corrected_v5(work_dir: &Path) -> Result<V5Correction, SweepRefusal> {
+    let kernel = ProvenanceRecord::kernel("sweep:seal", 0);
+    let mut store =
+        RegistryStore::open(work_dir.join("registry"), &kernel).expect("correction store opens");
+    hharness_registry::suites::seed_stage1(&mut store);
+    let gw = seeded_vid(&store, "hh/gateway_http")?;
+    let rr = seeded_vid(&store, "hh/round_robin")?;
+    let fw = seeded_vid(&store, "hh/full_window")?;
+    let authored = corrected_v5_doc(&gw, &rr, &fw);
+    let catalog = Stage1Catalog::stage1();
+    let mut env = ResolveEnv {
+        registry: &mut store,
+        catalog: &catalog,
+        snapshot_id: None,
+        mode: ResolveMode::Audit,
+        registrar: kernel.clone(),
+        resolved_at: 1_763_000_000_000,
+        notices: None,
+    };
+    let sealed =
+        resolve(&authored, &mut env).map_err(|diags| SweepRefusal::UnexpressibleSurface {
+            detail: format!(
+                "corrected V5 resolve refused: {}",
+                diags
+                    .iter()
+                    .map(|d| format!("{:?}:{}", d.code, d.subject))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
+        })?;
+    let snapshot_id = sealed
+        .document
+        .assembly
+        .as_ref()
+        .and_then(|a| a.get("resolved"))
+        .and_then(|r| r.get("registry_snapshot_id"))
+        .and_then(Json::as_str)
+        .unwrap_or_default()
+        .to_string();
+    Ok(V5Correction {
+        version_id: sealed.definition_ref.version_id.clone(),
+        sealed_json: hharness_hir::wire::sealed_definition_json(&sealed),
+        bound_vids: BTreeMap::from([
+            ("model_port".to_string(), gw),
+            ("control_strategy".to_string(), rr),
+            ("context_policy".to_string(), fw),
+        ]),
+        snapshot_id,
+    })
+}
+
 /// The V5 liveness declaration — the §8.1 row: request-diff kind,
 /// `reasoning_content` the declared wire path, always after turn 1.
 pub fn v5_liveness() -> LivenessDecl {
