@@ -187,9 +187,10 @@ impl CellOps for PodmanCell<'_> {
 /// `exec_guarded(backend, argv, cwd, env, deadline_ms)` — one phase exec
 /// under the D17 lapse enforcement (ADR-0448): a deadline-bearing exec
 /// runs in-cell through
-/// [`hharness_helper::podman::wrap_kill`] (`setsid timeout --kill-after`
-/// — the in-cell session-leader/group kill, the admitted mechanism the
-/// host-side pgid kill could not reach) carrying a unique `HH_EXEC_TAG`
+/// [`hharness_helper::podman::wrap_kill`] (`setsid --wait timeout
+/// --kill-after` — the in-cell session-leader/group kill, the admitted
+/// mechanism the host-side pgid kill could not reach) carrying a
+/// unique `HH_EXEC_TAG`
 /// in its environment. On lapse the host-side `podman exec` client is
 /// killed, the tag's own in-cell process tree is TERM/KILLed by a
 /// `/proc/*/environ` walk, and death is CONFIRMED by a second walk

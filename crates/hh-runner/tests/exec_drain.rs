@@ -54,7 +54,7 @@ fn backend(dir: &std::path::Path) -> hharness_helper::podman::PodmanBackend {
 }
 
 /// Install the `podman` stub: it logs every argv; the deadline-bearing
-/// phase exec (carrying `setsid timeout`) runs `body` — the emit/sleep
+/// phase exec (carrying `setsid --wait timeout`) runs `body` — the emit/sleep
 /// script that produces the oversized streams; the lapse sweep's
 /// environ walks exit 0 (terminated) and the confirm walk exits 1 (no
 /// tagged survivor). POSIX `dd|tr` emits — `head -c`/`yes` aren't
@@ -67,7 +67,7 @@ fn install_stub(dir: &std::path::Path, body: &str) -> (PathBuf, PathBuf) {
          echo \"$@\" >> \"$HH_PODMAN_LOG\"\n\
          if [ \"$1\" = \"exec\" ]; then\n\
          \x20 case \" $* \" in\n\
-         \x20   *\" setsid timeout \"*) {body};;\n\
+         \x20   *\" setsid --wait timeout \"*) {body};;\n\
          \x20   *\"/environ\"*kill*) exit 0;;\n\
          \x20   *\"/environ\"*) exit 1;;\n\
          \x20   *) exit 0;;\n\
@@ -151,7 +151,7 @@ fn xo05_return_hang_completed_phase_delivers_full_streams() {
         t0.elapsed()
     );
     let logged = std::fs::read_to_string(&log).unwrap();
-    assert!(logged.contains("setsid timeout"), "{logged}");
+    assert!(logged.contains("setsid --wait timeout"), "{logged}");
     let _ = std::fs::remove_dir_all(&dir);
 }
 

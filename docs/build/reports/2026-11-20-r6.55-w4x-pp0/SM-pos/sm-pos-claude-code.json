@@ -1,0 +1,22 @@
+{
+ "agent_end_cause": "exited{0}",
+ "arm_run_rc": 0,
+ "checks": {
+  "AG3": "pass",
+  "AG5": "pass",
+  "AG6": "pass",
+  "AG8": "pass"
+ },
+ "cost_attributed_count": 0,
+ "denied_hosts": [],
+ "endpoint_errors": [],
+ "harness": "claude-code",
+ "native_log_bytes": 12976,
+ "outcome": "withheld{sealed_until_results}",
+ "receipt_count": 2,
+ "schema": "hh-pp0-ag-evidence/1",
+ "task": "hh-smoke/write-file",
+ "trial_ref": "smoke/SM-pos/sm-pos-claude-code",
+ "unexpected_denied": [],
+ "variant": "SM-pos"
+}

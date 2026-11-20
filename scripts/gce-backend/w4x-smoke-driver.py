@@ -19,6 +19,11 @@ AG3/AG5/AG6/AG8 over the slot's own records: cell-report end cause,
 mediator denied hosts, proxy receipts, endpoint errors). A leg that
 cannot run records typed unavailability — never a pass.
 
+The `--lane-file` `model` member MUST spell the recorded model
+(`glm-5.3-flash` for the committed PP0 recordings) — receipts are
+attributed under the lane's model and a non-priced spelling such as
+`"replay"` mints `model.call` rows no evidence table can index.
+
 usage:
   w4x-smoke-driver.py --cfg cfg.json --battery DIR --w1-bin BIN \
     --proxy-session ws1-proxy-session.py --proxy-bin hh-model-proxy \
@@ -97,8 +102,24 @@ def replay_decl(battery, recs, variant):
 
 def proxy_stats(store_root, run_id, sid):
     """Receipts + endpoint-error dispositions attributed to `sid` on
-    the proxy run's wal (the ws1-pp0 fold's own read)."""
-    stats = {"receipts": 0, "endpoint_errors": []}
+    the proxy run's wal.
+
+    Two durable bases, counted separately (R6.55 cont. — the W4x
+    battery is §4.9 `replay`, which allocates NO slice budget, so
+    `measurement.cost.attributed` is never minted by contract):
+    - `cost_attributed` — the Ws1 fold's live-mode basis:
+      `measurement.cost.attributed` rows scoped by
+      `attribution.participant_ref`.
+    - `receipts` — the durable per-call receipt: terminal
+      `model.call.completed`/`failed` events whose `response_ref`
+      names an `hh.model_proxy.receipt/1` doc carrying
+      `proxy.slot_id == sid`. This is the mode-universal "the call
+      was receipted" row AG6 reads — present in replay where the
+      spend row is absent, and on every live call too.
+    Endpoint-error dispositions are read straight off the terminal
+    event's `disposition` member (the same member the
+    cost-attributed `source_event` chain resolved to)."""
+    stats = {"receipts": 0, "cost_attributed": 0, "endpoint_errors": []}
     wal = None
     for dp, _, fns in os.walk(store_root):
         for fn in fns:
@@ -115,16 +136,41 @@ def proxy_stats(store_root, run_id, sid):
         ev = e.get("v") or e
         if ev.get("event_id"):
             events[ev["event_id"]] = ev
+
+    def blob_json(ref):
+        if not isinstance(ref, str) or not ref.startswith("sha256:"):
+            return None
+        p = os.path.join(store_root, "blobs", ref.split(":", 1)[1])
+        try:
+            with open(p) as f:
+                return json.load(f)
+        except Exception:
+            return None
+
     for ev in events.values():
-        if (ev.get("class") or "") != "measurement.cost.attributed":
-            continue
+        cls = ev.get("class") or ""
         pay = ev.get("payload") or {}
-        if (pay.get("attribution") or {}).get("participant_ref") != sid:
+        if cls == "measurement.cost.attributed":
+            if (pay.get("attribution") or {}).get(
+                    "participant_ref") == sid:
+                stats["cost_attributed"] += 1
+                src = (pay.get("source_event") or {}).get("event_id")
+                disp = str(((events.get(src) or {}).get("payload") or {})
+                           .get("disposition") or "")
+                if "endpoint" in disp or "protocol" in disp:
+                    stats["endpoint_errors"].append(disp)
+            continue
+        if cls not in ("model.call.completed", "model.call.failed"):
+            continue
+        doc = blob_json(pay.get("response_ref"))
+        if not doc:
+            continue
+        if ((doc.get("proxy") or {}).get("slot_id")) != sid:
             continue
         stats["receipts"] += 1
-        src = (pay.get("source_event") or {}).get("event_id")
-        disp = str(((events.get(src) or {}).get("payload") or {})
-                   .get("disposition") or "")
+        disp = str(pay.get("disposition")
+                   or ((doc.get("outcome") or {}).get("disposition"))
+                   or "")
         if "endpoint" in disp or "protocol" in disp:
             stats["endpoint_errors"].append(disp)
     return stats
@@ -138,6 +184,7 @@ def fold_ag(slot_dir, arm, task, trial_ref, expected_denied, st):
     denied = rep.get("denied_hosts") or []
     unexpected = [h for h in denied if h not in expected_denied]
     receipts_n = None if st is None else st["receipts"]
+    cost_attributed_n = None if st is None else st["cost_attributed"]
     endpoint_errors = [] if st is None else st["endpoint_errors"]
     # the native log's byte total — a smoke asserting the harness's own
     # completion form can never pass on a silent run (the exec-time
@@ -161,7 +208,12 @@ def fold_ag(slot_dir, arm, task, trial_ref, expected_denied, st):
         "agent_end_cause": end,
         "denied_hosts": denied,
         "unexpected_denied": unexpected,
+        # `receipt_count` = durable `hh.model_proxy.receipt/1` call
+        # receipts scoped to the slot (the AG6 basis — mode-universal);
+        # `cost_attributed_count` = `measurement.cost.attributed` rows
+        # (live-mode spend rows — §4.9 replay mints none by contract).
         "receipt_count": receipts_n,
+        "cost_attributed_count": cost_attributed_n,
         "endpoint_errors": endpoint_errors,
         "native_log_bytes": native_bytes,
         "checks": {
