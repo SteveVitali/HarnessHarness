@@ -113,10 +113,12 @@ def main():
                 ok("refusal", "withheld leaderboard renders typed "
                    "markers verbatim")
         elif tfpb.get("verbatim_structure"):
-            # The executed-W4 packet: the packet-level disposition
-            # verbatim, landed values and typed markers.
-            if "not_run{admission:AG3}" not in lb:
-                fail("refusal", "W4 verbatim leaderboard lacks the "
+            # The executed packet (W4's not_run{admission:AG3}, then the
+            # executed-W4x fold's executed{adr-0453}): the packet-level
+            # disposition verbatim, landed values and typed markers.
+            disp = (tfpb.get("packet_disposition") or {}).get("text", "")
+            if not disp or disp not in lb:
+                fail("refusal", "verbatim leaderboard lacks the "
                      "packet disposition verbatim")
             elif 'class="absent-token"' not in lb:
                 fail("refusal", "W4 verbatim leaderboard lacks typed "

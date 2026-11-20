@@ -12,9 +12,10 @@
 //! ```text
 //! fp-w4x-results emit         <repo-root> — the full record set (needs the retained harvest)
 //! fp-w4x-results emit-packets <repo-root> — the committed-inputs packets only (byte-stable anywhere)
-//! fp-w4x-results freeze       <repo-root> — mint the hh-flagged-review/1 record + the frozen
-//!                                site-facing copies (refuses on unreviewed flags →
-//!                                withheld{flagged_review})
+//! fp-w4x-results freeze       <repo-root> — mint the hh-flagged-review/1 record, the
+//!                                post-review restored packets (`-post-review`) and the
+//!                                frozen site-facing copies (refuses on unreviewed or
+//!                                confirmed flags → withheld{flagged_review})
 //! ```
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -435,8 +436,17 @@ fn sources_from(m: &[(String, String)], repo: &Path, names: &[&str]) -> Vec<(Str
 }
 
 // ── the packet fold (committed-inputs only — byte-stable) ────────────
-
-fn packets(repo: &Path, m: &[(String, String)]) -> Vec<(String, Json)> {
+//
+// `packets(repo, m, review)` — `None` is the committed pre-review
+// generation (every scan flag a veto; the emitted packets' bytes are
+// history and re-emit identically anywhere). `Some(review)` is the
+// post-review restored generation: the `hh-flagged-review/1`
+// dispositions apply — `cleared` flags score as passes, a `confirmed`
+// or undispositioned flag stays a veto — and the restored members
+// (theta, counts, Δ, sign-flip + Holm p, leader, integrity) recompute
+// through the same estimators. The post-review set emits under
+// `-post-review` names; the committed files are never rewritten.
+fn packets(repo: &Path, m: &[(String, String)], review: Option<&Json>) -> Vec<(String, Json)> {
     let rel_of = |name: &str| -> String {
         m.iter()
             .find(|(k, _)| k == name)
@@ -511,18 +521,44 @@ fn packets(repo: &Path, m: &[(String, String)]) -> Vec<(String, Json)> {
             r
         })
         .collect();
-    let vetoes = hharness_runner::fp_w4::scan_vetoes(&w4x_scan);
+    // the committed scan's flag set — `flagged()` counts it and a
+    // confirmed/undispositioned flag always stays a veto.
+    let flag_vetoes = hharness_runner::fp_w4::scan_vetoes(&w4x_scan);
+    // the fold's active veto set: pre-review, every flag; post-review,
+    // the flag set minus the review's `cleared` dispositions.
+    let vetoes = match review {
+        Some(r) => w4x_restored_vetoes(&w4x_scan, r),
+        None => flag_vetoes.clone(),
+    };
+    let dispositions: BTreeMap<String, String> =
+        review.map(w4x_review_dispositions).unwrap_or_default();
+    let post = review.is_some();
+    let flagged_sid = |slot_id: &str| -> bool {
+        let raw = slot_id.split_once(':').map(|(_, s)| s).unwrap_or(slot_id);
+        flag_vetoes.contains_key(raw) || flag_vetoes.contains_key(slot_id)
+    };
     let flagged = |arm: &str| -> i64 {
         w4x_rows
             .iter()
             .filter(|r| r.arm == arm && r.pass.is_some())
+            .filter(|r| flagged_sid(&r.slot_id))
+            .count() as i64
+    };
+    // honest per-arm disposition counts over the flagged scored slots —
+    // derived from the committed review record, never asserted.
+    let dispositioned = |arm: &str, want: &str| -> i64 {
+        w4x_rows
+            .iter()
+            .filter(|r| r.arm == arm && r.pass.is_some())
+            .filter(|r| flagged_sid(&r.slot_id))
             .filter(|r| {
                 let raw = r
                     .slot_id
                     .split_once(':')
                     .map(|(_, s)| s)
                     .unwrap_or(&r.slot_id);
-                vetoes.contains_key(raw) || vetoes.contains_key(&r.slot_id)
+                dispositions.get(raw).map(String::as_str) == Some(want)
+                    || dispositions.get(&r.slot_id).map(String::as_str) == Some(want)
             })
             .count() as i64
     };
@@ -589,7 +625,7 @@ fn packets(repo: &Path, m: &[(String, String)]) -> Vec<(String, Json)> {
     let pi_costs = costs("pi", &scored_rows);
     let cc_costs = costs("claude-code", &scored_rows);
 
-    let deg_delta = Json::obj([
+    let mut deg_members: Vec<(&str, Json)> = vec![
         ("ppm", Json::Int(0)),
         (
             "interval",
@@ -602,7 +638,13 @@ fn packets(repo: &Path, m: &[(String, String)]) -> Vec<(String, Json)> {
         ("p_raw_ppm", Json::Int(1_000_000)),
         ("p_holm_ppm", Json::Int(1_000_000)),
         ("label", Json::str("reference arm — Δ ≡ 0 by construction")),
-    ]);
+    ];
+    if post {
+        // the restored generation carries the rejection flag — the
+        // reference Δ ≡ 0 at Holm-adjusted p = 1 is never separated.
+        deg_members.push(("separated", Json::Bool(false)));
+    }
+    let deg_delta = Json::obj(deg_members);
     let pending_family = |member: &str| -> Json {
         hharness_runner::fp_results::family_row(&hharness_runner::fp_results::FamilyMember {
             member: member.to_string(),
@@ -614,6 +656,147 @@ fn packets(repo: &Path, m: &[(String, String)]) -> Vec<(String, Json)> {
             )),
             computed: None,
         })
+    };
+    // the post-review confirmatory members: the paired-cell deltas via
+    // the shared `paired_deltas` helper (the one counting rule), the
+    // sharp-null sign-flip p under the confirmatory-family seed
+    // convention, Holm over the primary family and BH over the
+    // exploratory pair — the same machinery, never reimplemented.
+    let signflip_p = |pop: &hharness_eval::population::PlannedPopulation,
+                      member: &str,
+                      test: &str,
+                      control: &str|
+     -> Result<i64, String> {
+        let deltas = hharness_eval::comparative_estimators::paired_deltas(
+            pop,
+            hharness_eval::population::PopulationKind::JointTaskPassWithoutObservedVeto,
+            test,
+            control,
+            None,
+        )?;
+        hharness_eval::stats::permutation_signflip_p(
+            &deltas,
+            hharness_eval::task_mixture::SIGNFLIP_DRAWS,
+            &format!("comparative-family/1|{W4X_EST_SEED}|{member}|{test}|{control}"),
+        )
+        .ok_or_else(|| "the paired deltas carry no mass".to_string())
+    };
+    // the primary + exploratory members, computed post-review; a refused
+    // member stays unavailable at worst-case mass (never dropped).
+    #[allow(clippy::type_complexity)]
+    let (p2_family, p2_expl, pi_p, cc_p, pi_adj, cc_adj): (
+        Vec<Json>,
+        Vec<Json>,
+        Option<i64>,
+        Option<i64>,
+        Option<i64>,
+        Option<i64>,
+    ) = if post {
+        let raw_pi = signflip_p(&joint_p2, "pi", "pi", "mini-swe-agent");
+        let raw_cc = signflip_p(&joint_p2, "claude-code", "claude-code", "mini-swe-agent");
+        let raw_expl = signflip_p(&joint_p2, "pi|claude-code", "pi", "claude-code");
+        let adj = hharness_eval::stats::holm(&[
+            raw_pi.clone().unwrap_or(1_000_000),
+            raw_cc.clone().unwrap_or(1_000_000),
+        ]);
+        let eadj =
+            hharness_eval::stats::benjamini_hochberg(&[raw_expl.clone().unwrap_or(1_000_000)]);
+        let fam_row = |member: &str, raw: &Result<i64, String>, adj_ppm: i64| -> Json {
+            match raw {
+                Ok(r) => hharness_runner::fp_results::family_row(
+                    &hharness_runner::fp_results::FamilyMember {
+                        member: member.to_string(),
+                        status: "computed".into(),
+                        disposition: None,
+                        computed: Some((*r, adj_ppm)),
+                    },
+                ),
+                Err(reason) => hharness_runner::fp_results::family_row(
+                    &hharness_runner::fp_results::FamilyMember {
+                        member: member.to_string(),
+                        status: "unavailable".into(),
+                        disposition: Some(format!("unavailable{{paired_deltas}} — {reason}")),
+                        computed: None,
+                    },
+                ),
+            }
+        };
+        (
+            vec![
+                fam_row("pi", &raw_pi, adj[0]),
+                fam_row("claude-code", &raw_cc, adj[1]),
+            ],
+            vec![fam_row("pi|claude-code", &raw_expl, eadj[0])],
+            raw_pi.clone().ok(),
+            raw_cc.clone().ok(),
+            raw_pi.is_ok().then_some(adj[0]),
+            raw_cc.is_ok().then_some(adj[1]),
+        )
+    } else {
+        (
+            vec![pending_family("pi"), pending_family("claude-code")],
+            vec![pending_family("pi|claude-code")],
+            None,
+            None,
+            None,
+            None,
+        )
+    };
+    let (pi_delta_p, cc_delta_p) = if post {
+        (
+            W4xDeltaP::Reviewed {
+                raw_ppm: pi_p,
+                holm_ppm: pi_adj,
+            },
+            W4xDeltaP::Reviewed {
+                raw_ppm: cc_p,
+                holm_ppm: cc_adj,
+            },
+        )
+    } else {
+        (
+            W4xDeltaP::Pending(pending_note),
+            W4xDeltaP::Pending(pending_note),
+        )
+    };
+    // the post-review leader is the argmax restored θ over the scored
+    // arms (deterministic arm order; first max on a tie — the same
+    // rule `tied_with_leader` applies).
+    let leader_p2: Option<&str> = if post {
+        let mut best: Option<(&str, i64)> = None;
+        for (arm, pop) in [
+            ("claude-code", &cc_pop),
+            ("mini-swe-agent", &mini_pop),
+            ("pi", &pi_pop),
+        ] {
+            let ppm = w4x_arm_rate(pop, arm)
+                .map(|r| r.observed_ppm)
+                .unwrap_or(i64::MIN);
+            if best.map(|(_, v)| ppm > v).unwrap_or(true) {
+                best = Some((arm, ppm));
+            }
+        }
+        best.map(|(a, _)| a)
+    } else {
+        None
+    };
+    let leader_p2_participant = leader_p2.map(|a| match a {
+        "pi" => "hh/pi@0.52.3",
+        "claude-code" => "hh/claude-code@2.1.50",
+        _ => "hh/mini-swe-agent@2.4.6",
+    });
+    let p2_review = |arm: &str| -> W4xReview<'_> {
+        match leader_p2_participant {
+            Some(participant) => W4xReview::Reviewed {
+                participant,
+                member: leader_p2 == Some(arm),
+                note: "leader over the scored arms post-review — the restored fold \
+                       scores cleared flagged passes as passes",
+            },
+            None => {
+                W4xReview::Pending("leader over the scored arms is pending the w4x flagged review")
+            }
+        }
     };
     let unmetered = "w4x_unmetered — attributed model spend is honest 0 \
         (unmetered_streaming_usage: upstream usage objects absent on every call); \
@@ -639,11 +822,12 @@ fn packets(repo: &Path, m: &[(String, String)]) -> Vec<(String, Json)> {
         &mini_costs,
         "w4_measured_mean",
         0,
+        0,
         mini_cleared,
         1_000_000,
         deg_delta,
         &mini_swaps,
-        "leader over the scored arms is pending the w4x flagged review",
+        &p2_review("mini-swe-agent"),
     )
     .unwrap_or_else(|e| panic!("mini arm row: {e:?}"));
     let pi_swaps: Vec<(String, Json, Json)> = vec![{
@@ -659,11 +843,12 @@ fn packets(repo: &Path, m: &[(String, String)]) -> Vec<(String, Json)> {
         &pi_costs,
         unmetered,
         flagged("pi"),
-        0,
+        dispositioned("pi", "confirmed"),
+        dispositioned("pi", "cleared"),
         1_000_000,
-        w4x_delta(&joint_p2, "pi", "mini-swe-agent", pending_note),
+        w4x_delta(&joint_p2, "pi", "mini-swe-agent", &pi_delta_p),
         &pi_swaps,
-        "leader over the scored arms is pending the w4x flagged review",
+        &p2_review("pi"),
     )
     .unwrap_or_else(|e| panic!("pi arm row: {e:?}"));
     let cc_swaps: Vec<(String, Json, Json)> = vec![{
@@ -679,11 +864,12 @@ fn packets(repo: &Path, m: &[(String, String)]) -> Vec<(String, Json)> {
         &cc_costs,
         unmetered,
         flagged("claude-code"),
-        0,
+        dispositioned("claude-code", "confirmed"),
+        dispositioned("claude-code", "cleared"),
         1_000_000,
-        w4x_delta(&joint_p2, "claude-code", "mini-swe-agent", pending_note),
+        w4x_delta(&joint_p2, "claude-code", "mini-swe-agent", &cc_delta_p),
         &cc_swaps,
-        "leader over the scored arms is pending the w4x flagged review",
+        &p2_review("claude-code"),
     )
     .unwrap_or_else(|e| panic!("claude-code arm row: {e:?}"));
 
@@ -695,15 +881,25 @@ fn packets(repo: &Path, m: &[(String, String)]) -> Vec<(String, Json)> {
             ("claude-code".into(), cc_row),
             ("mini-swe-agent".into(), mini_row),
         ],
-        vec![pending_family("pi"), pending_family("claude-code")],
-        vec![pending_family("pi|claude-code")],
+        p2_family,
+        p2_expl,
         "executed{adr-0453}",
-        "all three P2-FP arms executed their full 50-slot tranches — mini-swe-agent \
-         under ADR-0452 (W4; its 32 flags cleared by hh-flagged-review/1), pi and \
-         claude-code under ADR-0453's a4 extension (50×rc=0 each; CTRF verdicts \
-         31/50 and 30/50 — the joint population scores unreviewed flagged passes \
-         as failures); the paired-cell Δ lands on each arm row and the Holm \
-         members stay pending{flagged_review} until HUMAN-H20 dispositions",
+        if post {
+            "all three P2-FP arms executed their full 50-slot tranches — mini-swe-agent \
+             under ADR-0452 (W4; its 32 flags cleared by hh-flagged-review/1), pi and \
+             claude-code under ADR-0453's a4 extension (50×rc=0 each; CTRF verdicts \
+             31/50 and 30/50); HUMAN-H20's hh-flagged-review/1 cleared all 34 \
+             flagged passes — the restored fold scores them as passes, the \
+             paired-cell Δ lands on each arm row and the Holm members are \
+             computed over the restored population"
+        } else {
+            "all three P2-FP arms executed their full 50-slot tranches — mini-swe-agent \
+             under ADR-0452 (W4; its 32 flags cleared by hh-flagged-review/1), pi and \
+             claude-code under ADR-0453's a4 extension (50×rc=0 each; CTRF verdicts \
+             31/50 and 30/50 — the joint population scores unreviewed flagged passes \
+             as failures); the paired-cell Δ lands on each arm row and the Holm \
+             members stay pending{flagged_review} until HUMAN-H20 dispositions"
+        },
         &expected("P2-FP", "below the declared precision target — first pass"),
         "2026-11-19-fp-w4-results-p2-fp-frozen.json",
         &w4x_sha,
@@ -747,6 +943,27 @@ fn packets(repo: &Path, m: &[(String, String)]) -> Vec<(String, Json)> {
         let (s, e) = w4x_swap_pair("v5", &v5_cells, "hh_native", &[]);
         ("hh/hh_native@fp".to_string(), s, e)
     }];
+    let v5_delta_p = if post {
+        // the Δ vs hh_native still refuses (no scored H side) — the
+        // restored generation keeps its p-members typed, never ints
+        // over a refusal.
+        W4xDeltaP::Reviewed {
+            raw_ppm: None,
+            holm_ppm: None,
+        }
+    } else {
+        W4xDeltaP::Pending(pending_note)
+    };
+    let v5_review = if post {
+        W4xReview::Reviewed {
+            participant: "hh/v5@corrected-seal",
+            member: true,
+            note: "leader over the scored arms post-review — the reference arm \
+                   produced no scored outcome (a one-arm read)",
+        }
+    } else {
+        W4xReview::Pending("the reference arm produced no scored outcome — no leader read lands")
+    };
     let v5_row = w4x_landed_arm_row(
         "v5",
         "hh/v5@corrected-seal",
@@ -756,11 +973,12 @@ fn packets(repo: &Path, m: &[(String, String)]) -> Vec<(String, Json)> {
         &v5_costs,
         "w4xv_measured_mean — proxy-ledger attributed (slot cost_micros)",
         flagged("v5"),
-        0,
+        dispositioned("v5", "confirmed"),
+        dispositioned("v5", "cleared"),
         1_000_000,
-        w4x_delta(&joint_p4, "v5", "hh_native", pending_note),
+        w4x_delta(&joint_p4, "v5", "hh_native", &v5_delta_p),
         &v5_swaps,
-        "the reference arm produced no scored outcome — no leader read lands",
+        &v5_review,
     )
     .unwrap_or_else(|e| panic!("v5 arm row: {e:?}"));
     let p4 = w4x_results_packet(
@@ -811,11 +1029,21 @@ fn packets(repo: &Path, m: &[(String, String)]) -> Vec<(String, Json)> {
             },
         )],
         "executed{adr-0453}",
-        "v5's corrected-seal evidence superseded its unavailable history: the a5 \
-         w4xv window recorded verifier rc=0 on all 50 slots (20×reward=1, \
-         30×reward=0) after the a4 machinery absence (recorded{127}, append-only); \
-         hh_native's W4 verifier-machinery failure is unchanged — no scored H \
-         side, so the Δ contrast stays honestly unavailable",
+        if post {
+            "v5's corrected-seal evidence superseded its unavailable history: the a5 \
+             w4xv window recorded verifier rc=0 on all 50 slots (20×reward=1, \
+             30×reward=0) after the a4 machinery absence (recorded{127}, append-only); \
+             the w4x flags cleared under the committed hh-flagged-review/1 \
+             (HUMAN-H20) — the restored fold lands; hh_native's W4 \
+             verifier-machinery failure is unchanged — no scored H side, so the \
+             Δ contrast stays honestly unavailable"
+        } else {
+            "v5's corrected-seal evidence superseded its unavailable history: the a5 \
+             w4xv window recorded verifier rc=0 on all 50 slots (20×reward=1, \
+             30×reward=0) after the a4 machinery absence (recorded{127}, append-only); \
+             hh_native's W4 verifier-machinery failure is unchanged — no scored H \
+             side, so the Δ contrast stays honestly unavailable"
+        },
         &expected("P4-FP", "single contrast — descriptive precision only"),
         "2026-11-19-fp-w4-results-p4-fp-frozen.json",
         &w4x_sha,
@@ -881,20 +1109,22 @@ fn packets(repo: &Path, m: &[(String, String)]) -> Vec<(String, Json)> {
         sources_json.clone(),
     );
 
+    // the post-review generation emits under `-post-review` names — the
+    // committed pre-review packets stay byte-untouched history; the
+    // frozen copies wrap the post-review record (the member-wise diff
+    // rule then reads exactly `freeze` + `review` + `seal_open_ref`).
+    let name = |base: &str| -> String {
+        if post {
+            format!("docs/build/reports/{base}-post-review.json")
+        } else {
+            format!("docs/build/reports/{base}.json")
+        }
+    };
     let mut out: Vec<(String, Json)> = vec![
-        (
-            "docs/build/reports/2026-11-20-fp-w4x-results-p2-fp.json".into(),
-            p2,
-        ),
-        (
-            "docs/build/reports/2026-11-20-fp-w4x-results-p4-fp.json".into(),
-            p4,
-        ),
-        (
-            "docs/build/reports/2026-11-20-fp-w4x-results-p3-l2.json".into(),
-            l2,
-        ),
-        ("docs/build/reports/2026-11-20-fp-w4x-l3.json".into(), l3),
+        (name("2026-11-20-fp-w4x-results-p2-fp"), p2),
+        (name("2026-11-20-fp-w4x-results-p4-fp"), p4),
+        (name("2026-11-20-fp-w4x-results-p3-l2"), l2),
+        (name("2026-11-20-fp-w4x-l3"), l3),
     ];
     for (_, j) in &out {
         if let Err(errs) = validate_w4x_results_packet(j) {
@@ -922,6 +1152,12 @@ fn freeze(repo: &Path) {
     let scan = load(repo, W4X_SCAN_REL);
     let scan_sha = sha256_file(&repo.join(W4X_SCAN_REL));
     let input_sha = sha256_file(&repo.join(W4X_REVIEW_INPUT_REL));
+    let manifest_path = std::env::var("HH_FP_W4X_RESULTS_INPUTS").unwrap_or_else(|_| {
+        repo.join("scripts/fp-w4x-results-inputs.txt")
+            .display()
+            .to_string()
+    });
+    let m = manifest(Path::new(&manifest_path));
     let flagged = scan
         .get("coverage")
         .and_then(|c| c.get("flagged"))
@@ -942,10 +1178,49 @@ fn freeze(repo: &Path) {
                     }
                 }
                 Ok(review) => {
+                    // all-cleared first — a confirmed or undispositioned
+                    // flag stays a veto; nothing post-review mints.
+                    if let Err(reason) = w4x_review_verified(&review) {
+                        for src in W4X_PACKET_RELS {
+                            eprintln!(
+                                "fp-w4x-results: freeze {src} withheld{{flagged_review}} — {reason}"
+                            );
+                        }
+                        return;
+                    }
                     write_record(repo, W4X_REVIEW_REL, &review);
+                    // the post-review restored generation: the review's
+                    // cleared dispositions apply inside the fold — the
+                    // frozen copy never wraps the vetoed pre-review
+                    // packet.
+                    let restored: BTreeMap<String, Json> =
+                        packets(repo, &m, Some(&review)).into_iter().collect();
                     for src in W4X_PACKET_RELS {
-                        let pkt = load(repo, &format!("docs/build/reports/{src}.json"));
-                        match w4x_freeze_reviewed_packet(&pkt, &review, &scan_sha, &input_sha) {
+                        let post_rel = format!("docs/build/reports/{src}-post-review.json");
+                        let Some(pkt) = restored.get(&post_rel) else {
+                            eprintln!(
+                                "fp-w4x-results: freeze {src} withheld{{flagged_review}} — \
+                                 the restored packet did not emit"
+                            );
+                            continue;
+                        };
+                        // the restored emitted packet is its own dated
+                        // record — the frozen copy diffs member-wise
+                        // against it exactly.
+                        write_record(repo, &post_rel, pkt);
+                        let pre_rel = format!("docs/build/reports/{src}.json");
+                        let restored_fold = matches!(
+                            src,
+                            &"2026-11-20-fp-w4x-results-p2-fp" | &"2026-11-20-fp-w4x-results-p4-fp"
+                        );
+                        match w4x_freeze_reviewed_packet(
+                            pkt,
+                            &review,
+                            &scan_sha,
+                            &input_sha,
+                            &pre_rel,
+                            restored_fold,
+                        ) {
                             Ok(fz) => write_record(
                                 repo,
                                 &format!("docs/build/reports/{src}-frozen.json"),
@@ -1007,8 +1282,19 @@ fn main() {
     };
 
     if cmd == "emit-packets" {
-        for (rel, j) in packets(&repo, &m) {
+        for (rel, j) in packets(&repo, &m, None) {
             write_record(&repo, &rel, &j);
+        }
+        // the post-review generation emits too once the committed
+        // `hh-flagged-review/1` record is all-cleared — appended, never
+        // rewritten over the pre-review files.
+        if repo.join(W4X_REVIEW_REL).exists() {
+            let review = load(&repo, W4X_REVIEW_REL);
+            if w4x_review_verified(&review).is_ok() {
+                for (rel, j) in packets(&repo, &m, Some(&review)) {
+                    write_record(&repo, &rel, &j);
+                }
+            }
         }
         return;
     }
@@ -1256,8 +1542,18 @@ fn main() {
     write_record(&repo, W4X_REVIEW_INPUT_REL, &input);
 
     // ── the superseding packets (committed-inputs fold) ─────────────
-    for (rel, j) in packets(&repo, &m) {
+    for (rel, j) in packets(&repo, &m, None) {
         write_record(&repo, &rel, &j);
+    }
+    // the post-review restored generation lands alongside once the
+    // committed `hh-flagged-review/1` record is all-cleared.
+    if repo.join(W4X_REVIEW_REL).exists() {
+        let review = load(&repo, W4X_REVIEW_REL);
+        if w4x_review_verified(&review).is_ok() {
+            for (rel, j) in packets(&repo, &m, Some(&review)) {
+                write_record(&repo, &rel, &j);
+            }
+        }
     }
     let _ = W4_OUTCOMES_PATH_REL;
     let _ = BTreeSet::<String>::new();

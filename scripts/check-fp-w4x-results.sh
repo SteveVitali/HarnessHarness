@@ -26,10 +26,19 @@ records=(
   2026-11-20-fp-w4x-outcomes
   2026-11-20-fp-w4x-answer-scan
   2026-11-20-fp-w4x-flagged-review-input
+  2026-11-20-fp-w4x-flagged-review
   2026-11-20-fp-w4x-results-p2-fp
   2026-11-20-fp-w4x-results-p4-fp
   2026-11-20-fp-w4x-results-p3-l2
   2026-11-20-fp-w4x-l3
+  2026-11-20-fp-w4x-results-p2-fp-post-review
+  2026-11-20-fp-w4x-results-p4-fp-post-review
+  2026-11-20-fp-w4x-results-p3-l2-post-review
+  2026-11-20-fp-w4x-l3-post-review
+  2026-11-20-fp-w4x-results-p2-fp-frozen
+  2026-11-20-fp-w4x-results-p4-fp-frozen
+  2026-11-20-fp-w4x-results-p3-l2-frozen
+  2026-11-20-fp-w4x-l3-frozen
   2026-11-20-fp-w4x-admission-pi-executed
   2026-11-20-fp-w4x-admission-claude-code-executed
 )
@@ -129,18 +138,53 @@ for r in \
   leg "byte-identical:$r" cmp "docs/build/reports/$r.json" "$SCRATCH/docs/build/reports/$r.json"
 done
 
-# 5 — the freeze state is the honest withheld{flagged_review}: the
-#     freeze leg refuses loudly until HUMAN-H20's analysis record
-#     lands; no *-frozen.json exists for the w4x set.
+# 5 — the post-review mint: HUMAN-H20's committed dispositions landed,
+#     so `freeze` re-mints the hh-flagged-review/1 record, the
+#     `-post-review` restored packets (the committed pre-review packets
+#     stay byte-untouched history) and the `-frozen` site-facing copies
+#     wrapping the restored fold.
 for r in \
     2026-11-20-fp-w4x-results-p2-fp \
     2026-11-20-fp-w4x-results-p4-fp \
     2026-11-20-fp-w4x-results-p3-l2 \
     2026-11-20-fp-w4x-l3; do
-  leg "no-frozen-copy:$r" bash -c "test ! -e docs/build/reports/$r-frozen.json"
+  leg "frozen-copy:$r" bash -c "test -e docs/build/reports/$r-frozen.json && test -e docs/build/reports/$r-frozen.sha256"
+  leg "post-review-copy:$r" bash -c "test -e docs/build/reports/$r-post-review.json && test -e docs/build/reports/$r-post-review.sha256"
 done
-leg "freeze-withholds" bash -c \
-  "! cargo run -q -p hharness-runner --bin fp_w4x_results -- freeze . 2>&1 | grep -q 'wrote .*-frozen'"
+# the restored fold: every flag cleared → the flagged passes score as
+# passes again (pi 31/50 → θ 620000, claude-code 30/50 → θ 600000,
+# mini 29/50 → θ 580000 unchanged); the paired-cell Δ and the
+# sign-flip/Holm p-members land as ints; no pending{flagged_review}
+# marker survives anywhere in the restored or frozen records.
+leg "restored-theta-p2" python3 -c \
+  "import json; p=json.load(open('docs/build/reports/2026-11-20-fp-w4x-results-p2-fp-frozen.json')); h=p['harnesses']; assert h['pi']['theta']['ppm']==620000, h['pi']['theta']; assert h['claude-code']['theta']['ppm']==600000; assert h['mini-swe-agent']['theta']['ppm']==580000; assert h['pi']['delta_vs_ref']['ppm']==40000; assert h['claude-code']['delta_vs_ref']['ppm']==20000; assert isinstance(h['pi']['delta_vs_ref']['p_raw_ppm'],int); assert isinstance(h['pi']['delta_vs_ref']['p_holm_ppm'],int); assert isinstance(h['claude-code']['delta_vs_ref']['p_raw_ppm'],int); assert isinstance(h['claude-code']['delta_vs_ref']['p_holm_ppm'],int); assert all(m['status']=='computed' for m in p['family']['members']); assert h['pi']['leader_group']['leader_id']=='hh/pi@0.52.3' and h['pi']['leader_group']['member']==True; assert h['pi']['integrity']['cleared']==35 and h['claude-code']['integrity']['cleared']==34"
+leg "restored-theta-p4" python3 -c \
+  "import json; p=json.load(open('docs/build/reports/2026-11-20-fp-w4x-results-p4-fp-frozen.json')); h=p['harnesses']; assert h['v5']['theta']['ppm']==400000; assert h['v5']['leader_group']['leader_id']=='hh/v5@corrected-seal'; assert h['v5']['delta_vs_ref']['p_raw_ppm']['state']=='unavailable{contrast_refused}'"
+leg "no-pending-markers" bash -c \
+  "! grep -l 'pending{flagged_review}\|pending_flagged_review\|unavailable{pending_flagged_review}' \
+    docs/build/reports/2026-11-20-fp-w4x-results-*-frozen.json \
+    docs/build/reports/2026-11-20-fp-w4x-l3-frozen.json \
+    docs/build/reports/2026-11-20-fp-w4x-*-post-review.json"
+# the member-wise diff rule: each frozen copy adds exactly
+# {freeze, review, seal_open_ref} over its post-review record.
+for r in \
+    2026-11-20-fp-w4x-results-p2-fp \
+    2026-11-20-fp-w4x-results-p4-fp \
+    2026-11-20-fp-w4x-results-p3-l2 \
+    2026-11-20-fp-w4x-l3; do
+  leg "freeze-diff:$r" python3 -c \
+    "import json; a=json.load(open('docs/build/reports/$r-post-review.json')); b=json.load(open('docs/build/reports/$r-frozen.json')); added=set(b)-set(a); assert added=={'freeze','review','seal_open_ref'} or added=={'freeze','review'}, added; assert all(a[k]==b[k] for k in a), '$r members changed'; assert b['freeze']['recomputed_from']=='docs/build/reports/$r.json'; assert b['review']['cleared']==69 and b['review']['confirmed']==0"
+done
+# the review record itself: 69 of 69 cleared, the derived disposition
+# cites HUMAN-H20's readout verbatim.
+leg "review-record" python3 -c \
+  "import json; r=json.load(open('docs/build/reports/2026-11-20-fp-w4x-flagged-review.json')); c=r['coverage']; assert c['flagged']==69 and c['cleared']==69 and c['confirmed']==0, c; assert r['disposition'].startswith('69 of 69 cleared'); assert all(x['disposition']=='cleared' for x in r['records']) and len(r['records'])==69"
+# the mint is deterministic: a re-run re-emits byte-identical records.
+leg "freeze-remint-identical" bash -c \
+  "s=\$(cd docs/build/reports && shasum -a 256 2026-11-20-fp-w4x-*-frozen.json 2026-11-20-fp-w4x-*-post-review.json 2026-11-20-fp-w4x-flagged-review.json | shasum -a 256); \
+   cargo run -q -p hharness-runner --bin fp_w4x_results -- freeze . >/dev/null 2>&1; \
+   s2=\$(cd docs/build/reports && shasum -a 256 2026-11-20-fp-w4x-*-frozen.json 2026-11-20-fp-w4x-*-post-review.json 2026-11-20-fp-w4x-flagged-review.json | shasum -a 256); \
+   [ \"\$s\" = \"\$s2\" ]"
 
 # 6 — retained-harvest legs recompute where the harvest resolves;
 #     otherwise a recorded skip (never a pass).

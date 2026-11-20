@@ -403,19 +403,125 @@ pub fn w4x_raw_cells(rows: &[SlotOutcome], arm: &str) -> Vec<FlipCell> {
         .collect()
 }
 
+/// `w4x_review_dispositions(review)` — the committed
+/// `hh-flagged-review/1` record's `slot_ref → disposition` map. Only
+/// the operator-recorded dispositions restore a flag — an agent never
+/// self-clears.
+pub fn w4x_review_dispositions(review: &Json) -> BTreeMap<String, String> {
+    let mut out = BTreeMap::new();
+    if let Some(Json::Arr(rows)) = review.get("records") {
+        for r in rows {
+            let sid = r.get("slot_ref").and_then(Json::as_str).unwrap_or("");
+            let disp = r.get("disposition").and_then(Json::as_str).unwrap_or("");
+            if !sid.is_empty() {
+                out.insert(sid.to_string(), disp.to_string());
+            }
+        }
+    }
+    out
+}
+
+/// `w4x_restored_vetoes(scan, review)` — the post-review veto set: the
+/// committed scan's flagged slots minus the review's `cleared`
+/// dispositions. A `confirmed` flag and an undispositioned flag both
+/// stay vetoes — the restore is disposition-driven, never a blanket
+/// clear.
+pub fn w4x_restored_vetoes(scan: &Json, review: &Json) -> BTreeMap<String, Vec<String>> {
+    let disp = w4x_review_dispositions(review);
+    let mut out = crate::fp_w4::scan_vetoes(scan);
+    out.retain(|sid, _| disp.get(sid).map(String::as_str) != Some("cleared"));
+    out
+}
+
 // ── the landed arm row (parameterized over the W4x landed set) ──────
+
+/// The `delta_vs_ref` p-member posture — `Pending` is the committed
+/// pre-review generation's `pending{flagged_review}` markers verbatim;
+/// `Reviewed` is the post-review restored fold: the raw sign-flip p and
+/// the Holm-adjudicated value land as computed ints (a `None` keeps a
+/// typed `unavailable{paired_deltas}` marker — never a synthesized p).
+/// A refused Δ keeps a typed p member in both generations.
+#[derive(Debug, Clone)]
+pub enum W4xDeltaP<'a> {
+    /// The pre-review marker note (the committed generation verbatim).
+    Pending(&'a str),
+    /// The post-review computed values.
+    Reviewed {
+        /// The raw sign-flip p (ppm) when the paired deltas resolve.
+        raw_ppm: Option<i64>,
+        /// The Holm-adjusted p (ppm) when adjudicated.
+        holm_ppm: Option<i64>,
+    },
+}
 
 /// `w4x_delta(ref_arm, test_arm, pop)` — the `delta_vs_ref` member:
 /// the paired-cell Δ via `comparative_estimand` (the same machinery,
 /// never reimplemented). The Holm p-members stay typed pending the
-/// flagged review — the confirmatory read is never claimed over an
-/// undispositioned-flag fold.
+/// flagged review in the `Pending` posture — the confirmatory read is
+/// never claimed over an undispositioned-flag fold; `Reviewed` lands
+/// the computed members the restored fold carries.
 pub fn w4x_delta(
     pop: &PlannedPopulation,
     test_arm: &str,
     reference_arm: &str,
-    pending_note: &str,
+    p: &W4xDeltaP,
 ) -> Json {
+    let post_pair = |raw_ppm: Option<i64>, holm_ppm: Option<i64>, refused: bool| {
+        if refused {
+            (
+                marker(
+                    "unavailable{contrast_refused}",
+                    "the contrast refused — no sign-flip p is claimed",
+                ),
+                marker(
+                    "unavailable{contrast_refused}",
+                    "the contrast refused — no Holm-adjudicated p is claimed",
+                ),
+            )
+        } else {
+            let pv = |v: Option<i64>, member: &str| match v {
+                Some(i) => Json::Int(i),
+                None => marker(
+                    "unavailable{paired_deltas}",
+                    &format!("the paired deltas refused — no {member} is claimed"),
+                ),
+            };
+            (
+                pv(raw_ppm, "sign-flip p"),
+                pv(holm_ppm, "Holm-adjudicated p"),
+            )
+        }
+    };
+    let (p_raw, p_holm, separated, label_suffix) = match p {
+        W4xDeltaP::Pending(note) => (
+            marker("pending{flagged_review}", note),
+            marker("pending{flagged_review}", note),
+            None,
+            "the Holm-adjudicated p is pending{flagged_review}".to_string(),
+        ),
+        W4xDeltaP::Reviewed { raw_ppm, holm_ppm } => {
+            let (r, h) = post_pair(*raw_ppm, *holm_ppm, false);
+            // `separated` is the family machinery's rejection flag —
+            // adjusted ≤ α = .05, the same rule `rejected_at_alpha`
+            // applies.
+            let sep = match holm_ppm {
+                Some(adj) => Json::Bool(*adj <= FAMILY_ALPHA_PPM),
+                None => marker(
+                    "unavailable{holm_family}",
+                    "the Holm-adjudicated p did not compute — no \
+                     separated flag is claimed",
+                ),
+            };
+            (
+                r,
+                h,
+                Some(sep),
+                "the Holm-adjudicated sign-flip p lands post-review — every flag \
+                 cleared by the committed hh-flagged-review/1"
+                    .to_string(),
+            )
+        }
+    };
     let est = comparative_estimand(
         pop,
         &EstimandDecl {
@@ -432,6 +538,7 @@ pub fn w4x_delta(
             let c = rep.contrasts.iter().find(|c| c.test_arm == test_arm);
             match c {
                 Some(c) => {
+                    let refused_delta = c.delta_ppm.is_none();
                     let ppm = match c.delta_ppm {
                         Some(d) => Json::Int(d),
                         None => refused(
@@ -448,24 +555,51 @@ pub fn w4x_delta(
                         ]),
                         None => refused(&c.refusal.clone().unwrap_or_default()),
                     };
+                    // a refused Δ keeps its typed p members — the
+                    // post-review generation never lands ints over a
+                    // refusal.
+                    let (p_raw, p_holm, separated, label_suffix) = if refused_delta {
+                        match p {
+                            W4xDeltaP::Pending(note) => (
+                                marker("pending{flagged_review}", note),
+                                marker("pending{flagged_review}", note),
+                                None,
+                                label_suffix,
+                            ),
+                            W4xDeltaP::Reviewed { .. } => {
+                                let (r, h) = post_pair(None, None, true);
+                                (
+                                    r,
+                                    h,
+                                    Some(marker(
+                                        "unavailable{contrast_refused}",
+                                        "the contrast refused — no separated \
+                                         flag is claimed",
+                                    )),
+                                    "the contrast refused — the p members stay typed".to_string(),
+                                )
+                            }
+                        }
+                    } else {
+                        (p_raw, p_holm, separated, label_suffix)
+                    };
                     let mut o = vec![
                         ("ppm", ppm),
                         ("interval", interval),
-                        ("p_raw_ppm", marker("pending{flagged_review}", pending_note)),
-                        (
-                            "p_holm_ppm",
-                            marker("pending{flagged_review}", pending_note),
-                        ),
-                        (
-                            "label",
-                            Json::str(format!(
-                                "paired-cell Δ({test_arm} − {reference_arm}) over the joint \
-                                 population — the interval is the all-planned bound; the \
-                                 Holm-adjudicated p is pending{{flagged_review}} — \
-                                 {LABEL_INTERNAL}"
-                            )),
-                        ),
+                        ("p_raw_ppm", p_raw),
+                        ("p_holm_ppm", p_holm),
                     ];
+                    if let Some(sep) = separated {
+                        o.push(("separated", sep));
+                    }
+                    o.push((
+                        "label",
+                        Json::str(format!(
+                            "paired-cell Δ({test_arm} − {reference_arm}) over the joint \
+                             population — the interval is the all-planned bound; \
+                             {label_suffix} — {LABEL_INTERNAL}"
+                        )),
+                    ));
                     if let Some(cond) = &c.conditional {
                         o.push((
                             "conditional",
@@ -570,6 +704,54 @@ pub fn w4x_swap_pair(
     }
 }
 
+/// `w4x_arm_rate(pop, arm)` — the finite-manifest rate call every
+/// landed row and the post-review leader argmax share (the one
+/// estimator call, never a second decl).
+pub fn w4x_arm_rate(
+    pop: &PlannedPopulation,
+    arm: &str,
+) -> Result<hharness_eval::comparative_estimators::FiniteManifestRate, Vec<String>> {
+    finite_manifest_rate(
+        pop,
+        &RateDecl {
+            population: PopulationKind::JointTaskPassWithoutObservedVeto,
+            arm: arm.to_string(),
+            stratum: None,
+            prior: REGISTERED_PRIOR,
+            prior_name: REGISTERED_PRIOR_NAME.to_string(),
+            bounds: BoundsDecl::Unit,
+            level_ppm: LEVEL_PPM,
+            seed: W4X_EST_SEED,
+            use_as: "first_pass".into(),
+            admission: Some(g23_admission()),
+        },
+    )
+    .map_err(|e| vec![format!("finite_manifest_rate({arm}): {e:?}")])
+}
+
+/// The landed row's review posture — `Pending` is the committed
+/// pre-review generation (the vetoed fold, the pending leader and the
+/// pending integrity note); `Reviewed` is the post-review restored
+/// generation — cleared flags score as passes, the leader decided
+/// (argmax restored θ), the integrity note landing the committed
+/// `hh-flagged-review/1` record.
+#[derive(Debug, Clone)]
+pub enum W4xReview<'a> {
+    /// The pre-review generation — the note routes the review.
+    Pending(&'a str),
+    /// The post-review generation — `participant` is the decided
+    /// leader's id, `member` marks this row's arm as the leader,
+    /// `note` extends the exploratory label.
+    Reviewed {
+        /// The decided leader's participant id (argmax restored θ).
+        participant: &'a str,
+        /// `true` when this row's arm is the leader.
+        member: bool,
+        /// The trailing label note.
+        note: &'a str,
+    },
+}
+
 /// The landed W4x arm row — real cells, real (honest-zero) costs, the
 /// joint population's veto-pending passes scored as failures. Unlike
 /// the W4 landed row (mini only, Δ degenerate), this row computes the
@@ -585,29 +767,15 @@ pub fn w4x_landed_arm_row(
     cost_micros: &[i64],
     cost_basis: &str,
     flagged: i64,
+    confirmed: i64,
     cleared: i64,
     coverage_ppm: i64,
     delta: Json,
     swaps: &[(String, Json, Json)],
-    leader_note: &str,
+    review: &W4xReview,
 ) -> Result<Json, Vec<String>> {
-    let adm = g23_admission();
-    let rate = finite_manifest_rate(
-        pop,
-        &RateDecl {
-            population: PopulationKind::JointTaskPassWithoutObservedVeto,
-            arm: arm.to_string(),
-            stratum: None,
-            prior: REGISTERED_PRIOR,
-            prior_name: REGISTERED_PRIOR_NAME.to_string(),
-            bounds: BoundsDecl::Unit,
-            level_ppm: LEVEL_PPM,
-            seed: W4X_EST_SEED,
-            use_as: "first_pass".into(),
-            admission: Some(adm),
-        },
-    )
-    .map_err(|e| vec![format!("finite_manifest_rate({arm}): {e:?}")])?;
+    let post = matches!(review, W4xReview::Reviewed { .. });
+    let rate = w4x_arm_rate(pop, arm)?;
     let (pass_all, pass_any) = pass_rates(raw_cells, 5, "descriptive", None, 4_000, W4X_EST_SEED)
         .map_err(|e| vec![format!("pass_rates({arm}): {e:?}")])?;
     let rerun = rerun_flip(raw_cells, "descriptive", None, 4_000, W4X_EST_SEED)
@@ -674,11 +842,18 @@ pub fn w4x_landed_arm_row(
                 ("seed_material", Json::str(&rate.seed_material)),
                 (
                     "label",
-                    Json::str(
+                    Json::str(if post {
+                        "finite-manifest rate over the 10-task tranche — joint \
+                         population (cleared flags restored to passes by the \
+                         committed hh-flagged-review/1 — HUMAN-H20's dispositions) \
+                         — internal record — not outside-verified"
+                            .to_string()
+                    } else {
                         "finite-manifest rate over the 10-task tranche — joint \
                          population (veto-pending passes score as failures until \
-                         review clears) — internal record — not outside-verified",
-                    ),
+                         review clears) — internal record — not outside-verified"
+                            .to_string()
+                    }),
                 ),
             ]),
         ),
@@ -711,18 +886,33 @@ pub fn w4x_landed_arm_row(
         ("delta_vs_ref", delta),
         (
             "leader_group",
-            Json::obj([
-                ("member", Json::Bool(false)),
-                (
-                    "leader_id",
-                    Json::str("unavailable{pending_flagged_review}"),
-                ),
-                ("diff_interval", fm_interval),
-                (
-                    "label",
-                    Json::str(format!("{LABEL_EXPLORATORY_LEADER} — {leader_note}")),
-                ),
-            ]),
+            match review {
+                W4xReview::Pending(note) => Json::obj([
+                    ("member", Json::Bool(false)),
+                    (
+                        "leader_id",
+                        Json::str("unavailable{pending_flagged_review}"),
+                    ),
+                    ("diff_interval", fm_interval),
+                    (
+                        "label",
+                        Json::str(format!("{LABEL_EXPLORATORY_LEADER} — {note}")),
+                    ),
+                ]),
+                W4xReview::Reviewed {
+                    participant,
+                    member,
+                    note,
+                } => Json::obj([
+                    ("member", Json::Bool(*member)),
+                    ("leader_id", Json::str(*participant)),
+                    ("diff_interval", fm_interval),
+                    (
+                        "label",
+                        Json::str(format!("{LABEL_EXPLORATORY_LEADER} — {note}")),
+                    ),
+                ]),
+            },
         ),
         (
             "pass_at",
@@ -821,16 +1011,24 @@ pub fn w4x_landed_arm_row(
             "integrity",
             Json::obj([
                 ("flagged", Json::Int(flagged)),
-                ("confirmed", Json::Int(0)),
+                ("confirmed", Json::Int(confirmed)),
                 ("cleared", Json::Int(cleared)),
                 ("coverage_ppm", Json::Int(coverage_ppm)),
                 ("detector", Json::str(ANSWER_SCAN_VERSION)),
                 (
                     "label",
-                    Json::str(format!(
-                        "integrity panel — {LABEL_CONFIRMED_MIN}; unreviewed flags \
-                         stay vetoes — {W4X_REVIEW_INPUT_TO} routes them"
-                    )),
+                    Json::str(if post {
+                        format!(
+                            "integrity panel — {LABEL_CONFIRMED_MIN}; cleared flags \
+                             restore to passes — the committed hh-flagged-review/1 \
+                             records {W4X_REVIEW_INPUT_TO}'s dispositions"
+                        )
+                    } else {
+                        format!(
+                            "integrity panel — {LABEL_CONFIRMED_MIN}; unreviewed flags \
+                             stay vetoes — {W4X_REVIEW_INPUT_TO} routes them"
+                        )
+                    }),
                 ),
             ]),
         ),
@@ -1365,17 +1563,12 @@ pub fn w4x_freeze_packet(
     Ok(Json::Obj(m))
 }
 
-/// `w4x_freeze_reviewed_packet(packet, review, scan_sha, input_sha)` —
-/// the reviewed case: the `hh-flagged-review/1` record is verified
-/// (every flagged record dispositioned, none confirmed) then the
-/// packet gains `freeze` + `review` — every other member byte-identical
-/// (the R6.49 member-wise diff rule).
-pub fn w4x_freeze_reviewed_packet(
-    packet: &Json,
-    review: &Json,
-    scan_sha256: &str,
-    input_sha256: &str,
-) -> Result<Json, String> {
+/// `w4x_review_verified(review)` — the all-cleared gate over a
+/// `hh-flagged-review/1` record: every flagged record dispositioned
+/// `cleared`, none confirmed, `coverage` honest. `Ok(())` only when the
+/// restored fold may mint — a confirmed or undispositioned flag keeps
+/// its veto and the freeze/refold refuses.
+pub fn w4x_review_verified(review: &Json) -> Result<(), String> {
     if review.get("schema").and_then(Json::as_str) != Some(crate::fp_results::FLAGGED_REVIEW_SCHEMA)
     {
         return Err("review record is not hh-flagged-review/1".into());
@@ -1411,6 +1604,32 @@ pub fn w4x_freeze_reviewed_packet(
             ));
         }
     }
+    Ok(())
+}
+
+/// `w4x_freeze_reviewed_packet(packet, review, scan_sha, input_sha,
+/// pre_review_path, restored)` — the reviewed case: the
+/// `hh-flagged-review/1` record is verified all-cleared
+/// ([`w4x_review_verified`]) then the packet gains `freeze` + `review`.
+/// The packet it wraps is the post-review *restored* generation —
+/// cleared flags score as passes and the Holm members land; `restored`
+/// marks whether the fold's content recomputed (P2-FP/P4-FP) or is the
+/// review-untouched rewrap (P3-L2/L3). The freeze member names the
+/// pre-review packet it recomputes from — that record stays append-only
+/// history, never rewritten.
+pub fn w4x_freeze_reviewed_packet(
+    packet: &Json,
+    review: &Json,
+    scan_sha256: &str,
+    input_sha256: &str,
+    pre_review_path: &str,
+    restored: bool,
+) -> Result<Json, String> {
+    w4x_review_verified(review)?;
+    let cov = review.get("coverage").cloned().unwrap_or(Json::obj([]));
+    let flagged = cov.get("flagged").and_then(Json::as_int).unwrap_or(-1);
+    let confirmed = cov.get("confirmed").and_then(Json::as_int).unwrap_or(-1);
+    let cleared = cov.get("cleared").and_then(Json::as_int).unwrap_or(-1);
     let mut m: BTreeMap<String, Json> = match packet {
         Json::Obj(m) => m.clone(),
         _ => return Err("packet is not an object".into()),
@@ -1444,6 +1663,32 @@ pub fn w4x_freeze_reviewed_packet(
             "gate_disposition",
             Json::str("executed-W4x supersession — ADR-0453's W4 extension"),
         ),
+        (
+            "fold",
+            Json::str(if restored {
+                "post_review_restored"
+            } else {
+                "unchanged_by_review"
+            }),
+        ),
+        (
+            "fold_note",
+            Json::str(if restored {
+                format!(
+                    "the frozen copy is the post-review restored generation — \
+                     the review's cleared dispositions score the flagged passes \
+                     as passes and the Holm members land; it recomputes from \
+                     {pre_review_path}, which stays append-only history (its \
+                     vetoed fold was the honest pending-generation read)"
+                )
+            } else {
+                "the review's cleared dispositions touch no member of this \
+                 fold — the frozen copy recomputes byte-identically from the \
+                 pre-review record and adds only the freeze/review members"
+                    .to_string()
+            }),
+        ),
+        ("recomputed_from", Json::str(pre_review_path)),
         ("review_ref", Json::str(W4X_REVIEW_REL)),
         ("scan_ref", Json::str(W4X_SCAN_REL)),
         ("scan_sha256", Json::str(scan_sha256)),
@@ -1510,7 +1755,28 @@ pub fn w4x_flagged_review_record(
             rows.len()
         ));
     }
-    let cleared = rows.len() as i64;
+    // honest tallies — the cleared/confirmed counts derive from the
+    // dispositioned rows, never asserted.
+    let cleared = rows
+        .iter()
+        .filter(|r| r.get("disposition").and_then(Json::as_str) == Some("cleared"))
+        .count() as i64;
+    let confirmed = rows
+        .iter()
+        .filter(|r| r.get("disposition").and_then(Json::as_str) == Some("confirmed"))
+        .count() as i64;
+    let disposition = if cleared == flagged && confirmed == 0 {
+        format!(
+            "{cleared} of {flagged} cleared — operator mass ruling \
+             ({W4X_REVIEW_READOUT} verbatim)"
+        )
+    } else {
+        format!(
+            "{cleared} of {flagged} cleared, {confirmed} confirmed — operator \
+             ruling ({W4X_REVIEW_READOUT}); a confirmed or undispositioned \
+             flag stays a veto"
+        )
+    };
     Ok(Json::obj([
         (
             "schema",
@@ -1536,12 +1802,15 @@ pub fn w4x_flagged_review_record(
                     cov.get("scored_hits").cloned().unwrap_or(Json::Null),
                 ),
                 ("flagged", cov.get("flagged").cloned().unwrap_or(Json::Null)),
-                ("confirmed", Json::Int(0)),
+                ("confirmed", Json::Int(confirmed)),
                 ("cleared", Json::Int(cleared)),
             ]),
         ),
         ("label", Json::str(crate::fp_results::REVIEW_LABEL)),
-        ("disposition", Json::str("pending{human}")),
+        // derived, never a literal: the record mints only after HUMAN-H20's
+        // ruling lands, so the disposition summarizes the dispositioned rows
+        // and cites the readout where the operator's verbatim lives.
+        ("disposition", Json::str(&disposition)),
         ("records", Json::Arr(rows)),
         ("recorded_at", Json::str(W4X_RECORDED_AT)),
         ("ticket", Json::str("R6.57")),
