@@ -1,0 +1,20 @@
+{
+ "grants": {
+  "sm-429-claude-code": {
+   "effort": "high",
+   "slice_micros": 850000,
+   "slot_token": "4c189f78ef2c3ba3279bf19f9ed0ddb3"
+  },
+  "sm-429-pi": {
+   "effort": "high",
+   "slice_micros": 850000,
+   "slot_token": "3c194579a32b49f48f8e2e049eb37fc5"
+  }
+ },
+ "listen": "127.0.0.1:49401",
+ "mode": "replay",
+ "registered_at": "2026-11-20T02:03:35Z",
+ "run_id": "w4x-pp0-r9-sm-429",
+ "schema": "hh-w2-proxy-session/1",
+ "store_root": "store"
+}

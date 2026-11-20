@@ -1,0 +1,20 @@
+{
+ "grants": {
+  "sm-402-claude-code": {
+   "effort": "high",
+   "slice_micros": 850000,
+   "slot_token": "c11907f41da1936ef0996c34a312e179"
+  },
+  "sm-402-pi": {
+   "effort": "high",
+   "slice_micros": 850000,
+   "slot_token": "d2e471757af3e2ccc1d72ec6d9419d5c"
+  }
+ },
+ "listen": "127.0.0.1:49401",
+ "mode": "replay",
+ "registered_at": "2026-11-20T02:03:57Z",
+ "run_id": "w4x-pp0-r9-sm-402",
+ "schema": "hh-w2-proxy-session/1",
+ "store_root": "store"
+}

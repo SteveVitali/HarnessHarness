@@ -43,6 +43,12 @@ def read_json(p):
 
 ARMS = ["pi", "claude-code"]
 VARIANTS = ["SM-pos", "SM-429", "SM-402", "SM-slow", "SM-hang"]
+# The §5.7 asserted-records column binds each variant's terminal
+# expectation: SM-hang MUST end `agent_timeout` (the injected
+# `sleep 100000` killed by the enforced deadline); every other
+# variant's terminal state is the `exited{*}` family (SM-429:
+# "retries (each a receipt) or exits"; SM-402: exits within a bound).
+EXPECTED_END = {"SM-hang": "agent_timeout"}
 ADMISSION_FILES = {"pi": "pi.json", "claude-code": "claude-code.json",
                    "mini-swe-agent": "mini-swe-agent.json"}
 
@@ -176,8 +182,20 @@ def proxy_stats(store_root, run_id, sid):
     return stats
 
 
-def fold_ag(slot_dir, arm, task, trial_ref, expected_denied, st):
-    """`hh-pp0-ag-evidence/1` — the committed Ws1 fold, verbatim."""
+def fold_ag(slot_dir, arm, task, trial_ref, expected_denied, st,
+            expected_end=None):
+    """`hh-pp0-ag-evidence/1` — the committed Ws1 fold, verbatim, with
+    the variant's §5.7-declared terminal end cause bound into AG3.
+
+    AG3's criterion is "a headless single-instruction run with a
+    terminal exit state" — the battery's terminal expectation is
+    per-variant by spec §5.7's asserted-records column: every variant
+    expects `exited{rc}` EXCEPT SM-hang, whose asserted record IS
+    `end_cause: agent_timeout` (the injected `sleep 100000` must be
+    killed by the enforced 60 s agent deadline — an `exited{0}` hang
+    leg proves the agent never consumed the injection, not that the
+    deadline held). `expected_end` carries the variant's declared
+    terminal spelling; `None` falls back to the `exited{*}` family."""
     rep_path = os.path.join(slot_dir, "cell-report.json")
     rep = read_json(rep_path) if os.path.exists(rep_path) else {}
     end = rep.get("agent_end_cause") or ""
@@ -200,12 +218,15 @@ def fold_ag(slot_dir, arm, task, trial_ref, expected_denied, st):
                        for n, f in (nlog.get("files") or {}).items()
                        if n.endswith(".txt"))
     silent = end.startswith("exited") and native_bytes == 0 and receipts_n == 0
+    ag3 = ("pass" if end == expected_end else "fail") if expected_end \
+        else ("pass" if end.startswith("exited") else "fail")
     return {
         "schema": "hh-pp0-ag-evidence/1",
         "harness": arm,
         "task": task,
         "trial_ref": trial_ref,
         "agent_end_cause": end,
+        "expected_end_cause": expected_end or "exited{*}",
         "denied_hosts": denied,
         "unexpected_denied": unexpected,
         # `receipt_count` = durable `hh.model_proxy.receipt/1` call
@@ -217,7 +238,7 @@ def fold_ag(slot_dir, arm, task, trial_ref, expected_denied, st):
         "endpoint_errors": endpoint_errors,
         "native_log_bytes": native_bytes,
         "checks": {
-            "AG3": "pass" if end.startswith("exited") else "fail",
+            "AG3": ag3,
             "AG5": "pass" if not unexpected else "fail",
             "AG6": "pass" if (receipts_n or 0) > 0 else "fail",
             "AG8": "pass" if not endpoint_errors else "fail",
@@ -374,7 +395,8 @@ def main():
                 st = proxy_stats(sess.get("store_root") or a.store_root,
                                  run_id, sid)
                 ev = fold_ag(slot_dir, arm, task,
-                             f"smoke/{variant}/{sid}", expected, st)
+                             f"smoke/{variant}/{sid}", expected, st,
+                             expected_end=EXPECTED_END.get(variant))
                 ev["arm_run_rc"] = p.returncode
                 ev["variant"] = variant
                 if p.returncode != 0:

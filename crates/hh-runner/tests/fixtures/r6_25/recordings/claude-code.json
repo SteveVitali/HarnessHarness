@@ -24,32 +24,46 @@
     "headers": {
      "content-type": "text/event-stream"
     },
-    "body_sha256": "sha256:762e6f9450084e83006e878139c3cf4259b263c9003456f2f9d45452a7fd1075",
+    "body_sha256": "sha256:6382142c677133b62fc731e65473ad43160455ee40e1b93df991650e07106613",
     "body": {
-     "utf8": "\"event: content_block_start\\ndata: {\\\"type\\\":\\\"content_block_start\\\",\\\"index\\\":0,\\\"content_block\\\":{\\\"type\\\":\\\"tool_use\\\",\\\"id\\\":\\\"toolu_1\\\",\\\"name\\\":\\\"Bash\\\",\\\"input\\\":{}}}\\n\\nevent: content_block_delta\\ndata: {\\\"type\\\":\\\"content_block_delta\\\",\\\"index\\\":0,\\\"delta\\\":{\\\"type\\\":\\\"input_json_delta\\\",\\\"partial_json\\\":\\\"{\\\\\\\"command\\\\\\\":\\\\\\\"printf 'ok' > /app/hh_smoke.txt\\\\\\\"}\\\"}}\\n\\nevent: content_block_stop\\ndata: {\\\"type\\\":\\\"content_block_stop\\\",\\\"index\\\":0}\\n\\nevent: message_stop\\ndata: {\\\"type\\\":\\\"message_stop\\\"}\\n\\n\""
+     "utf8": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_sm1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":9,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"output_tokens\":1}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"Bash\",\"input\":{}}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"command\\\":\\\"printf 'ok' > /app/hh_smoke.txt\\\"}\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":14}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
     },
     "chunk_stamps": [
      [
       0,
-      150
+      298
      ],
      [
-      55,
-      200
+      40,
+      151
      ],
      [
-      30,
-      90
+      80,
+      178
+     ],
+     [
+      120,
+      73
+     ],
+     [
+      160,
+      138
+     ],
+     [
+      200,
+      51
      ]
     ]
    },
    "failure": null,
    "released": {
     "status": 200,
-    "headers": {},
-    "body_sha256": "sha256:762e6f9450084e83006e878139c3cf4259b263c9003456f2f9d45452a7fd1075",
+    "headers": {
+     "content-type": "text/event-stream"
+    },
+    "body_sha256": "sha256:6382142c677133b62fc731e65473ad43160455ee40e1b93df991650e07106613",
     "body": {
-     "utf8": "\"event: content_block_start\\ndata: {\\\"type\\\":\\\"content_block_start\\\",\\\"index\\\":0,\\\"content_block\\\":{\\\"type\\\":\\\"tool_use\\\",\\\"id\\\":\\\"toolu_1\\\",\\\"name\\\":\\\"Bash\\\",\\\"input\\\":{}}}\\n\\nevent: content_block_delta\\ndata: {\\\"type\\\":\\\"content_block_delta\\\",\\\"index\\\":0,\\\"delta\\\":{\\\"type\\\":\\\"input_json_delta\\\",\\\"partial_json\\\":\\\"{\\\\\\\"command\\\\\\\":\\\\\\\"printf 'ok' > /app/hh_smoke.txt\\\\\\\"}\\\"}}\\n\\nevent: content_block_stop\\ndata: {\\\"type\\\":\\\"content_block_stop\\\",\\\"index\\\":0}\\n\\nevent: message_stop\\ndata: {\\\"type\\\":\\\"message_stop\\\"}\\n\\n\""
+     "utf8": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_sm1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":9,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"output_tokens\":1}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"tool_use\",\"id\":\"toolu_1\",\"name\":\"Bash\",\"input\":{}}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"input_json_delta\",\"partial_json\":\"{\\\"command\\\":\\\"printf 'ok' > /app/hh_smoke.txt\\\"}\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"tool_use\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":14}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
     }
    },
    "disposition": "forwarded",
@@ -57,6 +71,72 @@
   },
   {
    "k": 1,
+   "downstream": {
+    "method": "POST",
+    "path": "/v1/messages",
+    "body_sha256": "sha256:2beff86dc2bd9ba5b436a84fd915a7d627d89dd68f80b6374993513e8cefdfd0",
+    "body": {
+     "utf8": "{\"model\":\"claude-participant\",\"max_tokens\":32000,\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Command: printf 'ok' > /app/hh_smoke.txt\\nOutput: \\n\"}]}],\"system\":[{\"type\":\"text\",\"text\":\"Extract any file paths that this command reads or modifies. Format your response as:\\n<is_displaying_contents>\\ntrue\\n</is_displaying_contents>\\n\\n<filepaths>\\npath/to/file1\\n</filepaths>\"}],\"tools\":[]}"
+    }
+   },
+   "upstream_request": {
+    "body_sha256": "sha256:58acd742f9b03fd9ac03d5c986fde8b42f374957112a792702b5e43f8e388e6e",
+    "body": {
+     "utf8": "{\"model\":\"claude-participant\",\"max_tokens\":32000,\"stream\":true,\"messages\":[{\"role\":\"user\",\"content\":[{\"type\":\"text\",\"text\":\"Command: printf 'ok' > /app/hh_smoke.txt\\nOutput: \\n\"}]}],\"system\":[{\"type\":\"text\",\"text\":\"Extract any file paths that this command reads or modifies. Format your response as:\\n<is_displaying_contents>\\ntrue\\n</is_displaying_contents>\\n\\n<filepaths>\\npath/to/file1\\n</filepaths>\"}],\"tools\":[],\"output_config\":{\"effort\":\"high\"}}"
+    }
+   },
+   "upstream_response": {
+    "status": 200,
+    "headers": {
+     "content-type": "text/event-stream"
+    },
+    "body_sha256": "sha256:9c2c75875843bdb4744952ce99d063c84ef27c5920e623dace1895c7c214ca1c",
+    "body": {
+     "utf8": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_sm1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":9,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"output_tokens\":1}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"<is_displaying_contents>\\nfalse\\n</is_displaying_contents>\\n\\n<filepaths>\\n/app/hh_smoke.txt\\n</filepaths>\\n\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":14}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+    },
+    "chunk_stamps": [
+     [
+      0,
+      298
+     ],
+     [
+      40,
+      117
+     ],
+     [
+      80,
+      223
+     ],
+     [
+      120,
+      73
+     ],
+     [
+      160,
+      138
+     ],
+     [
+      200,
+      51
+     ]
+    ]
+   },
+   "failure": null,
+   "released": {
+    "status": 200,
+    "headers": {
+     "content-type": "text/event-stream"
+    },
+    "body_sha256": "sha256:9c2c75875843bdb4744952ce99d063c84ef27c5920e623dace1895c7c214ca1c",
+    "body": {
+     "utf8": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_sm1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":9,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"output_tokens\":1}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"<is_displaying_contents>\\nfalse\\n</is_displaying_contents>\\n\\n<filepaths>\\n/app/hh_smoke.txt\\n</filepaths>\\n\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":14}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
+    }
+   },
+   "disposition": "forwarded",
+   "latency_ms": 90
+  },
+  {
+   "k": 2,
    "downstream": {
     "method": "POST",
     "path": "/v1/messages",
@@ -76,28 +156,46 @@
     "headers": {
      "content-type": "text/event-stream"
     },
-    "body_sha256": "sha256:c0af5eb6810d8a6a5f761180c4af0c05619d61ce788956c2fc17107016cc42ff",
+    "body_sha256": "sha256:cd83bf22285223ae6088c425829e0296580fc736afc4694f22af1b46060a02b5",
     "body": {
-     "utf8": "\"event: content_block_start\\ndata: {\\\"type\\\":\\\"content_block_start\\\",\\\"index\\\":0,\\\"content_block\\\":{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"\\\"}}\\n\\nevent: content_block_delta\\ndata: {\\\"type\\\":\\\"content_block_delta\\\",\\\"index\\\":0,\\\"delta\\\":{\\\"type\\\":\\\"text_delta\\\",\\\"text\\\":\\\"ok written \\u2014 task complete\\\"}}\\n\\nevent: content_block_stop\\ndata: {\\\"type\\\":\\\"content_block_stop\\\",\\\"index\\\":0}\\n\\nevent: message_stop\\ndata: {\\\"type\\\":\\\"message_stop\\\"}\\n\\n\""
+     "utf8": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_sm1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":9,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"output_tokens\":1}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"ok written \u2014 task complete\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":14}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
     },
     "chunk_stamps": [
      [
       0,
-      160
+      298
      ],
      [
-      60,
-      140
+      40,
+      117
+     ],
+     [
+      80,
+      143
+     ],
+     [
+      120,
+      73
+     ],
+     [
+      160,
+      138
+     ],
+     [
+      200,
+      51
      ]
     ]
    },
    "failure": null,
    "released": {
     "status": 200,
-    "headers": {},
-    "body_sha256": "sha256:c0af5eb6810d8a6a5f761180c4af0c05619d61ce788956c2fc17107016cc42ff",
+    "headers": {
+     "content-type": "text/event-stream"
+    },
+    "body_sha256": "sha256:cd83bf22285223ae6088c425829e0296580fc736afc4694f22af1b46060a02b5",
     "body": {
-     "utf8": "\"event: content_block_start\\ndata: {\\\"type\\\":\\\"content_block_start\\\",\\\"index\\\":0,\\\"content_block\\\":{\\\"type\\\":\\\"text\\\",\\\"text\\\":\\\"\\\"}}\\n\\nevent: content_block_delta\\ndata: {\\\"type\\\":\\\"content_block_delta\\\",\\\"index\\\":0,\\\"delta\\\":{\\\"type\\\":\\\"text_delta\\\",\\\"text\\\":\\\"ok written \\u2014 task complete\\\"}}\\n\\nevent: content_block_stop\\ndata: {\\\"type\\\":\\\"content_block_stop\\\",\\\"index\\\":0}\\n\\nevent: message_stop\\ndata: {\\\"type\\\":\\\"message_stop\\\"}\\n\\n\""
+     "utf8": "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_sm1\",\"type\":\"message\",\"role\":\"assistant\",\"model\":\"glm-5.3-flash\",\"content\":[],\"stop_reason\":null,\"stop_sequence\":null,\"usage\":{\"input_tokens\":9,\"cache_creation_input_tokens\":0,\"cache_read_input_tokens\":0,\"output_tokens\":1}}}\n\nevent: content_block_start\ndata: {\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"text\",\"text\":\"\"}}\n\nevent: content_block_delta\ndata: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"ok written \u2014 task complete\"}}\n\nevent: content_block_stop\ndata: {\"type\":\"content_block_stop\",\"index\":0}\n\nevent: message_delta\ndata: {\"type\":\"message_delta\",\"delta\":{\"stop_reason\":\"end_turn\",\"stop_sequence\":null},\"usage\":{\"output_tokens\":14}}\n\nevent: message_stop\ndata: {\"type\":\"message_stop\"}\n\n"
     }
    },
    "disposition": "forwarded",

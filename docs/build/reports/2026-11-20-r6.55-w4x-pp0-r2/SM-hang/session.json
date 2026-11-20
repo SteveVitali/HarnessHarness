@@ -1,0 +1,20 @@
+{
+ "grants": {
+  "sm-hang-claude-code": {
+   "effort": "high",
+   "slice_micros": 850000,
+   "slot_token": "c843cc0a1ff08256b9f6567a24080f6a"
+  },
+  "sm-hang-pi": {
+   "effort": "high",
+   "slice_micros": 850000,
+   "slot_token": "4c76d30fd499c2ac2c9eb7a9ad41a783"
+  }
+ },
+ "listen": "127.0.0.1:49401",
+ "mode": "replay",
+ "registered_at": "2026-11-20T02:04:39Z",
+ "run_id": "w4x-pp0-r9-sm-hang",
+ "schema": "hh-w2-proxy-session/1",
+ "store_root": "store"
+}
