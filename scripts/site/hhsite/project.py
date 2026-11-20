@@ -109,12 +109,12 @@ def manifest(inputs, inputs_digest):
                        for i in inputs],
         "phases": {
             "phase-1": "internal record; not outside-verified",
-            "phase-2": "fixture-rendered — internal profile only; "
-                       "publication pending",
-            "phase-3": "fixture-rendered — internal profile only; "
-                       "publication pending",
-            "phase-4": "fixture-rendered — internal profile only; "
-                       "publication pending",
+            "phase-2": "published — hh-site-publication/1 "
+                       "phase-2-2026-11-19 (GATE-G31 via ADR-0453)",
+            "phase-3": "published — hh-site-publication/1 "
+                       "phase-3-2026-11-20 (GATE-G31 / ADR-0452)",
+            "phase-4": "published — hh-site-publication/1 "
+                       "phase-4-2026-11-20 (GATE-G31 / ADR-0452)",
         },
         "site_files": ["changelog.json", "claims.json", "manifest.json",
                        "method.json", "phase1.json", "phase3.json",

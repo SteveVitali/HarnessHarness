@@ -40,6 +40,10 @@ MANIFEST_REL = "docs/tickets/00_MANIFEST.md"
 # phase-2 stays gated until its own operator decision.
 PHASE_GATES = {
     "phase-1": "GATE-G22",
+    # phase-2's publication gate is GATE-G31 (README: "phase-2 first-pass"),
+    # extended to the publish decision by ADR-0453's verbatim operator ruling
+    # "Publish — same terms as G31" (2026-11-19).
+    "phase-2": "GATE-G31",
     "phase-3": "GATE-G31",
     "phase-4": "GATE-G31",
 }
