@@ -649,6 +649,9 @@ Source: [ratified experiments supplement](../experiments-spec.md) (canonical v0.
 | 323 | `323_CAP6.3__reconcile.md` | Round 6 | capstone | Reconciliation capstone: `reconcile-build` spec reconciliation (landed code, ADRs, REQ-X coverage, §0.3 history), then the integration plan from actual stack CI and bran… | — |
 | 324 | `324_GATE-G32__accept.md` | Round 6 | gate | Round-6 acceptance (GATE-ACCEPT role) over the minimal tail: CAP6.1’s verdicts, CAP6.2’s closure, live reads and routing register, and CAP6.3’s reconciliation and integr… | STOP |
 | 325 | `325_DOC6.1__docs.md` | Round 6 | docs | Docs refresh: `refresh-repo-docs` (reader docs from accepted evidence), then `agent-docs` (agent docs from the landed implementation) | — |
+| 325a | `325a_R6.52__w4-resurrect.md` | Round 6 addendum | ticket | W4 resurrection window (ADR-0452 operator amendment): undelete `hh-fp-a1b2c3`, provision+declare, run protected pair + V5, Pi/CC `not_run{admission}`, teardown+receipts | GATE-G32, ADR-0452 |
+| 325b | `325b_R6.53__w4-results-refold.md` | Round 6 addendum | ticket | W4 results re-fold: superseding P2-FP/P3-L2/P4-FP packets + publication records over executed evidence | 325a |
+| 325c | `325c_R6.54__w4-reconcile-addendum.md` | Round 6 addendum | ticket | W4 reconcile addendum: H18 billing entry superseding `N/A{scope_end}` + SETTLE-W4 confirming reads | 325b |
 
 ## Milestone gates
 **GATE-G1 — Stage-0 acceptance & ecosystem-decision revalidation** (Stage 0). Criterion (verbatim): S1/S2 gates pass and the revalidation rule is evaluated: any C5/C7/C12 score outside the assumed ±1 band, or a gate failure on the winning candidate, re-runs ADR-0009 steps 5–7 (§10.6; OQ-131).

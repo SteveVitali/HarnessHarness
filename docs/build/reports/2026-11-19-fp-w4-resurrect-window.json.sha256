@@ -1,0 +1,2 @@
+938c986adb6d3d5b4e5a8a50b130365ca44c03cd074f045c4c8ef5806896f554  docs/build/reports/2026-11-19-fp-w4-resurrect-window.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-19-fp-w4-resurrect-window.json.sha256 (run from the repo root)

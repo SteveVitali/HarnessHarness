@@ -1,0 +1,2 @@
+355449923a3621d6466a927cc720215649db85bc6b3fb254055fbb04a3396fc4  docs/build/reports/2026-11-19-fp-w4-resurrect-settlement.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-19-fp-w4-resurrect-settlement.json.sha256 (run from the repo root)

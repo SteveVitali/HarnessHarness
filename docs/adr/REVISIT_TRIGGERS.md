@@ -30,7 +30,7 @@ Reading the classes:
 - **Superseded** — the ADR is superseded; the trigger is dead (listed for
   completeness — the catalogue accounts for every ADR file).
 
-_235 ADRs: 183 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
+_236 ADRs: 184 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered · 0 superseded._
 
 ## Quiet-conditional triggers (BL-47)
 
@@ -219,6 +219,7 @@ _235 ADRs: 183 quiet-conditional · 49 fired-and-answered · 3 fired-unanswered 
 | ADR-0449 | Revisit immediately if any committed requirement is found to mandate in-repo raw trees (the caveat: keep current behavior and surface), if the private archive's `archive_verified` index is ever unavailable for a window (the raw tree then has no retention guarantee — stop and record), or at CAP6.2's retention review (REQ-XH-106). |
 | ADR-0450 | Any corpus member with a complete (non-truncated) recording that cannot reach `submitted` under the armed stop rule, or a future corpus where submission carries a content payload — then the `channel:"content"` arm and payload equality become the gating comparison and this ADR's marker-channel normalization no longer suffices alone. |
 | ADR-0451 | A later-pass corpus where branch coverage must be attributed to natural recordings (not authored fixtures), a corpus member whose on-disk bytes differ from its digested bytes, or a canon version bump — then the manifest members and digest must be re-emitted and the pass id re-minted on an unused partition (REQ-XD-106). |
+| ADR-0452 | Any proposal to re-run an arm the operator recorded `not_run{admission}` without new PP0 admission evidence, or a request to extend this amendment's supersession beyond the W4 scope — then the narrow-supersession boundary (GATE-G30's `end-first-pass-early` stands for every other scope) must be re-ruled explicitly rather than inferred. |
 
 ## Fired-and-answered triggers (BL-48)
 

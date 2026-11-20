@@ -1,0 +1,2 @@
+fd7fd663bb1a95ff47571d6b50c671d64fbcd5bf98b247d6dd15a580d3ae9a2f  docs/build/reports/archive/2026-11-19-fp-w4-resurrect-upload.json
+# recompute: shasum -a 256 -c docs/build/reports/archive/2026-11-19-fp-w4-resurrect-upload.json.sha256 (run from the repo root)
