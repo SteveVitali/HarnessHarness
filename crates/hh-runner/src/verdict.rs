@@ -195,8 +195,10 @@ where
 
 /// The host-name members a decided/requested row records —
 /// `host_norm`/`host_raw` in the committed wire shape, `host` kept
-/// for any producer that spells it that way.
-fn collect_host_names(j: &Json, out: &mut BTreeSet<String>) {
+/// for any producer that spells it that way. `pub` so the R6.51
+/// derivation (`crate::verify_hosts`) maps a decided deny row to its
+/// host set through the same member table — never a re-implementation.
+pub fn collect_host_names(j: &Json, out: &mut BTreeSet<String>) {
     match j {
         Json::Obj(m) => {
             for (k, v) in m {
