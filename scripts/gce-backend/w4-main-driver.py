@@ -204,7 +204,9 @@ def task_verify_deadline_s(tasks_dir, task, cfg):
     toml_path = os.path.join(tasks_dir, task, "task.toml")
     try:
         in_verifier = False
-        for line in open(toml_path):
+        with open(toml_path) as tf:
+            lines = list(tf)
+        for line in lines:
             s = line.split("#", 1)[0].strip()
             if s.startswith("["):
                 in_verifier = s == "[verifier]"
