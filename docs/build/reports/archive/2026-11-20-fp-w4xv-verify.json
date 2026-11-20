@@ -1,0 +1,13 @@
+{
+ "attempt": "a5",
+ "label": "archive-verify",
+ "members_checked": 43,
+ "method": "hf download --local-dir readback, sha256 vs staged bytes",
+ "mismatches": 0,
+ "recorded_at": "2026-11-20T15:43:01Z",
+ "repo": "SteveVitali/harnessharness-archive",
+ "repo_type": "dataset",
+ "ticket": "R6.56",
+ "verdict": "readback byte-exact 43/43",
+ "window": "w4xv"
+}

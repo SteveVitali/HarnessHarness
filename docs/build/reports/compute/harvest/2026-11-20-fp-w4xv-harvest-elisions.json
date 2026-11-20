@@ -1,0 +1,18 @@
+{
+ "attempt": "a5",
+ "elisions": [
+  {
+   "class": "task_corpus_placeholder",
+   "occurrences": 3,
+   "pattern": "AKIA1234567890123456",
+   "replacement": "[elided:task-corpus-placeholder-AKIA-format]",
+   "where": "verify-clone stdout reached journald (podman journald driver): a held task's pytest expected-string uses the canonical AWS-format fixture credential \u2014 not a live secret. The un-elided bytes existed only in the VM's journald (deleted with the VM). hh-secret-scan's aws_access_key pattern matches the fixture verbatim."
+  }
+ ],
+ "file": "journald.log",
+ "journald_sha256_post_elision": "a28de5a5ddd733328e67e233e754f1f2062cbb1259622c4e9cd1b3805f39e6c7",
+ "journald_sha256_pre_elision": "94c91064fc583d6921b4b249cbb6de34752230aade4109487c05527f64a92e33",
+ "recorded_at": "2026-11-20T15:37:37Z",
+ "schema": "hh-harvest-elisions/1",
+ "window": "w4xv"
+}
