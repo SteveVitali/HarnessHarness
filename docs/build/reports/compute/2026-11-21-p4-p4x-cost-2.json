@@ -1,0 +1,109 @@
+{
+ "attribution": {
+  "idle_seconds": 4814.0,
+  "slot_wall_ms": 0,
+  "utilization_ppm": 0
+ },
+ "billed": {
+  "amount_micros": null,
+  "read_at": null,
+  "reason": null,
+  "record": null,
+  "source": "Cloud Billing report, project filter, read by operator",
+  "status": "pending"
+ },
+ "estimate": {
+  "free_tier_applied": false,
+  "lines_micros": {
+   "disk": 54960,
+   "egress": 360000,
+   "instance": 358430,
+   "ipv4": 6687,
+   "nat": 0
+  },
+  "rounding": "ceil per line",
+  "total_micros": 780077
+ },
+ "phase": "p4",
+ "project_id": "hh-p4-a1b2c3",
+ "provided": {
+  "OLLAMA_API_KEY": "no",
+  "gcloud_auth": "yes"
+ },
+ "provider": "gce",
+ "quote": {
+  "ceiling_micros": 13486340,
+  "dead_man_h": 40,
+  "id": "59a49747bfa5bdf0"
+ },
+ "rate_table": {
+  "path": "docs/build/reports/live/pricing.json",
+  "sha256": "045e0b8612e901505b9dbd66cbb460286ba763f8b6a169bef7721eb6251033e2"
+ },
+ "receipts": {
+  "provision": {
+   "path": "/private/tmp/hh-r6.53-wt/docs/build/reports/compute/2026-11-21-p4-p4x-provision.json"
+  },
+  "teardown": {
+   "path": "/private/tmp/hh-r6.53-wt/docs/build/reports/compute/2026-11-21-p4-p4x-teardown-2.json"
+  }
+ },
+ "reconciliation": {
+  "delta_micros": null,
+  "tolerance_micros": null,
+  "verdict": "pending"
+ },
+ "record_id": "cc-p4x-rerun4",
+ "recorded_at": "2026-11-21T02:12:00Z",
+ "schema": "hh-compute-cost/1",
+ "ticket": "GATE-G35",
+ "window": "p4x",
+ "usage": {
+  "disk": {
+   "gib_seconds": 1444200.0,
+   "intervals": [
+    {
+     "from": "2026-11-21T00:47:46.040Z",
+     "to": "2026-11-21T02:08:00Z"
+    }
+   ],
+   "micros": 54960,
+   "size_gib": 300,
+   "type": "pd-balanced"
+  },
+  "egress": {
+   "gib_bound": 3.0,
+   "gib_measured": null,
+   "label": "estimated",
+   "method": "declared estimate \u2014 guest NIC counters unrecorded",
+   "micros": 360000
+  },
+  "instance": {
+   "billable_seconds": 4814.0,
+   "intervals": [
+    {
+     "from": "2026-11-21T00:47:46.040Z",
+     "state": "RUNNING",
+     "to": "2026-11-21T02:08:00Z"
+    }
+   ],
+   "machine_type": "e2-standard-8",
+   "micros": 358430,
+   "seconds": 4814.0
+  },
+  "ipv4": {
+   "kind": "ephemeral",
+   "micros": 6687,
+   "seconds": 4814.0
+  },
+  "nat": {
+   "micros": 0,
+   "present": false,
+   "seconds": 0
+  }
+ },
+ "model_spend": {
+  "micros": 0,
+  "basis": "G-L1 corpus leg \u2014 all model calls served by strict/lenient replay listeners on 127.0.0.1; VM NAT disabled; no upstream provider egress"
+ }
+}

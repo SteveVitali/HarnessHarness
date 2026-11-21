@@ -1,0 +1,1 @@
+hh-p4-p4x (e2-standard-8, us-central1-a): RUNNING 2026-11-21T00:47:46Z → deleted 2026-11-21T02:08:00Z (~4814 s billable; G-L1 corpus legs only — replay-served model calls, $0 model spend; NAT disabled)
