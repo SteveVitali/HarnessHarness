@@ -1,0 +1,2 @@
+2bdc56a4b4ba3a96240a52d7bde59644d1f0ce3737969cb751de7989f289087f  docs/build/reports/2026-11-21-fp-p4-admissibility.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-21-fp-p4-admissibility.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)

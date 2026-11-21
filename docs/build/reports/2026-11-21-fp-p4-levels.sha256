@@ -1,0 +1,2 @@
+155bd3e47dc3103f898b4abc8de7094935b16d81527c75ff4033e63f6b52ca82  docs/build/reports/2026-11-21-fp-p4-levels.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-21-fp-p4-levels.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)
