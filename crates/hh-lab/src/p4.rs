@@ -847,6 +847,41 @@ pub fn sweep_seeded_store_p4(dir: &Path) -> RegistryStore {
     store
 }
 
+/// `sweep_seed_into_p4(store)` — the pass-2 sweep class + variant
+/// records registered into an already-open store, idempotent on the
+/// deterministic `version_id` (the same check `seed_stage1` makes —
+/// R7.3, manifest 329). The sealed P4 level docs pin the sweep
+/// store's version ids (`hh/compactor` foremost); the drive's
+/// Stage-1-seeded registry never carried them, so probe/session
+/// resolve surfaced `RefUnresolved`. Registering — not republishing —
+/// is all the drive needs: sealed docs resolve by pinned
+/// `version_id`, never by `hh/` name selector.
+pub fn sweep_seed_into_p4(store: &mut RegistryStore) {
+    let kernel = ProvenanceRecord::kernel("sweep:registry", 0);
+    for (class_id, name) in [
+        ("model_port", "openai-chat"),
+        ("control_strategy", "round_robin"),
+        ("context_policy", "full_window"),
+        ("compaction_strategy", "compactor"),
+    ] {
+        let class_rec = RegistryRecord::Class(sweep_class_record_pub(class_id));
+        let class_vid = hharness_registry::identity::version_id(&class_rec);
+        if store.get(&class_vid).is_none() {
+            store
+                .register(class_rec, &kernel, None)
+                .expect("class registers");
+        }
+        let variant_rec =
+            RegistryRecord::Variant(sweep_variant_record_pub(&class_vid, &format!("hh/{name}")));
+        let variant_vid = hharness_registry::identity::version_id(&variant_rec);
+        if store.get(&variant_vid).is_none() {
+            store
+                .register(variant_rec, &kernel, None)
+                .expect("variant registers");
+        }
+    }
+}
+
 // Thin re-exports of sweep.rs's private fixture record builders —
 // the same record shape, one implementation (CC1); never a second
 // class/variant author.

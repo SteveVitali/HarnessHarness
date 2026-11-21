@@ -638,3 +638,42 @@ fn runtime_probe() -> String {
         .err()
         .unwrap_or_default()
 }
+
+/// R7.3 (manifest 329) — the `hh/compactor` arm: the frozen P4 level
+/// docs' `strategy:"none"` + declared `window_cap` binds a declining
+/// rung (the ladder falls to `evict_oldest`, byte-identical to the
+/// unbound slot); unknown members and unbound `strategy` spellings
+/// refuse typed, never silently armed.
+#[test]
+fn hh_compactor_none_arms_decline_others_refuse() {
+    use hharness_wire::json::Json;
+    let mut params = std::collections::BTreeMap::new();
+    params.insert("strategy".to_string(), Json::str("none"));
+    params.insert("window_cap".to_string(), Json::Int(1048576));
+    let s = hharness_embed::runtime::compaction_strategy_for("hh/compactor", &params)
+        .expect("strategy:none arms");
+    assert_eq!(s.variant_ref(), "hh/compactor");
+    let sel = s.selection_parameters().to_canonical_string();
+    assert!(sel.contains("\"none\""), "{sel}");
+    assert!(sel.contains("1048576"), "{sel}");
+
+    for (label, mut p) in [
+        ("unknown member", params.clone()),
+        ("unbound strategy", params.clone()),
+        ("missing strategy", std::collections::BTreeMap::new()),
+    ] {
+        match label {
+            "unknown member" => {
+                p.insert("bogus".to_string(), Json::str("x"));
+            }
+            "unbound strategy" => {
+                p.insert("strategy".to_string(), Json::str("summarize"));
+            }
+            _ => {}
+        }
+        let e = hharness_embed::runtime::compaction_strategy_for("hh/compactor", &p)
+            .err()
+            .unwrap_or_default();
+        assert!(!e.is_empty(), "{label} must refuse typed");
+    }
+}

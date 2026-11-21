@@ -771,6 +771,13 @@ fn mswea_report_body(
     let mut probe_registry =
         hharness_registry::store::RegistryStore::open(probe_root.join("registry"), &kernel)
             .map_err(|e| format!("probe registry: {e:?}"))?;
+    // R7.3 (manifest 329) — the sealed P4 level docs pin the sweep
+    // store's variant version_ids (`hh/compactor` foremost); the
+    // Stage-1 seeds alone never carried them. Register the lab's
+    // pass-2 sweep records (one constructor home, CC1) so the probe
+    // resolve admits the sealed pins — no republish, the sealed docs
+    // resolve by version_id, never by name selector.
+    hharness_lab::p4::sweep_seed_into_p4(&mut probe_registry);
     let doc = hharness_hir::wire::document_from_json(doc_json)
         .map_err(|e| format!("derived doc parse: {e:?}"))?;
     let sealed = {
@@ -1217,6 +1224,23 @@ fn main() {
     // `exec` rides `open_session`'s params (not `spec`) — R6.38's arm
     // declaration for the definition's named ToolCapability surfaces.
     let exec_decl = exec_arm_decl(&surfaces_csv, &bash_surface_id);
+
+    // R7.3 (manifest 329) — pre-seed the session store's registry with
+    // the lab's pass-2 sweep records *before* `EmbedService::open`
+    // installs the Stage-1 seeds (idempotent on both sides — the check
+    // is the deterministic version_id). The sealed P4 level docs pin
+    // sweep version_ids the Stage-1 set never carried; session
+    // resolve/open would otherwise surface `RefUnresolved` for
+    // `hh/compactor` exactly as the probe did.
+    {
+        let seed_kernel = hharness_provenance::ProvenanceRecord::kernel("hh-l1-drive", 0);
+        let mut session_registry = hharness_registry::store::RegistryStore::open(
+            store_root.join("registry"),
+            &seed_kernel,
+        )
+        .expect("session registry opens for the p4 sweep seed");
+        hharness_lab::p4::sweep_seed_into_p4(&mut session_registry);
+    }
 
     let mut svc = match EmbedService::open(ServiceConfig {
         store_root: store_root.clone(),

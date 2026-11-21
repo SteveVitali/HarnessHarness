@@ -111,20 +111,20 @@ python3 -c "import json;d=json.load(open('$O/images.json'));print('images.json t
 
 # ── release build of the window binaries ─────────────────────────────
 cd "$SRC"
-cargo build --release -p hharness-runner --bin hh-w1 \
+cargo build --release -p hharness-runner --bin hh_w1 \
   --bin p4_admissibility 2>&1 | tail -3
 cargo build --release -p hharness-embed --bin hh_l1_drive 2>&1 | tail -3
 cargo build --release -p hharness-hosting --bin hh-model-proxy 2>&1 | tail -3
 cargo build --release -p hharness-helper --bin hh-helper 2>&1 | tail -3
-for b in hh-w1 hh_l1_drive hh-model-proxy hh-helper p4_admissibility; do
+for b in hh_w1 hh_l1_drive hh-model-proxy hh-helper p4_admissibility; do
   [ -x "target/release/$b" ] || fail "binary $b absent"
-  cp "target/release/$b" "$R/bin/$b"
+  n="$(echo "$b" | tr _ -)"; cp "target/release/$b" "$R/bin/$n"
 done
 echo "== binaries: $(ls $R/bin)"
 
 # ── the arm docs: emit-docs + bind_hir ───────────────────────────────
 mkdir -p "$O/docs-raw" "$O/docs"
-"$R/bin/p4_admissibility" emit-docs "$O/docs-raw" || fail "emit-docs"
+"$R/bin/p4-admissibility" emit-docs "$O/docs-raw" || fail "emit-docs"
 python3 "$SRC/scripts/gce-backend/bind-hir.py" "$O/docs-raw" "$O/docs" \
   || fail "bind-hir"
 python3 - "$O/docs" <<'PY'
