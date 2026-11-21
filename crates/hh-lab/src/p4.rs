@@ -687,7 +687,58 @@ pub fn p4_level_decls() -> Vec<P4LevelDecl> {
 /// sweepable parameter surface honestly): every Tier-1 factor's
 /// declared parameter is sweepable and binds its typed path through
 /// the `$param:` marker.
+///
+/// **Generation 1** — the frozen artifact's authoring, preserved so
+/// the committed `2026-11-20-fp-p4-*` records reproduce byte-identical
+/// through `p4-admissibility emit` (the `fp-sweep correct` precedent —
+/// a superseded generation's reproducer is never deleted). Its
+/// `transcript_render` declares only the swept `reasoning_replay`
+/// leaf, which is the R7.3 G-L1 rerun-4 root cause — see
+/// [`sweep_baseline_doc_p4_gen2`], the repaired authoring.
 pub fn sweep_baseline_doc_p4() -> hharness_hir::document::HirDocument {
+    sweep_baseline_doc_p4_gen(P4DocGen::G1)
+}
+
+/// The pass-2 generation-2 declared sweep baseline (R7.3): the gen-1
+/// shape plus the complete `transcript_render` replay-fidelity set the
+/// ws1 authored H doc (`c451ed97`, the recorded G-L1 pass) declares.
+///
+/// G-L1 rerun-4 measured a *genuine* exact-H divergence under
+/// `hh-l1-canon/1`: the sealed gen-1 baseline declared
+/// `transcript_render{"assistant_replay":{"reasoning":…}}` and nothing
+/// else, so the canon did not mask `assistant_replay.content`,
+/// `id_normalisation`, `format_error_turn` or `tool_arguments` — O's
+/// recorded requests carry all four verbatim while the gen-1 lane
+/// rendered `content:null` + kernel call ids. The repair declares the
+/// ws1 set in the admitted spellings `decode_transcript_render` reads
+/// — the ws1 window-authored `keep`/`on_format_error`/
+/// `text_only_turns`/`tool_args` members bind to these same admitted
+/// spellings at `bind_hir` time; the sweep doc authors them directly.
+/// The swept `reasoning_replay` leaf stays on its `$param:` marker —
+/// only the swept member differs from ws1's fixed declarations.
+///
+/// Declaring the missing members changes the sealed document and
+/// therefore the baseline identity: `88042f…` can never pass G-L1, so
+/// gen-2 is a new H — the registry/levels/prereg records supersede
+/// append-only; the envelope (slots, arms, seeds, ceilings) is
+/// unchanged.
+pub fn sweep_baseline_doc_p4_gen2() -> hharness_hir::document::HirDocument {
+    sweep_baseline_doc_p4_gen(P4DocGen::G2)
+}
+
+/// The baseline-doc generation: `G1` reproduces the frozen artifact;
+/// `G2` declares the repaired `transcript_render` fidelity set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum P4DocGen {
+    /// The frozen generation-1 authoring (superseded — kept for
+    /// byte-identical recompute of the committed gen-1 records).
+    G1,
+    /// The repaired generation-2 authoring (the full replay-fidelity
+    /// set — the window's current baseline).
+    G2,
+}
+
+fn sweep_baseline_doc_p4_gen(gen: P4DocGen) -> hharness_hir::document::HirDocument {
     let mut doc = sweep::sweep_baseline_doc();
     let kernel = ProvenanceRecord::kernel("sweep:p4", 0);
     let mut a = Assembly::from_json(
@@ -767,6 +818,9 @@ pub fn sweep_baseline_doc_p4() -> hharness_hir::document::HirDocument {
             "instance_template".to_string(),
             Json::str("$param:instance_template"),
         );
+        if gen == P4DocGen::G2 {
+            declare_full_transcript_fidelity(mp);
+        }
     }
     // V7 — the tool surface, declared at `values` (the fixture has no
     // registered tool-surface class; `tool_set` + `tool_desc` carry
@@ -809,6 +863,40 @@ pub fn sweep_baseline_doc_p4() -> hharness_hir::document::HirDocument {
         }
     }
     doc
+}
+
+/// `declare_full_transcript_fidelity(mp)` — the gen-2
+/// `transcript_render` repair: the member set the ws1 authored doc
+/// carries (post-`bind_hir` admitted spellings — `content: verbatim`,
+/// `id_normalisation: provider_verbatim`, `format_error_turn: omit`,
+/// `text_only_turn: drop`, `tool_arguments: verbatim`), merged into
+/// the model_port slot's declared `transcript_render`. The swept
+/// `reasoning` leaf stays on its `$param:reasoning_replay` marker; a
+/// doc that somehow lacks the `transcript_render`/`assistant_replay`
+/// objects gets the full structure (never silently skipped).
+fn declare_full_transcript_fidelity(mp: &mut SlotBinding) {
+    let tr = mp
+        .params
+        .entry("transcript_render".to_string())
+        .or_insert_with(|| Json::Obj(BTreeMap::new()));
+    let Json::Obj(trm) = tr else {
+        return; // a non-object transcript_render is the caller's bug — leave it typed
+    };
+    let ar = trm
+        .entry("assistant_replay".to_string())
+        .or_insert_with(|| Json::Obj(BTreeMap::new()));
+    if let Json::Obj(arm) = ar {
+        arm.entry("content".to_string())
+            .or_insert_with(|| Json::str("verbatim"));
+    }
+    trm.entry("id_normalisation".to_string())
+        .or_insert_with(|| Json::str("provider_verbatim"));
+    trm.entry("format_error_turn".to_string())
+        .or_insert_with(|| Json::str("omit"));
+    trm.entry("text_only_turn".to_string())
+        .or_insert_with(|| Json::str("drop"));
+    trm.entry("tool_arguments".to_string())
+        .or_insert_with(|| Json::str("verbatim"));
 }
 
 /// The pass-2 seeded store — the first-pass classes plus
@@ -920,10 +1008,28 @@ pub struct P4Materialization {
 /// pass-2 baseline for every declarable Tier-1 level, each with its
 /// declared-delta check (one registered slot, confined to declared
 /// typed paths). Withheld levels (`seal: false`) are skipped honestly.
+/// Generation 1 — the frozen artifact's seal, kept byte-identical for
+/// the committed gen-1 records.
 pub fn seal_p4_levels(work_dir: &Path) -> Result<P4Materialization, SweepRefusal> {
+    seal_p4_levels_over(work_dir, &sweep_baseline_doc_p4())
+}
+
+/// `seal_p4_levels_gen2(work_dir)` — the same chain over the gen-2
+/// authored baseline (the full `transcript_render` fidelity set; R7.3
+/// machinery repair). A new baseline identity and new level refs —
+/// never an in-place edit of the frozen gen-1 artifacts.
+pub fn seal_p4_levels_gen2(work_dir: &Path) -> Result<P4Materialization, SweepRefusal> {
+    seal_p4_levels_over(work_dir, &sweep_baseline_doc_p4_gen2())
+}
+
+/// `seal_p4_levels_over(work_dir, authored)` — the shared chain over
+/// the caller's authored baseline document.
+fn seal_p4_levels_over(
+    work_dir: &Path,
+    authored: &hharness_hir::document::HirDocument,
+) -> Result<P4Materialization, SweepRefusal> {
     let kernel = ProvenanceRecord::kernel("sweep:seal", 0);
     let mut store = sweep_seeded_store_p4(&work_dir.join("registry"));
-    let authored = sweep_baseline_doc_p4();
     let catalog = Stage1Catalog::stage1();
     let mut env = ResolveEnv {
         registry: &mut store,
@@ -934,7 +1040,7 @@ pub fn seal_p4_levels(work_dir: &Path) -> Result<P4Materialization, SweepRefusal
         resolved_at: 1_763_000_000_000,
         notices: None,
     };
-    let base = resolve(&authored, &mut env).map_err(|d| SweepRefusal::UnexpressibleSurface {
+    let base = resolve(authored, &mut env).map_err(|d| SweepRefusal::UnexpressibleSurface {
         detail: format!("p4 baseline resolve refused: {}", d.len()),
     })?;
     let baseline_json = sealed_json(&base);
@@ -943,7 +1049,7 @@ pub fn seal_p4_levels(work_dir: &Path) -> Result<P4Materialization, SweepRefusal
         .and_then(|d| d.get("assembly"))
         .cloned()
         .unwrap_or(Json::Null);
-    let sp = space(&authored, &kernel).map_err(|e| SweepRefusal::UnexpressibleSurface {
+    let sp = space(authored, &kernel).map_err(|e| SweepRefusal::UnexpressibleSurface {
         detail: format!("space: {e}"),
     })?;
     let mut levels = Vec::new();
@@ -1062,6 +1168,22 @@ pub fn sweep_registry_record_p4(
     mat: &P4Materialization,
     level_extra: &BTreeMap<String, Vec<(String, Json)>>,
     admissibility: Json,
+) -> Json {
+    sweep_registry_record_p4_gen(mat, level_extra, admissibility, "2026-11-20", None)
+}
+
+/// `sweep_registry_record_p4_gen(mat, level_extra, admissibility,
+/// recorded_at, supersedes)` — the generation-parameterized record.
+/// `recorded_at` is the minting date and `supersedes`, when present, is
+/// the superseded generation's cite (`prior` path + `prior_sha256` +
+/// `reason` + `byte_untouched: true`) — append-only lineage, never an
+/// in-place edit (R7.3).
+pub fn sweep_registry_record_p4_gen(
+    mat: &P4Materialization,
+    level_extra: &BTreeMap<String, Vec<(String, Json)>>,
+    admissibility: Json,
+    recorded_at: &str,
+    supersedes: Option<Json>,
 ) -> Json {
     let decls = p4_level_decls();
     let sealed_ref_of = |id: &str| -> Option<String> {
@@ -1238,7 +1360,7 @@ pub fn sweep_registry_record_p4(
     ];
     let mut levels: Vec<Json> = entries.into_iter().map(|(_, j)| j).collect();
     levels.shrink_to_fit();
-    Json::obj([
+    let mut rec = Json::obj([
         ("schema", Json::str(sweep::SWEEP_REGISTRY_SCHEMA)),
         ("label", Json::str(sweep::SWEEP_VARIANT_LABEL)),
         (
@@ -1253,7 +1375,7 @@ pub fn sweep_registry_record_p4(
                 "second-pass scope (R7.1): V1–V9 + Tier 2 declared; V1–V7 sealed through R6.43's enumerate→seal; V8/V9 declared with their W-rule disposition — a level changed after this freeze is a new identity (REQ-XD-202)",
             ),
         ),
-        ("recorded_at", Json::str("2026-11-20")),
+        ("recorded_at", Json::str(recorded_at)),
         (
             "baseline",
             Json::obj([
@@ -1315,7 +1437,13 @@ pub fn sweep_registry_record_p4(
                 ),
             ]),
         ),
-    ])
+    ]);
+    if let Some(s) = supersedes {
+        if let Json::Obj(ref mut m) = rec {
+            m.insert("supersedes".to_string(), s);
+        }
+    }
+    rec
 }
 
 /// The id sets this pass's validator shares with R6.43's.

@@ -337,6 +337,232 @@ fn emit(repo: &Path, inputs: &BTreeMap<String, String>) {
     let _ = std::fs::remove_dir_all(&work);
 }
 
+/// `supersede <repo-root>` — the R7.3 generation-2 mint (manifest 329):
+/// the same `emit` shape over the **gen-2** authored baseline — the
+/// `transcript_render` repair the G-L1 rerun-4 divergence diagnosed —
+/// writing the four records at the inputs manifest's gen-2 relpaths,
+/// each carrying a `supersedes` lineage cite (`prior` path +
+/// recomputed `prior_sha256` + the manifest's `supersedes_reason` +
+/// `byte_untouched: true`). The gen-1 records stay byte-untouched;
+/// `emit` keeps reproducing them (a superseded generation's
+/// reproducer is never deleted — the `fp-sweep correct` precedent).
+/// Deterministic — same inputs, byte-identical outputs.
+fn supersede(repo: &Path, inputs: &BTreeMap<String, String>) {
+    use hharness_lab::p4::*;
+
+    let recorded_at = inputs
+        .get("recorded_at")
+        .map(String::as_str)
+        .unwrap_or("2026-11-21");
+    let reason = inputs
+        .get("supersedes_reason")
+        .map(String::as_str)
+        .unwrap_or_else(|| panic!("supersede requires supersedes_reason in the inputs manifest"));
+    // The lineage cite for a named prior record — path + the gen-1
+    // file's recomputed sha256 + the declared reason.
+    let cite = |key: &str| -> Json {
+        let rel = inputs
+            .get(&format!("supersedes_{key}"))
+            .unwrap_or_else(|| panic!("supersede requires supersedes_{key}"));
+        let bytes = std::fs::read(repo.join(rel)).unwrap_or_else(|e| panic!("read {rel}: {e}"));
+        Json::obj([
+            ("prior", Json::str(rel.as_str())),
+            (
+                "prior_sha256",
+                Json::str(format!("sha256:{}", sha256_hex(bytes.as_slice()))),
+            ),
+            ("reason", Json::str(reason)),
+            ("byte_untouched", Json::Bool(true)),
+        ])
+    };
+
+    let corpus = load(repo, &inputs["corpus"]);
+    assert_eq!(
+        corpus.get("schema").and_then(Json::as_str),
+        Some("hh-p4-token-corpus/1"),
+        "corpus record is not hh-p4-token-corpus/1"
+    );
+    let peaks = corpus_peaks(&corpus);
+    let wr = w_rule(&peaks);
+    let withheld_composites = matches!(wr.outcome, WOutcome::WithheldInertAtAdmissibleWindow);
+
+    let work = std::env::temp_dir().join(format!("p4-adm-g2-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&work);
+    std::fs::create_dir_all(&work).unwrap();
+    let mat =
+        seal_p4_levels_gen2(&work).unwrap_or_else(|e| panic!("pass-2 gen-2 seal refused: {e}"));
+
+    let pin_evidence = corpus
+        .get("effort_pin_evidence")
+        .cloned()
+        .unwrap_or(Json::Null);
+
+    let mut level_extra: BTreeMap<String, Vec<(String, Json)>> = BTreeMap::new();
+    for decl in p4_level_decls() {
+        let id = decl.level_id;
+        let fold = level_fold(id, &wr);
+        let mut entries = vec![("forecast".to_string(), forecast_entry(id, fold))];
+        if id == "V8" || id == "V9" {
+            if withheld_composites {
+                entries.push((
+                    "withheld".to_string(),
+                    Json::str("withheld{inert_at_admissible_window}"),
+                ));
+            }
+            entries.push((
+                "declaration".to_string(),
+                Json::obj([
+                    (
+                        "strategy",
+                        Json::str(decl.spellings[0].split('=').nth(1).unwrap_or("")),
+                    ),
+                    ("window_cap", Json::Int(32_768)),
+                    (
+                        "note",
+                        Json::str("the composite's W — uniform across every task and replicate"),
+                    ),
+                ]),
+            ));
+        }
+        level_extra.insert(id.to_string(), entries);
+    }
+
+    let t2_admissions = Json::Arr(
+        hharness_lab::sweep::TIER2_CANDIDATES
+            .iter()
+            .map(|id| check_tier2_admission(id, false, None))
+            .collect(),
+    );
+
+    let admissibility = Json::obj([
+        ("schema", Json::str("hh-p4-admissibility/1")),
+        ("recorded_at", Json::str(recorded_at)),
+        ("ticket", Json::str("329_R7.3")),
+        ("w_rule", w_rule_json(&wr)),
+        ("corpus_sha256", {
+            let bytes = format!("{}\n", corpus.to_canonical_string());
+            Json::str(format!("sha256:{}", sha256_hex(bytes.as_bytes())))
+        }),
+        (
+            "effort_pin",
+            Json::obj([
+                ("declared_baseline", Json::str("high")),
+                ("applied_eq_declared_share", Json::str("1/1 — every recorded call")),
+                ("corpus_evidence", pin_evidence),
+                (
+                    "note",
+                    Json::str("the proxy pin surface records requested/applied/path per call; a call whose applied value differs from the level's declared lane value makes the level ineligible — ineligible{mis_pinned:…}"),
+                ),
+            ]),
+        ),
+        ("tier2_admissions", t2_admissions),
+        (
+            "note",
+            Json::str("registration authorizes no spend; V8/V9 carry the W-rule disposition — withheld levels stay declared, never sealed"),
+        ),
+        ("supersedes", cite("admissibility")),
+    ]);
+
+    let reg = hharness_lab::sweep::freeze_registry_as(
+        &sweep_registry_record_p4_gen(
+            &mat,
+            &level_extra,
+            admissibility.clone(),
+            recorded_at,
+            Some(cite("sweep_registry")),
+        ),
+        P4_TAG,
+    );
+    let refusals = hharness_lab::sweep::check_registry(&reg);
+    assert!(refusals.is_empty(), "registry refused: {refusals:?}");
+
+    let levels_rec = Json::obj([
+        ("schema", Json::str("hh-p4-levels/1")),
+        ("recorded_at", Json::str(recorded_at)),
+        ("baseline_ref", Json::str(&mat.baseline_version_id)),
+        (
+            "levels",
+            Json::Arr(
+                mat.levels
+                    .iter()
+                    .map(|l| {
+                        Json::obj([
+                            ("level_id", Json::str(&l.sealed.level_id)),
+                            ("level_ref", Json::str(&l.sealed.version_id)),
+                            (
+                                "override_spellings",
+                                Json::Arr(l.sealed.spellings.iter().map(Json::str).collect()),
+                            ),
+                            ("sealed", hharness_lab::sweep::sealed_json(&l.sealed.sealed)),
+                            ("delta", Json::Arr(l.delta.iter().map(Json::str).collect())),
+                            ("label", Json::str(hharness_lab::sweep::SWEEP_VARIANT_LABEL)),
+                            ("parity", Json::str("none")),
+                        ])
+                    })
+                    .collect(),
+            ),
+        ),
+        (
+            "withheld",
+            Json::Arr(
+                ["V8", "V9"]
+                    .iter()
+                    .map(|id| {
+                        Json::obj([
+                            ("level_id", Json::str(*id)),
+                            (
+                                "disposition",
+                                Json::str(if withheld_composites {
+                                    "withheld{inert_at_admissible_window}"
+                                } else {
+                                    "declared"
+                                }),
+                            ),
+                        ])
+                    })
+                    .collect(),
+            ),
+        ),
+        ("supersedes", cite("levels")),
+    ]);
+
+    let w_rule_rec = Json::obj([
+        ("schema", Json::str("hh-p4-w-rule/1")),
+        ("recorded_at", Json::str(recorded_at)),
+        ("ticket", Json::str("329_R7.3")),
+        ("corpus", Json::str(&inputs["corpus"])),
+        (
+            "input_manifest",
+            corpus.get("input_manifest").cloned().unwrap_or(Json::Null),
+        ),
+        ("derivation", w_rule_json(&wr)),
+        (
+            "trials",
+            corpus.get("trials").cloned().unwrap_or(Json::Arr(vec![])),
+        ),
+        ("supersedes", cite("w_rule")),
+    ]);
+
+    for (key, doc) in [
+        ("sweep_registry", &reg),
+        ("levels", &levels_rec),
+        ("w_rule", &w_rule_rec),
+        ("admissibility", &admissibility),
+    ] {
+        let rel = &inputs[key];
+        let bytes = format!("{}\n", doc.to_canonical_string());
+        write(repo, rel, &bytes);
+        let sha_key = format!("{key}_sha256");
+        let sha_rel = &inputs[&sha_key];
+        write(
+            repo,
+            sha_rel,
+            &sidecar(&sha256_hex(bytes.as_bytes()), rel, sha_rel),
+        );
+    }
+    let _ = std::fs::remove_dir_all(&work);
+}
+
 /// `emit-docs <out-dir>` — the R7.3 drive surface (manifest 329): the
 /// same `seal_p4_levels` materialization the `emit` leg validates, this
 /// time writing each arm's drive-time document — the sealed baseline
@@ -347,13 +573,18 @@ fn emit(repo: &Path, inputs: &BTreeMap<String, String>) {
 /// `definition_ref.version_id == baseline_ref` verbatim. Determinism is
 /// asserted: a doc that fails to re-produce its declared level_ref or
 /// the declared baseline_ref refuses, never a silently different doc.
+///
+/// Emits the **current generation** — gen-2 (the `transcript_render`
+/// repair). The gen-1 sealed documents stay recoverable verbatim inside
+/// the committed gen-1 `hh-p4-levels/1` record.
 fn emit_docs(out_dir: &Path, inputs: &BTreeMap<String, String>) {
     use hharness_lab::p4::*;
     let _ = inputs;
     let work = std::env::temp_dir().join(format!("p4-docs-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).unwrap();
-    let mat = seal_p4_levels(&work).unwrap_or_else(|e| panic!("pass-2 seal refused: {e}"));
+    let mat =
+        seal_p4_levels_gen2(&work).unwrap_or_else(|e| panic!("pass-2 gen-2 seal refused: {e}"));
     std::fs::create_dir_all(out_dir).unwrap();
     let base_doc = mat
         .baseline_json
@@ -401,6 +632,10 @@ fn main() {
         "emit" => {
             let repo = PathBuf::from(args.next().unwrap_or_else(|| ".".to_string()));
             emit(&repo, &inputs)
+        }
+        "supersede" => {
+            let repo = PathBuf::from(args.next().unwrap_or_else(|| ".".to_string()));
+            supersede(&repo, &inputs)
         }
         "emit-docs" => {
             let out = PathBuf::from(

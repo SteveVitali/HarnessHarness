@@ -511,6 +511,10 @@ pub fn check_registry(reg: &Json) -> Vec<SweepRefusal> {
             "recorded_at",
             "baseline",
             "admissibility",
+            // A superseding generation's lineage cite (R7.3 — the
+            // frozen gen-1 record stays byte-untouched; the cite is
+            // append-only, never an in-place edit).
+            "supersedes",
         ]
         .contains(&k.as_str())
         {

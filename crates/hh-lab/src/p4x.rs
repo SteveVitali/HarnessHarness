@@ -1475,13 +1475,74 @@ pub fn band_a_dev_tasks(selection: &Json) -> Result<(Vec<String>, Vec<String>), 
     Ok((x1, x0))
 }
 
+/// The generation metadata a `hh-p4-x-prereg/1` mint carries.
+/// Generation 1 reproduces the frozen `ec27a278…` record verbatim;
+/// a superseding generation supplies its own `recorded_at`/`ticket`/
+/// `predates`/`baseline.label` plus the `supersedes` lineage cite —
+/// append-only, the superseded record stays byte-untouched (R7.3).
+pub struct XPreregGen {
+    /// `recorded_at` — the minting date (a declared constant, never a
+    /// clock read).
+    pub recorded_at: &'static str,
+    /// `ticket` — the minting ticket row.
+    pub ticket: &'static str,
+    /// `predates` — the honest hash-before-subjects wording for this
+    /// generation (gen-1 names GATE-G35; a superseding generation
+    /// minted after the gate's signature says so, never borrows the
+    /// "predates GATE-G35" claim).
+    pub predates: &'static str,
+    /// `baseline.label` — the generation's baseline wording.
+    pub baseline_label: &'static str,
+    /// `supersedes` — the superseded generation's cite (`prior` path +
+    /// `prior_sha256` + `reason` + `byte_untouched: true`), `None` for
+    /// generation 1.
+    pub supersedes: Option<Json>,
+}
+
+/// The generation-1 metadata — the frozen record's own wording.
+pub fn x_prereg_gen1() -> XPreregGen {
+    XPreregGen {
+        recorded_at: RECORDED_AT,
+        ticket: "327_R7.2",
+        predates: "every X0/X1 subject and GATE-G35 — this hash is minted offline before any window (hash-before-subjects)",
+        baseline_label: "the phase-4 baseline — H frozen by G-L1 for the exact version swept; the exact G-L1 pass id is cited at GATE-G35 (REQ-XD-220)",
+        supersedes: None,
+    }
+}
+
+/// `recorded_at` for the superseding generation-2 mint (R7.3 — the
+/// declared minting-date constant, never a clock read).
+pub const RECORDED_AT_G2: &str = "2026-11-21";
+
+/// The generation-2 metadata — the superseding mint (R7.3): the same
+/// declared envelope (slots, arms, seeds, tasks, stop rules, ceilings —
+/// GATE-G35's authorized words unchanged), a new baseline identity from
+/// the `transcript_render` authoring-completeness repair, and the gen-1
+/// lineage cite. `prior_rel`/`prior_sha` cite the superseded gen-1
+/// record; `reason` is the declared supersession reason.
+pub fn x_prereg_gen2(prior_rel: &str, prior_sha: &str, reason: &str) -> XPreregGen {
+    XPreregGen {
+        recorded_at: RECORDED_AT_G2,
+        ticket: "329_R7.3",
+        predates: "every X0/X1 subject — this hash is minted offline before any subject slot (hash-before-subjects); the superseding generation postdates GATE-G35's signature — the authorized envelope (slots, arms, seeds, ceilings, task source) is unchanged, only the baseline identity moved",
+        baseline_label: "the phase-4 baseline — H frozen by G-L1 for the exact version swept; the gen-2 G-L1 pass id binds this record's baseline_ref before any subject slot (REQ-XD-220)",
+        supersedes: Some(Json::obj([
+            ("prior", Json::str(prior_rel)),
+            ("prior_sha256", Json::str(prior_sha)),
+            ("reason", Json::str(reason)),
+            ("byte_untouched", Json::Bool(true)),
+        ])),
+    }
+}
+
 /// `x_prereg_record(args)` — build the frozen `hh-p4-x-prereg/1` from
 /// the committed inputs: the x2 `sweep-registry/1` + `hh-p4-levels/1`
 /// (registry hash, withheld set, sealed refs), `hh-p4-w-rule/1` (W
 /// verbatim), `hh-p4-admissibility/1` (floor + forecast dispositions),
 /// `task-selection/1` (the band-A dev manifest). The declared envelope
 /// is what GATE-G35 presents — slots, arms, levels, ceiling estimate
-/// and task source all recorded honestly.
+/// and task source all recorded honestly. Generation 1 — the frozen
+/// record's own mint.
 #[allow(clippy::too_many_arguments)] // the committed inputs it consumes
 pub fn x_prereg_record(
     reg: &Json,
@@ -1492,6 +1553,33 @@ pub fn x_prereg_record(
     registry_relpath: &str,
     w_rule_relpath: &str,
     task_relpath: &str,
+) -> Result<Json, SweepRefusal> {
+    x_prereg_record_gen(
+        reg,
+        levels_rec,
+        w_rule_rec,
+        admissibility,
+        task_selection,
+        registry_relpath,
+        w_rule_relpath,
+        task_relpath,
+        &x_prereg_gen1(),
+    )
+}
+
+/// `x_prereg_record_gen(args, gen)` — the generation-parameterized
+/// mint: the same frozen shape, the caller's generation metadata.
+#[allow(clippy::too_many_arguments)] // the committed inputs it consumes
+pub fn x_prereg_record_gen(
+    reg: &Json,
+    levels_rec: &Json,
+    w_rule_rec: &Json,
+    admissibility: &Json,
+    task_selection: &Json,
+    registry_relpath: &str,
+    w_rule_relpath: &str,
+    task_relpath: &str,
+    gen: &XPreregGen,
 ) -> Result<Json, SweepRefusal> {
     let registry_sha = reg
         .get("frozen_sha256")
@@ -1575,14 +1663,11 @@ pub fn x_prereg_record(
         .and_then(Json::as_str)
         .unwrap_or("high")
         .to_string();
-    let rec = Json::obj([
+    let mut rec = Json::obj([
         ("schema", Json::str(X_PREREG_SCHEMA)),
-        ("recorded_at", Json::str(RECORDED_AT)),
-        ("ticket", Json::str("327_R7.2")),
-        (
-            "predates",
-            Json::str("every X0/X1 subject and GATE-G35 — this hash is minted offline before any window (hash-before-subjects)"),
-        ),
+        ("recorded_at", Json::str(gen.recorded_at)),
+        ("ticket", Json::str(gen.ticket)),
+        ("predates", Json::str(gen.predates)),
         (
             "spend",
             Json::str("USD $0.00 — registration authorizes no spend (REQ-XD-221: phase-4 spend is authorized only at G-P4-X and G-P4-C)"),
@@ -1592,10 +1677,7 @@ pub fn x_prereg_record(
             Json::obj([
                 ("document", Json::str("declared sweep baseline (fixture, pass 2)")),
                 ("baseline_ref", Json::str(&design.baseline_ref)),
-                (
-                    "label",
-                    Json::str("the phase-4 baseline — H frozen by G-L1 for the exact version swept; the exact G-L1 pass id is cited at GATE-G35 (REQ-XD-220)"),
-                ),
+                ("label", Json::str(gen.baseline_label)),
                 ("effort_pin", Json::str(&effort_pin)),
                 (
                     "note",
@@ -1753,6 +1835,11 @@ pub fn x_prereg_record(
             Json::str("x2 (REQ-XD-220: exploration requires a G-L1 pass for the exact H swept, follows the recorded L2 verdict, never runs concurrently with L2; any H change starts a new phase-4 cohort)"),
         ),
     ]);
+    if let Some(s) = gen.supersedes.clone() {
+        if let Json::Obj(ref mut m) = rec {
+            m.insert("supersedes".to_string(), s);
+        }
+    }
     let refusals = check_x_prereg(&rec);
     if !refusals.is_empty() {
         return Err(SweepRefusal::TierViolation {
