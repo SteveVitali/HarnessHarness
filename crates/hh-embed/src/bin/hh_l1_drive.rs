@@ -604,12 +604,36 @@ fn apply_mswea_pack(
             _ => None,
         }
     }
-    fn patch_slots(slots: &mut Json, touched: &mut bool, pack_reasoning: &str) {
+    fn patch_slots(
+        slots: &mut Json,
+        touched: &mut bool,
+        pack_reasoning: &str,
+    ) -> Result<(), String> {
         let params = obj_mut(slots, "model_port")
             .and_then(|s| obj_mut(s, "one"))
             .and_then(|s| obj_mut(s, "params"));
-        let Some(params) = params else { return };
+        let Some(params) = params else { return Ok(()) };
         if let Json::Obj(pm) = params {
+            // R7.3 — the pack's lane contract is O's recorded wire:
+            // `non_stream` with the `stream` member absent. A doc that
+            // leaves `transport` undeclared decodes the default
+            // (`stream`); pin `non_stream` so the `stream_member:omit`
+            // arm below stays admissible. An explicit `stream`
+            // declaration cannot ride this surface — its wire would
+            // carry a member O never sent — refuse, never silently
+            // arm a lane the canon cannot match.
+            match pm.get("transport").and_then(Json::as_str) {
+                None => {
+                    pm.insert("transport".to_string(), Json::str("non_stream"));
+                }
+                Some("non_stream") => {}
+                Some(other) => {
+                    return Err(format!(
+                        "model_port.transport `{other}` cannot carry the mswea surface — \
+                         O's recorded lane is `non_stream`"
+                    ))
+                }
+            }
             pm.insert("model_surface".to_string(), Json::str("compiled"));
             // O's recording carries `reasoning_effort` — an extension
             // member `openai-compatible@1`'s plan_schema refuses by
@@ -623,7 +647,7 @@ fn apply_mswea_pack(
             // O's recorded request carries no `stream` member — the
             // family default emits `stream:false` (REQ-XE-107's
             // declared member-presence choice removes it; `transport`
-            // is already `non_stream`, so `omit` is admissible).
+            // is pinned `non_stream` above, so `omit` is admissible).
             pm.insert("stream_member".to_string(), Json::str("omit"));
             let pp = pm
                 .entry("provider_params".to_string())
@@ -650,11 +674,12 @@ fn apply_mswea_pack(
             }
             *touched = true;
         }
+        Ok(())
     }
     let mut touched = false;
     if let Some(asm) = doc.get_mut("assembly") {
         if let Some(slots) = obj_mut(asm, "slots") {
-            patch_slots(slots, &mut touched, pack_reasoning);
+            patch_slots(slots, &mut touched, pack_reasoning)?;
         }
     }
     if let Some(Json::Arr(items)) = doc.get_mut("nodes") {
@@ -670,7 +695,7 @@ fn apply_mswea_pack(
                     p.insert("profile_ref".to_string(), Json::str(coord.clone()));
                 }
                 if let Some(slots) = native.get_mut("slots") {
-                    patch_slots(slots, &mut touched, pack_reasoning);
+                    patch_slots(slots, &mut touched, pack_reasoning)?;
                 }
             }
         }
@@ -1524,5 +1549,72 @@ mod tests {
             Some("provider_specific_fields")
         );
         assert_eq!(got("drop").as_deref(), Some("drop"));
+    }
+
+    // R7.3 — the pack pins `transport:"non_stream"` on a doc that
+    // leaves the member undeclared (the decode default is `stream`,
+    // which contradicted `stream_member:omit` at open_session — the
+    // p4x exact-H G-L1 rc=1 machinery failure). An explicit `stream`
+    // declaration refuses; `non_stream` is left verbatim.
+    #[test]
+    fn mswea_pack_pins_non_stream_transport() {
+        let dir = std::env::temp_dir().join(format!("l1-pack-tr-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("system_template.tmpl"), "sys {{instruction}}").unwrap();
+        std::fs::write(dir.join("instance_template.tmpl"), "inst {{task}}").unwrap();
+        let doc_with = |params: &str| {
+            parse(&format!(
+                "{{\"nodes\":[],\"assembly\":{{\"slots\":{{\"model_port\":{{\"one\":{{\"params\":{params}}}}}}}}}}}"
+            ))
+            .unwrap()
+        };
+        let transport_of = |d: &Json| {
+            d.get("assembly")
+                .and_then(|a| a.get("slots"))
+                .and_then(|s| s.get("model_port"))
+                .and_then(|p| p.get("one"))
+                .and_then(|p| p.get("params"))
+                .and_then(|p| p.get("transport"))
+                .and_then(Json::as_str)
+                .map(str::to_string)
+        };
+        let stream_member_of = |d: &Json| {
+            d.get("assembly")
+                .and_then(|a| a.get("slots"))
+                .and_then(|s| s.get("model_port"))
+                .and_then(|p| p.get("one"))
+                .and_then(|p| p.get("params"))
+                .and_then(|p| p.get("stream_member"))
+                .and_then(Json::as_str)
+                .map(str::to_string)
+        };
+        // undeclared transport → pinned non_stream + omit
+        let (d, _, _, _) = apply_mswea_pack(
+            &doc_with("{}"),
+            dir.to_str().unwrap(),
+            "m-test",
+            "provider_specific_fields",
+        )
+        .unwrap();
+        assert_eq!(transport_of(&d).as_deref(), Some("non_stream"));
+        assert_eq!(stream_member_of(&d).as_deref(), Some("omit"));
+        // declared non_stream stays
+        let (d, _, _, _) = apply_mswea_pack(
+            &doc_with("{\"transport\":\"non_stream\"}"),
+            dir.to_str().unwrap(),
+            "m-test",
+            "provider_specific_fields",
+        )
+        .unwrap();
+        assert_eq!(transport_of(&d).as_deref(), Some("non_stream"));
+        // declared stream refuses — the pack never silently arms a
+        // lane O's recording cannot match
+        let e = apply_mswea_pack(
+            &doc_with("{\"transport\":\"stream\"}"),
+            dir.to_str().unwrap(),
+            "m-test",
+            "provider_specific_fields",
+        );
+        assert!(format!("{e:?}").contains("transport `stream`"));
     }
 }

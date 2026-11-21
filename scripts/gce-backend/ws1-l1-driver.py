@@ -883,6 +883,17 @@ def main():
                 store = os.path.join(a.run_root, slot, "store")
                 h_docs[leg], ep_firsts[leg] = h_drive(
                     store, slot, events, n_calls)
+                if rc != 0:
+                    # the drive never armed — stamp the machinery
+                    # refusal on the folded H drive so an empty
+                    # `requests`/`exception{unfinished}` doc reads as
+                    # the open/arm failure it is (the leg's own
+                    # statuses carry the same fact; a vacuous-gate
+                    # "pass" must never stand unqualified)
+                    h_docs[leg]["refusal"] = {
+                        "rule": "machinery{l1_drive:rc=%d}" % rc,
+                        "detail": (se or "")[:200],
+                    }
                 row[leg] = {"status": "exited{%d}" % rc if rc == 0
                             else "machinery{l1_drive:rc=%d}" % rc,
                             "detail": (se or "")[:200]}
