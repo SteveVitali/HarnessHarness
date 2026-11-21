@@ -65,7 +65,9 @@ echo "== band-A 11 task dirs present"
 
 # ── registries ────────────────────────────────────────────────────────
 mkdir -p /etc/containers
-grep -q 'unqualified-search-registries' /etc/containers/registries.conf 2>/dev/null || \
+# only an uncommented declaration counts — Debian's shipped file carries
+# the key inside a comment block, which a bare grep falsely satisfies.
+grep -q '^unqualified-search-registries' /etc/containers/registries.conf 2>/dev/null || \
   printf 'unqualified-search-registries = ["docker.io"]\n' >> /etc/containers/registries.conf
 
 # ── task-env pulls (declared task.toml docker_image refs) ────────────
