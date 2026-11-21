@@ -131,7 +131,7 @@ python3 "$SRC/scripts/gce-backend/bind-hir.py" "$O/docs-raw" "$O/docs" \
   || fail "bind-hir"
 python3 - "$O/docs" <<'PY'
 import json,sys,os
-want={"baseline":"sha256:88042f890bdedb91bcf865d34630499b87f17b05d53d3640a3deaa863a8a0844"}
+want={"baseline":"sha256:d4a9302be48a4ad635876b9d57bcafed10616fc1067187f29baa4f572eb0aab9"}
 for arm in ("baseline","V1","V2","V3","V4","V5","V6","V7"):
     p=os.path.join(sys.argv[1],f"{arm}.json")
     assert os.path.isfile(p), f"bound doc absent: {arm}"
@@ -180,10 +180,10 @@ cp "$O/docs-raw/baseline.json" "$O/l1/hset/hir"
 python3 - "$O/l1/hset/h_set.json" <<'PY'
 import json,sys
 hs={"identity":{"participant_ref":"H","version":"frozen",
- "digest":"sha256:88042f890bdedb91bcf865d34630499b87f17b05d53d3640a3deaa863a8a0844"},
+ "digest":"sha256:d4a9302be48a4ad635876b9d57bcafed10616fc1067187f29baa4f572eb0aab9"},
  "members":[{"kind":"hir","name":"hir","path":"hir"}]}
 json.dump(hs,open(sys.argv[1],"w"),indent=1,sort_keys=True)
-print("h_set.json written (H digest 88042f…)")
+print("h_set.json written (H digest d4a9302b…)")
 PY
 
 echo "P4X-SETUP: done"

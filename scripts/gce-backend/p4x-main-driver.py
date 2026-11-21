@@ -22,7 +22,7 @@ each a drive-time `document` emitted by `p4_admissibility emit-docs`
 `--pack-reasoning drop`; V3/V4/V6/V7 ride their sealed level docs).
 V8 and V9 never enter the plan — they are recorded verbatim as
 `withheld{inert_at_admissible_window}` per the frozen
-preregistration (ec27a278…). The frozen stop set is budget /
+preregistration (295f94ac…). The frozen stop set is budget /
 infrastructure / integrity / catalog_identity only: the
 continuation checkpoint never drops a level — a projection that
 does not fit stops the batch and the remaining slots record
@@ -52,7 +52,7 @@ usage (on the compute VM):
 import argparse, hashlib, json, os, subprocess, sys, time, urllib.request
 
 # The frozen executable arm-set — V8/V9 never enter it
-# (`withheld{inert_at_admissible_window}`, fp-p4x-prereg ec27a278…).
+# (`withheld{inert_at_admissible_window}`, fp-p4x-prereg 295f94ac…).
 ARMS = ["baseline", "V1", "V2", "V3", "V4", "V5", "V6", "V7"]
 WITHHELD_ARMS = ["V8", "V9"]
 # Per-arm drive spellings (the sealed level deltas): V1 pins effort
