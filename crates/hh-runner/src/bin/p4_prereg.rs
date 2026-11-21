@@ -137,16 +137,20 @@ fn emit(repo: &Path, inputs: &BTreeMap<String, String>) {
     }
 }
 
-/// `supersede <repo-root>` — the R7.3 generation-2 mint (manifest 329):
-/// reads the gen-2 inputs (the superseded-generation registry, levels,
-/// w_rule and admissibility at their gen-2 relpaths; task_selection is
-/// unchanged — the declared envelope's task source is generation-
-/// neutral) and mints the superseding `hh-p4-x-prereg/1` at the
-/// manifest's `prereg` relpath, carrying the gen-1 lineage cite. The
-/// manifest's `supersedes` key names the gen-1 record and
-/// `supersedes_reason` the declared reason; the selection rule is
-/// re-emitted byte-identically at `selection_rule` (point it at the
-/// gen-1 path — the rule is envelope-wide, not generation-scoped).
+/// `supersede <repo-root>` — the R7.3 superseding mint (manifest 329):
+/// reads the prior-generation inputs (the superseded-generation
+/// registry, levels, w_rule and admissibility at their relpaths;
+/// task_selection is unchanged — the declared envelope's task source
+/// is generation-neutral) and mints the superseding `hh-p4-x-prereg/1`
+/// at the manifest's `prereg` relpath, carrying the prior
+/// generation's lineage cite. `doc_gen` selects the authored-document
+/// generation (default 2 — the gen-2 manifest omits it; a gen-3
+/// manifest declares `doc_gen=3`, the gen-2 relpaths and the gen-2
+/// prereg as its `supersedes` cite). The manifest's `supersedes` key
+/// names the superseded record and `supersedes_reason` the declared
+/// reason; the selection rule is re-emitted byte-identically at
+/// `selection_rule` (point it at the gen-1 path — the rule is
+/// envelope-wide, not generation-scoped).
 /// Deterministic — same inputs, byte-identical outputs.
 fn supersede(repo: &Path, inputs: &BTreeMap<String, String>) {
     let reg = load(repo, &inputs["sweep_registry"]);
@@ -174,11 +178,18 @@ fn supersede(repo: &Path, inputs: &BTreeMap<String, String>) {
         "registry refused: {reg_refusals:?}"
     );
 
-    // The lineage cite — the gen-1 record's relpath and recomputed
+    // `doc_gen` — the authored-document generation the mint's metadata
+    // spells (default 2 — the gen-2 inputs manifest omits it; a gen-3
+    // manifest declares `doc_gen=3` and cites the gen-2 record).
+    let doc_gen: u32 = inputs
+        .get("doc_gen")
+        .map(|s| s.parse().unwrap_or_else(|_| panic!("doc_gen {s}")))
+        .unwrap_or(2);
+    // The lineage cite — the superseded record's relpath and recomputed
     // sha256, plus the manifest's declared supersession reason.
     let prior_rel = inputs
         .get("supersedes")
-        .unwrap_or_else(|| panic!("supersede requires supersedes=<gen-1 prereg relpath>"));
+        .unwrap_or_else(|| panic!("supersede requires supersedes=<prior prereg relpath>"));
     let reason = inputs
         .get("supersedes_reason")
         .unwrap_or_else(|| panic!("supersede requires supersedes_reason=<reason>"));
@@ -195,7 +206,7 @@ fn supersede(repo: &Path, inputs: &BTreeMap<String, String>) {
         &inputs["sweep_registry"],
         &inputs["w_rule"],
         &inputs["task_selection"],
-        &hharness_lab::p4x::x_prereg_gen2(prior_rel, &prior_sha, reason),
+        &hharness_lab::p4x::x_prereg_doc_gen(doc_gen, prior_rel, &prior_sha, reason),
     )
     .unwrap_or_else(|e| panic!("pre-registration refused: {e}"));
     hharness_lab::p4x::check_registry_cite(&reg, &rec)

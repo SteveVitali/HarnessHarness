@@ -126,12 +126,19 @@ echo "== binaries: $(ls $R/bin)"
 
 # ── the arm docs: emit-docs + bind_hir ───────────────────────────────
 mkdir -p "$O/docs-raw" "$O/docs"
-"$R/bin/p4-admissibility" emit-docs "$O/docs-raw" || fail "emit-docs"
+"$R/bin/p4-admissibility" emit-docs "$O/docs-raw" | tee "$O/emit-docs.log" \
+  || fail "emit-docs"
+# The gen-3 sealed baseline identity — the control_strategy
+# submission contract minted at this tree (R7.3). The emit pins its
+# own printed definition_ref; a stale binary refuses here, never a
+# silently different H.
+grep -q "baseline.json definition_ref=sha256:4142fb105a9abf67bf7c8e39ca2bd69b26dfc9ae9813ebd04244fd221af557b5" \
+  "$O/emit-docs.log" || fail "emit-docs baseline identity (want 4142fb10…)"
 python3 "$SRC/scripts/gce-backend/bind-hir.py" "$O/docs-raw" "$O/docs" \
   || fail "bind-hir"
 python3 - "$O/docs" <<'PY'
 import json,sys,os
-want={"baseline":"sha256:d4a9302be48a4ad635876b9d57bcafed10616fc1067187f29baa4f572eb0aab9"}
+want={"baseline":"sha256:4142fb105a9abf67bf7c8e39ca2bd69b26dfc9ae9813ebd04244fd221af557b5"}
 for arm in ("baseline","V1","V2","V3","V4","V5","V6","V7"):
     p=os.path.join(sys.argv[1],f"{arm}.json")
     assert os.path.isfile(p), f"bound doc absent: {arm}"
@@ -180,10 +187,10 @@ cp "$O/docs-raw/baseline.json" "$O/l1/hset/hir"
 python3 - "$O/l1/hset/h_set.json" <<'PY'
 import json,sys
 hs={"identity":{"participant_ref":"H","version":"frozen",
- "digest":"sha256:d4a9302be48a4ad635876b9d57bcafed10616fc1067187f29baa4f572eb0aab9"},
+ "digest":"sha256:4142fb105a9abf67bf7c8e39ca2bd69b26dfc9ae9813ebd04244fd221af557b5"},
  "members":[{"kind":"hir","name":"hir","path":"hir"}]}
 json.dump(hs,open(sys.argv[1],"w"),indent=1,sort_keys=True)
-print("h_set.json written (H digest d4a9302b…)")
+print("h_set.json written (H digest 4142fb10…)")
 PY
 
 echo "P4X-SETUP: done"

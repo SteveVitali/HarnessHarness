@@ -1,11 +1,15 @@
-//! R7.3 — the generation-2 `transcript_render` authoring repair
+//! R7.3 — the generation-aware baseline authoring repairs
 //! (manifest 329): the gen-2 declared baseline carries the complete
 //! replay-fidelity member set the ws1 authored H doc declared (G-L1
 //! rerun-4 diagnosed the gen-1 gap — `assistant_replay.reasoning`
-//! alone), the swept `reasoning_replay` leaf stays on its `$param:`
-//! marker, the gen-1 machinery still reproduces the frozen
-//! `88042f…`/`ec27a278…` artifacts byte-identical, and the committed
-//! gen-2 records carry the append-only `supersedes` lineage cites.
+//! alone), the gen-3 baseline adds the `control_strategy` submission
+//! contract the same ws1 doc declared (the gen-2 battery's
+//! trajectory-termination divergence — the bare `submit` preset's
+//! dormant marker), the swept `reasoning_replay` leaf stays on its
+//! `$param:` marker, the gen-1/gen-2 machinery still reproduces the
+//! frozen `88042f…`/`ec27a278…` and gen-2 artifacts byte-identical,
+//! and the committed gen-2/gen-3 records carry the append-only
+//! `supersedes` lineage cites.
 //! Offline fixtures only — no subject, model call, or paid run.
 
 #![allow(clippy::unwrap_used)]
@@ -476,4 +480,204 @@ fn ac3_gen2_prereg_recomputes() {
     )
     .unwrap();
     assert_eq!(rec1.to_canonical_string(), g1.to_canonical_string());
+}
+
+// ── AC-4: generation-3 — the control_strategy submission contract ────────────
+
+const G3_REG: &str = "docs/build/reports/2026-11-21-fp-p4-sweep-registry-gen3.json";
+const G3_LEVELS: &str = "docs/build/reports/2026-11-21-fp-p4-levels-gen3.json";
+const G3_WRULE: &str = "docs/build/reports/2026-11-21-fp-p4-w-rule-gen3.json";
+const G3_ADM: &str = "docs/build/reports/2026-11-21-fp-p4-admissibility-gen3.json";
+const G3_PREREG: &str = "docs/build/reports/2026-11-21-fp-p4x-prereg-gen3.json";
+
+/// The authored doc's `control_strategy` slot params — where the
+/// submission contract lands before `$param:` binding.
+fn authored_cs(gen: fn() -> hharness_hir::document::HirDocument) -> Json {
+    let doc = gen();
+    let asm = doc.assembly.clone().unwrap();
+    asm.get("slots")
+        .and_then(|s| s.get("control_strategy"))
+        .and_then(|mp| mp.get("one"))
+        .and_then(|o| o.get("params"))
+        .cloned()
+        .expect("control_strategy slot params")
+}
+
+#[test]
+fn ac4_gen3_declares_the_submission_contract() {
+    let cs = authored_cs(sweep_baseline_doc_p4_gen3);
+    let m = as_obj(&cs);
+    // The ws1-authored control set — the marker the bare `submit`
+    // preset leaves dormant (`marker: None`), which the gen-2 G-L1
+    // battery's trajectory-termination divergence diagnosed.
+    assert_eq!(
+        m.get("completion_surface").and_then(Json::as_str),
+        Some("none")
+    );
+    assert_eq!(
+        m.get("format_failure_scope").and_then(Json::as_str),
+        Some("batch")
+    );
+    assert_eq!(
+        m.get("max_consecutive_format_errors")
+            .and_then(Json::as_int),
+        Some(3)
+    );
+    assert_eq!(
+        m.get("tool_batch_mode").and_then(Json::as_str),
+        Some("sequential")
+    );
+    let sub = as_obj(as_obj(m.get("stop_rule").unwrap()).get("submit").unwrap());
+    assert_eq!(
+        sub.get("marker").and_then(Json::as_str),
+        Some("COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT")
+    );
+    assert_eq!(sub.get("line").and_then(Json::as_str), Some("first"));
+    assert_eq!(
+        sub.get("require_returncode").and_then(Json::as_int),
+        Some(0)
+    );
+    // And the gen-3 doc keeps the full gen-2 fidelity set.
+    let tr = authored_tr(sweep_baseline_doc_p4_gen3);
+    let tm = as_obj(&tr);
+    for (k, v) in FIDELITY {
+        assert_eq!(
+            tm.get(*k).and_then(Json::as_str),
+            Some(*v),
+            "gen-3 keeps fidelity.{k}"
+        );
+    }
+    let ar = as_obj(tm.get("assistant_replay").unwrap());
+    assert_eq!(ar.get("content").and_then(Json::as_str), Some("verbatim"));
+    // The gen-2 doc does NOT declare the marker — that is exactly the
+    // authored difference between the generations.
+    let g2_cs = authored_cs(sweep_baseline_doc_p4_gen2);
+    assert!(
+        g2_cs.get("stop_rule").is_none(),
+        "gen-2 stays bare — the divergence it diagnosed"
+    );
+}
+
+#[test]
+fn ac4_gen3_seal_binds_the_contract() {
+    let work = std::env::temp_dir().join(format!("r7-3-g3-seal-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&work);
+    std::fs::create_dir_all(&work).unwrap();
+    let mat = seal_p4_levels_gen3(&work).unwrap();
+    // The baseline carries the sealed contract; the level docs match
+    // the committed gen-3 record's refs.
+    let committed = load(G3_LEVELS);
+    assert_eq!(
+        mat.baseline_version_id,
+        committed
+            .get("baseline_ref")
+            .and_then(Json::as_str)
+            .unwrap()
+    );
+    let mut got: Vec<String> = mat
+        .levels
+        .iter()
+        .map(|l| l.sealed.version_id.clone())
+        .collect();
+    got.sort();
+    let mut want: Vec<String> = as_arr(committed.get("levels").unwrap())
+        .iter()
+        .map(|l| {
+            l.get("level_ref")
+                .and_then(Json::as_str)
+                .unwrap()
+                .to_string()
+        })
+        .collect();
+    want.sort();
+    assert_eq!(got, want, "gen-3 level refs match the committed record");
+    // The sealed baseline's bound control_strategy carries the marker.
+    let doc = mat
+        .baseline_json
+        .get("document")
+        .and_then(|d| d.get("assembly"))
+        .and_then(|a| a.get("slots"))
+        .and_then(|s| s.get("control_strategy"))
+        .and_then(|mp| mp.get("one"))
+        .and_then(|o| o.get("params"))
+        .and_then(|p| p.get("stop_rule"))
+        .and_then(|sr| sr.get("submit"))
+        .cloned()
+        .unwrap();
+    assert_eq!(
+        doc.get("marker").and_then(Json::as_str),
+        Some("COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT")
+    );
+    let _ = std::fs::remove_dir_all(&work);
+}
+
+#[test]
+fn ac4_gen3_doc_gen_selector() {
+    // The generation selector reproduces each mint; gen-1 stays on
+    // its own entry point.
+    for (doc_gen, committed_levels) in [(2u32, G2_LEVELS), (3u32, G3_LEVELS)] {
+        let work = std::env::temp_dir().join(format!("r7-3-g{doc_gen}-sel-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&work);
+        std::fs::create_dir_all(&work).unwrap();
+        let mat = seal_p4_levels_doc_gen(&work, doc_gen).unwrap();
+        let committed = load(committed_levels);
+        assert_eq!(
+            mat.baseline_version_id,
+            committed
+                .get("baseline_ref")
+                .and_then(Json::as_str)
+                .unwrap(),
+            "gen-{doc_gen} baseline ref"
+        );
+        let _ = std::fs::remove_dir_all(&work);
+    }
+    // An unadmitted generation refuses (panic — the emitter-side
+    // input-admission convention, never a silent fallback).
+    let w = std::env::temp_dir().join(format!("r7-3-gX-{}", std::process::id()));
+    assert!(std::panic::catch_unwind(|| {
+        let _ = seal_p4_levels_doc_gen(&w, 9);
+    })
+    .is_err());
+}
+
+#[test]
+fn ac4_gen3_prereg_recomputes() {
+    // The gen-3 prereg recomputes deterministically through the
+    // generation-parameterized mint over the committed gen-3 inputs,
+    // citing the gen-2 record.
+    let reg = load(G3_REG);
+    let levels = load(G3_LEVELS);
+    let w_rule = load(G3_WRULE);
+    let adm = load(G3_ADM);
+    let tasks = load(TASKS);
+    let prior_sha = sha_file(G2_PREREG);
+    let rec = x_prereg_record_gen(
+        &reg,
+        &levels,
+        &w_rule,
+        &adm,
+        &tasks,
+        G3_REG,
+        G3_WRULE,
+        TASKS,
+        &x_prereg_gen3(
+            G2_PREREG,
+            &prior_sha,
+            "control_strategy authoring-completeness repair (R7.3): the gen-2 baseline's control_strategy.params left the submit-marker detection dormant — the gen-2 G-L1 battery held request-level parity and diverged at trajectory termination; the authorized envelope (slots, arms, seeds, caps) is unchanged",
+        ),
+    )
+    .unwrap();
+    let committed = load(G3_PREREG);
+    assert_eq!(
+        rec.to_canonical_string(),
+        committed.to_canonical_string(),
+        "gen-3 prereg recomputes"
+    );
+    check_registry_cite(&reg, &rec).unwrap();
+    // The doc_gen selector reproduces both superseding mints.
+    for doc_gen in [2u32, 3] {
+        let m = x_prereg_doc_gen(doc_gen, "prior", "sha256:0", "reason");
+        assert!(m.recorded_at.starts_with("2026-11-"), "gen-{doc_gen}");
+    }
+    assert!(std::panic::catch_unwind(|| x_prereg_doc_gen(9, "p", "s", "r")).is_err());
 }

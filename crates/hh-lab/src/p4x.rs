@@ -1535,6 +1535,50 @@ pub fn x_prereg_gen2(prior_rel: &str, prior_sha: &str, reason: &str) -> XPreregG
     }
 }
 
+/// `recorded_at` for the superseding generation-3 mint (R7.3 — same
+/// minting date as gen-2; the `-gen3` filename infix disambiguates the
+/// same-day records).
+pub const RECORDED_AT_G3: &str = "2026-11-21";
+
+/// The generation-3 metadata — the second superseding mint (R7.3): the
+/// same declared envelope again, a new baseline identity from the
+/// `control_strategy` submission-contract authoring repair (the gen-2
+/// G-L1 battery held request-level parity but diverged at trajectory
+/// termination — the bare `submit` preset's dormant marker), and the
+/// gen-2 lineage cite. `prior_rel`/`prior_sha` cite the superseded
+/// gen-2 record; `reason` is the declared supersession reason.
+pub fn x_prereg_gen3(prior_rel: &str, prior_sha: &str, reason: &str) -> XPreregGen {
+    XPreregGen {
+        recorded_at: RECORDED_AT_G3,
+        ticket: "329_R7.3",
+        predates: "every X0/X1 subject — this hash is minted offline before any subject slot (hash-before-subjects); the superseding generation postdates GATE-G35's signature — the authorized envelope (slots, arms, seeds, ceilings, task source) is unchanged, only the baseline identity moved",
+        baseline_label: "the phase-4 baseline — H frozen by G-L1 for the exact version swept; the gen-3 G-L1 pass id binds this record's baseline_ref before any subject slot (REQ-XD-220)",
+        supersedes: Some(Json::obj([
+            ("prior", Json::str(prior_rel)),
+            ("prior_sha256", Json::str(prior_sha)),
+            ("reason", Json::str(reason)),
+            ("byte_untouched", Json::Bool(true)),
+        ])),
+    }
+}
+
+/// `x_prereg_doc_gen(doc_gen, prior_rel, prior_sha, reason)` — the
+/// inputs-manifest selector for `p4_prereg supersede` (`doc_gen ∈
+/// {2,3}`; generation 1's reproducer is `x_prereg_record` and stays its
+/// own path).
+pub fn x_prereg_doc_gen(
+    doc_gen: u32,
+    prior_rel: &str,
+    prior_sha: &str,
+    reason: &str,
+) -> XPreregGen {
+    match doc_gen {
+        2 => x_prereg_gen2(prior_rel, prior_sha, reason),
+        3 => x_prereg_gen3(prior_rel, prior_sha, reason),
+        other => panic!("p4x doc_gen {other} — admitted: 2, 3"),
+    }
+}
+
 /// `x_prereg_record(args)` — build the frozen `hh-p4-x-prereg/1` from
 /// the committed inputs: the x2 `sweep-registry/1` + `hh-p4-levels/1`
 /// (registry hash, withheld set, sealed refs), `hh-p4-w-rule/1` (W

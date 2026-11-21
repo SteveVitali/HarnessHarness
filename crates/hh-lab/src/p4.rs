@@ -726,16 +726,45 @@ pub fn sweep_baseline_doc_p4_gen2() -> hharness_hir::document::HirDocument {
     sweep_baseline_doc_p4_gen(P4DocGen::G2)
 }
 
+/// The pass-2 generation-3 declared sweep baseline (R7.3): the gen-2
+/// shape plus the `control_strategy` submission contract the ws1
+/// authored H doc (`c451ed97`, the recorded G-L1 pass) declares.
+///
+/// The gen-2 G-L1 battery measured a *genuine* exact-H trajectory
+/// divergence under `hh-l1-canon/1` — request-level parity held
+/// end-to-end (the gen-2 `transcript_render` repair), but on the six
+/// `submitted`-terminated sequences H drove one request past the
+/// recorded end and finished `exception{model_error}` where O finished
+/// `submitted`. Cause: the gen-1/gen-2 skeleton leaves
+/// `control_strategy.params` empty, so the armed `react/minimal`
+/// preset carries `stop_rule = submit` **bare** — `marker: None`,
+/// detection dormant (`StopRuleParam`'s documented semantics: the
+/// marker is harness data, never a kernel constant). The ws1 authored
+/// doc declares `stop_rule{submit{marker, line, require_returncode}}`
+/// naming `COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT` — the
+/// trajectory-termination half of the same mswea contract the gen-2
+/// `transcript_render` repair completed. Declaring it changes the
+/// sealed document and therefore the baseline identity — gen-3
+/// supersedes gen-2 append-only; the envelope is unchanged.
+pub fn sweep_baseline_doc_p4_gen3() -> hharness_hir::document::HirDocument {
+    sweep_baseline_doc_p4_gen(P4DocGen::G3)
+}
+
 /// The baseline-doc generation: `G1` reproduces the frozen artifact;
-/// `G2` declares the repaired `transcript_render` fidelity set.
+/// `G2` declares the repaired `transcript_render` fidelity set; `G3`
+/// additionally declares the `control_strategy` submission contract.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum P4DocGen {
     /// The frozen generation-1 authoring (superseded — kept for
     /// byte-identical recompute of the committed gen-1 records).
     G1,
     /// The repaired generation-2 authoring (the full replay-fidelity
-    /// set — the window's current baseline).
+    /// set — superseded; kept for byte-identical recompute of the
+    /// committed gen-2 records).
     G2,
+    /// The generation-3 authoring — gen-2 plus the declared submission
+    /// marker contract (the window's current baseline).
+    G3,
 }
 
 fn sweep_baseline_doc_p4_gen(gen: P4DocGen) -> hharness_hir::document::HirDocument {
@@ -818,8 +847,16 @@ fn sweep_baseline_doc_p4_gen(gen: P4DocGen) -> hharness_hir::document::HirDocume
             "instance_template".to_string(),
             Json::str("$param:instance_template"),
         );
-        if gen == P4DocGen::G2 {
+        if gen != P4DocGen::G1 {
             declare_full_transcript_fidelity(mp);
+        }
+    }
+    // G3 — the `control_strategy` slot declares the ws1 submission
+    // contract: the bare `submit` preset's marker detection stays
+    // dormant without it (`marker: None`).
+    if gen == P4DocGen::G3 {
+        if let Some(SlotBindings::One(cs)) = a.slots.get_mut("control_strategy") {
+            declare_mswea_control_contract(cs);
         }
     }
     // V7 — the tool surface, declared at `values` (the fixture has no
@@ -897,6 +934,33 @@ fn declare_full_transcript_fidelity(mp: &mut SlotBinding) {
         .or_insert_with(|| Json::str("drop"));
     trm.entry("tool_arguments".to_string())
         .or_insert_with(|| Json::str("verbatim"));
+}
+
+/// `declare_mswea_control_contract(cs)` — the gen-3 `control_strategy`
+/// repair: the parameter set the ws1 authored doc (`c451ed97`, the
+/// recorded G-L1 pass) declares verbatim. Every member decodes through
+/// the admitted `strategy_params_overlay` set — `stop_rule`'s
+/// `submit{marker, line, require_returncode}` object arms the marker
+/// detection the bare `submit` preset leaves dormant; the rest state
+/// the preset's values explicitly (the authored contract is declared,
+/// never inferred).
+fn declare_mswea_control_contract(cs: &mut SlotBinding) {
+    let p = &mut cs.params;
+    p.insert("completion_surface".to_string(), Json::str("none"));
+    p.insert("format_failure_scope".to_string(), Json::str("batch"));
+    p.insert("max_consecutive_format_errors".to_string(), Json::Int(3));
+    p.insert(
+        "stop_rule".to_string(),
+        Json::obj([(
+            "submit",
+            Json::obj([
+                ("line", Json::str("first")),
+                ("marker", Json::str("COMPLETE_TASK_AND_SUBMIT_FINAL_OUTPUT")),
+                ("require_returncode", Json::Int(0)),
+            ]),
+        )]),
+    );
+    p.insert("tool_batch_mode".to_string(), Json::str("sequential"));
 }
 
 /// The pass-2 seeded store — the first-pass classes plus
@@ -1020,6 +1084,30 @@ pub fn seal_p4_levels(work_dir: &Path) -> Result<P4Materialization, SweepRefusal
 /// never an in-place edit of the frozen gen-1 artifacts.
 pub fn seal_p4_levels_gen2(work_dir: &Path) -> Result<P4Materialization, SweepRefusal> {
     seal_p4_levels_over(work_dir, &sweep_baseline_doc_p4_gen2())
+}
+
+/// `seal_p4_levels_gen3(work_dir)` — the same chain over the gen-3
+/// authored baseline (gen-2's fidelity set plus the declared
+/// `control_strategy` submission-marker contract; R7.3 G-L1 gen-2
+/// trajectory-divergence repair). A new baseline identity and new
+/// level refs — never an in-place edit of either superseded
+/// generation's committed artifacts.
+pub fn seal_p4_levels_gen3(work_dir: &Path) -> Result<P4Materialization, SweepRefusal> {
+    seal_p4_levels_over(work_dir, &sweep_baseline_doc_p4_gen3())
+}
+
+/// `seal_p4_levels_doc_gen(work_dir, doc_gen)` — the inputs-manifest
+/// selector (`doc_gen ∈ {2,3}`; generation 1's reproducer is
+/// [`seal_p4_levels`] and stays its own path).
+pub fn seal_p4_levels_doc_gen(
+    work_dir: &Path,
+    doc_gen: u32,
+) -> Result<P4Materialization, SweepRefusal> {
+    match doc_gen {
+        2 => seal_p4_levels_gen2(work_dir),
+        3 => seal_p4_levels_gen3(work_dir),
+        other => panic!("p4 doc_gen {other} — admitted: 2, 3"),
+    }
 }
 
 /// `seal_p4_levels_over(work_dir, authored)` — the shared chain over

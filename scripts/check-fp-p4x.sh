@@ -21,8 +21,18 @@ mkdir -p "$REPO/scripts/gce-backend/declarations" \
          "$REPO/docs/build/reports/live"
 cp scripts/fp-p4x-inputs.txt "$REPO/scripts/"
 cp scripts/fp-p4x-inputs-gen2.txt "$REPO/scripts/"
+cp scripts/fp-p4x-inputs-gen3.txt "$REPO/scripts/"
 cp scripts/gce-backend/declarations/fp-p4x.json \
    "$REPO/scripts/gce-backend/declarations/"
+# The declaration moved after the gen-1/gen-2 mints (the runner.commit
+# repoints, 6ece081f): the committed gen-1 and gen-2
+# `hh-p4-x-quote-inputs/1` records cite the pre-repoint bytes. The
+# pinned copy (`fp-p4x-4b04440e.json`, sha 4b04440e… — the exact bytes
+# the records cite) preserves the cited input; the gen-1/gen-2 emit
+# legs run over it at the cited path, and the live declaration returns
+# for the gen-3 leg.
+cp scripts/gce-backend/declarations/fp-p4x-4b04440e.json \
+   "$REPO/scripts/gce-backend/declarations/fp-p4x.json.pinned"
 cp docs/build/reports/live/pricing.json "$REPO/docs/build/reports/live/"
 for f in \
   2026-11-20-fp-p4-sweep-registry.json \
@@ -34,14 +44,20 @@ for f in \
   cp "docs/build/reports/$f" "$REPO/docs/build/reports/"
 done
 # The gen-2 legs (R7.3): the superseding inputs + the gen-1 prereg
-# the lineage cite recomputes against.
+# the lineage cite recomputes against. The gen-3 legs additionally
+# read the committed gen-3 x2 records and cite the gen-2 prereg.
 for f in \
   2026-11-21-fp-p4-sweep-registry.json \
   2026-11-21-fp-p4-levels.json \
   2026-11-21-fp-p4-w-rule.json \
   2026-11-21-fp-p4-admissibility.json \
   2026-11-20-fp-p4x-prereg.json \
-  2026-11-20-fp-p4x-quote.json; do
+  2026-11-20-fp-p4x-quote.json \
+  2026-11-21-fp-p4-sweep-registry-gen3.json \
+  2026-11-21-fp-p4-levels-gen3.json \
+  2026-11-21-fp-p4-w-rule-gen3.json \
+  2026-11-21-fp-p4-admissibility-gen3.json \
+  2026-11-21-fp-p4x-prereg.json; do
   cp "docs/build/reports/$f" "$REPO/docs/build/reports/"
 done
 
@@ -180,6 +196,12 @@ print('shape OK: envelope 24 + 440 executable slots, V8/V9 withheld')
 PY
 
 echo "== leg 4: GATE-G35 quote — compute + comparative recompute =="
+# The gen-1/gen-2 quote-inputs records cite the pre-repoint
+# declaration — stage the pinned bytes at the cited path for the
+# recompute legs (the priced envelope is identical across repoints;
+# only runner.commit moved).
+cp "$REPO/scripts/gce-backend/declarations/fp-p4x.json.pinned" \
+   "$REPO/scripts/gce-backend/declarations/fp-p4x.json"
 # The declaration validates through the closed-schema validator.
 python3 -I scripts/gce-backend/validate_decl.py \
   scripts/gce-backend/declarations/fp-p4x.json
@@ -347,7 +369,96 @@ print('gen-2 prereg OK:', sha('docs/build/reports/2026-11-21-fp-p4x-prereg.json'
       '— envelope verbatim, baseline moved')
 PY
 
-echo "== leg 8: lab acceptance batteries =="
+echo "== leg 8: gen-3 (R7.3) — supersede recomputes byte-identical =="
+# The superseding generation-3 mint: the same envelope over the
+# baseline carrying the control_strategy submission contract; the
+# emitted prereg and the byte-pinned rule recompute byte-identical.
+HH_FP_P4X_INPUTS=scripts/fp-p4x-inputs-gen3.txt \
+  "$BIN" supersede "$REPO" >/dev/null
+cmp -s "docs/build/reports/2026-11-21-fp-p4x-prereg-gen3.json" \
+  "$REPO/docs/build/reports/2026-11-21-fp-p4x-prereg-gen3.json" || {
+  echo "FAIL: gen-3 prereg does not recompute byte-identical"; exit 1; }
+cmp -s "docs/build/reports/2026-11-20-fp-p4x-selection-rule.json" \
+  "$REPO/docs/build/reports/2026-11-20-fp-p4x-selection-rule.json" || {
+  echo "FAIL: selection rule not byte-identical"; exit 1; }
+# The comparative quote re-emits byte-identical at its gen-1 path
+# (the priced envelope is unchanged); the inputs record mints gen-3.
+# The gen-3 record cites the live declaration — restore it at the
+# cited path first.
+cp scripts/gce-backend/declarations/fp-p4x.json \
+   "$REPO/scripts/gce-backend/declarations/fp-p4x.json"
+HH_FP_P4X_INPUTS=scripts/fp-p4x-inputs-gen3.txt \
+  "$QBIN" emit "$REPO" >/dev/null
+cmp -s "docs/build/reports/2026-11-20-fp-p4x-quote.json" \
+  "$REPO/docs/build/reports/2026-11-20-fp-p4x-quote.json" || {
+  echo "FAIL: gen-3 quote not byte-identical"; exit 1; }
+cmp -s "docs/build/reports/2026-11-21-fp-p4x-quote-inputs-gen3.json" \
+  "$REPO/docs/build/reports/2026-11-21-fp-p4x-quote-inputs-gen3.json" || {
+  echo "FAIL: gen-3 quote-inputs does not recompute byte-identical"; exit 1; }
+echo "gen-3 supersede-identical OK"
+
+echo "== leg 9: gen-3 sha256 sidecars =="
+for f in \
+  2026-11-21-fp-p4x-prereg-gen3.sha256 \
+  2026-11-21-fp-p4x-quote-inputs-gen3.sha256; do
+  shasum -a 256 -c "docs/build/reports/$f"
+done
+
+echo "== leg 10: gen-3 prereg shape — lineage + envelope parity =="
+python3 - <<'PY'
+import json, hashlib
+
+def sha(p):
+    return 'sha256:' + hashlib.sha256(open(p,'rb').read()).hexdigest()
+
+g3 = json.loads(open('docs/build/reports/2026-11-21-fp-p4x-prereg-gen3.json').read())
+g2 = json.loads(open('docs/build/reports/2026-11-21-fp-p4x-prereg.json').read())
+reg = json.loads(open('docs/build/reports/2026-11-21-fp-p4-sweep-registry-gen3.json').read())
+
+assert g3['schema'] == 'hh-p4-x-prereg/1'
+assert g3['ticket'] == '329_R7.3'
+# The lineage cite binds the gen-2 record's actual bytes.
+s = g3['supersedes']
+assert s['prior'] == 'docs/build/reports/2026-11-21-fp-p4x-prereg.json'
+assert s['prior_sha256'] == sha(s['prior'])
+assert s['byte_untouched'] is True
+assert 'control_strategy' in s['reason']
+assert 'supersedes' in g2, 'the gen-2 record keeps its lineage cite'
+assert 'postdates GATE-G35' in g3['predates']
+# The registry citation binds the gen-3 registry.
+assert g3['registry']['sha256'] == reg['frozen_sha256']
+assert g3['registry']['exploration_identity'] == reg['exploration_identity']
+assert g3['baseline']['baseline_ref'] != g2['baseline']['baseline_ref']
+
+def strip(o):
+    if isinstance(o, dict):
+        return {k: strip(v) for k, v in o.items()
+                if k not in ('ref', 'version_id', 'artifact_ref', 'experiment_id')}
+    if isinstance(o, list):
+        return [strip(v) for v in o]
+    return o
+assert strip(g3['design']) == strip(g2['design']), 'design verbatim modulo digests'
+for member in ['envelope', 'tasks', 'withheld', 'stop_rules',
+               'selection_rule', 'selection_rule_sha256', 'estimators',
+               'labels', 'combine_declaration', 'selection_packet',
+               'integrity', 'expected_outcome', 'spend', 'cohort']:
+    assert g3[member] == g2[member], member
+assert g3['w']['outcome'] == g2['w']['outcome']
+assert g3['w']['verbatim'] == g2['w']['verbatim']
+# The quote-inputs record cites the gen-3 prereg by hash.
+qi = json.loads(open('docs/build/reports/2026-11-21-fp-p4x-quote-inputs-gen3.json').read())
+assert qi['records']['prereg']['path'] == \
+    'docs/build/reports/2026-11-21-fp-p4x-prereg-gen3.json'
+assert qi['records']['prereg']['sha256'] == \
+    hashlib.sha256(open(qi['records']['prereg']['path'], 'rb').read()).hexdigest()
+assert qi['records']['compute_quote']['quote_id'] == 'pq-59a49747bfa5bdf0'
+assert qi['envelope']['x0_slots'] == 24 and qi['envelope']['x1_slots'] == 440
+assert {w['level_id'] for w in qi['envelope']['withheld']} == {'V8', 'V9'}
+print('gen-3 prereg OK:', sha('docs/build/reports/2026-11-21-fp-p4x-prereg-gen3.json')[:24],
+      '— envelope verbatim, baseline moved')
+PY
+
+echo "== leg 11: lab acceptance batteries =="
 cargo test -q -p hharness-lab --test r7_2 -- --test-threads=1
 cargo test -q -p hharness-lab --test r7_3 -- --test-threads=1
 cargo test -q -p hharness-lab --test r7_1 -- --test-threads=1

@@ -337,15 +337,18 @@ fn emit(repo: &Path, inputs: &BTreeMap<String, String>) {
     let _ = std::fs::remove_dir_all(&work);
 }
 
-/// `supersede <repo-root>` — the R7.3 generation-2 mint (manifest 329):
-/// the same `emit` shape over the **gen-2** authored baseline — the
-/// `transcript_render` repair the G-L1 rerun-4 divergence diagnosed —
-/// writing the four records at the inputs manifest's gen-2 relpaths,
-/// each carrying a `supersedes` lineage cite (`prior` path +
-/// recomputed `prior_sha256` + the manifest's `supersedes_reason` +
-/// `byte_untouched: true`). The gen-1 records stay byte-untouched;
-/// `emit` keeps reproducing them (a superseded generation's
-/// reproducer is never deleted — the `fp-sweep correct` precedent).
+/// `supersede <repo-root>` — the R7.3 superseding mint (manifest 329):
+/// the same `emit` shape over the authored baseline the inputs
+/// manifest's `doc_gen` selects (absent ⇒ 2; a gen-3 manifest declares
+/// `doc_gen=3` — the `control_strategy` submission-contract repair the
+/// gen-2 G-L1 battery's trajectory divergence diagnosed) — writing the
+/// four records at the manifest's relpaths, each carrying a
+/// `supersedes` lineage cite (`prior` path + recomputed `prior_sha256`
+/// + the manifest's `supersedes_reason` + `byte_untouched: true`). The
+/// superseded generations' records stay byte-untouched; `emit` keeps
+/// reproducing gen-1 and `supersede` with the gen-2 manifest keeps
+/// reproducing gen-2 (a superseded generation's reproducer is never
+/// deleted — the `fp-sweep correct` precedent).
 /// Deterministic — same inputs, byte-identical outputs.
 fn supersede(repo: &Path, inputs: &BTreeMap<String, String>) {
     use hharness_lab::p4::*;
@@ -386,11 +389,18 @@ fn supersede(repo: &Path, inputs: &BTreeMap<String, String>) {
     let wr = w_rule(&peaks);
     let withheld_composites = matches!(wr.outcome, WOutcome::WithheldInertAtAdmissibleWindow);
 
-    let work = std::env::temp_dir().join(format!("p4-adm-g2-{}", std::process::id()));
+    // `doc_gen` — the authored-document generation the mint seals
+    // (default 2 — the gen-2 inputs manifest omits it; a gen-3
+    // manifest declares `doc_gen=3` and its own relpaths/lineage).
+    let doc_gen: u32 = inputs
+        .get("doc_gen")
+        .map(|s| s.parse().unwrap_or_else(|_| panic!("doc_gen {s}")))
+        .unwrap_or(2);
+    let work = std::env::temp_dir().join(format!("p4-adm-g{doc_gen}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).unwrap();
-    let mat =
-        seal_p4_levels_gen2(&work).unwrap_or_else(|e| panic!("pass-2 gen-2 seal refused: {e}"));
+    let mat = seal_p4_levels_doc_gen(&work, doc_gen)
+        .unwrap_or_else(|e| panic!("pass-2 gen-{doc_gen} seal refused: {e}"));
 
     let pin_evidence = corpus
         .get("effort_pin_evidence")
@@ -574,9 +584,10 @@ fn supersede(repo: &Path, inputs: &BTreeMap<String, String>) {
 /// asserted: a doc that fails to re-produce its declared level_ref or
 /// the declared baseline_ref refuses, never a silently different doc.
 ///
-/// Emits the **current generation** — gen-2 (the `transcript_render`
-/// repair). The gen-1 sealed documents stay recoverable verbatim inside
-/// the committed gen-1 `hh-p4-levels/1` record.
+/// Emits the **current generation** — gen-3 (the `transcript_render`
+/// fidelity set plus the `control_strategy` submission-marker
+/// contract). The gen-1/gen-2 sealed documents stay recoverable
+/// verbatim inside their committed `hh-p4-levels/1` records.
 fn emit_docs(out_dir: &Path, inputs: &BTreeMap<String, String>) {
     use hharness_lab::p4::*;
     let _ = inputs;
@@ -584,7 +595,7 @@ fn emit_docs(out_dir: &Path, inputs: &BTreeMap<String, String>) {
     let _ = std::fs::remove_dir_all(&work);
     std::fs::create_dir_all(&work).unwrap();
     let mat =
-        seal_p4_levels_gen2(&work).unwrap_or_else(|e| panic!("pass-2 gen-2 seal refused: {e}"));
+        seal_p4_levels_gen3(&work).unwrap_or_else(|e| panic!("pass-2 gen-3 seal refused: {e}"));
     std::fs::create_dir_all(out_dir).unwrap();
     let base_doc = mat
         .baseline_json
