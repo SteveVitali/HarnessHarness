@@ -95,7 +95,7 @@
   },
   "runner": {
     "build": "source",
-    "commit": "05199a94154bf3577c1ba51e01d173b102e9e41f"
+    "commit": "b5f887341b650925955c9e664fcd7455c6c2e1f6"
   },
   "schema": "hh-compute-decl/1",
   "service_account": "none",
