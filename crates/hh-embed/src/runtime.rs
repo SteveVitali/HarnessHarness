@@ -3441,9 +3441,20 @@ pub fn probe_uname_slots(
                     cap.capability_ref.version_id.clone(),
                 ),
                 effect: cap.declared.clone(),
+                // R7.3 (manifest 329) — the probe's `argv` spelling: the
+                // executor arg contracts differ — the `local_host`
+                // `LocalExecutor` whitespace-splits `command` (no shell),
+                // while `hh-helper` runs `command` through `sh -c`; both
+                // exec `argv` verbatim. `/bin/sh -c` is the one spelling
+                // that runs the compound uname under every real executor
+                // (the replay double ignores args positionally).
                 args: Json::obj([(
-                    "command",
-                    Json::str("uname -s; uname -r; uname -v; uname -m"),
+                    "argv",
+                    Json::Arr(vec![
+                        Json::str("/bin/sh"),
+                        Json::str("-c"),
+                        Json::str("uname -s; uname -r; uname -v; uname -m"),
+                    ]),
                 )]),
                 env_handle_id: handle.to_string(),
                 attribution_token: token.clone(),

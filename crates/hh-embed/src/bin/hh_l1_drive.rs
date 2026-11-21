@@ -1057,6 +1057,35 @@ fn exec_arm_decl(surfaces_csv: &str, bash_surface_id: &Option<String>) -> Option
     }
 }
 
+/// `raw_observation(j)` — one `--obs` entry decoded to the replay
+/// queue's triple (R7.3, manifest 329): `l1-raws` emits an explicit
+/// `"exception_info": null` member on every recorded observation —
+/// a present-but-null member must decode to `None`, never
+/// `Some(Json::Null)`: `execute_replay` maps any `Some` to
+/// `ToolError{Timeout}`, which poisoned every replayed observation
+/// (the uname probe's own positional serve included) into a reported
+/// timeout before the first request rendered.
+fn raw_observation(j: &Json) -> RawObservation {
+    RawObservation {
+        output: j
+            .get("output")
+            .and_then(Json::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        returncode: j
+            .get("returncode")
+            .and_then(Json::as_int)
+            .unwrap_or_default(),
+        exception_info: j.get("exception_info").and_then(|v| {
+            if matches!(v, Json::Null) {
+                None
+            } else {
+                Some(v.clone())
+            }
+        }),
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let store_root = PathBuf::from(req_arg(&args, "--store-root"));
@@ -1091,23 +1120,7 @@ fn main() {
     let raws: Option<Vec<RawObservation>> = if mode == "obs_replay" {
         let p = req_arg(&args, "--obs");
         match read_json_file(&p) {
-            Ok(Json::Arr(items)) => Some(
-                items
-                    .iter()
-                    .map(|j| RawObservation {
-                        output: j
-                            .get("output")
-                            .and_then(Json::as_str)
-                            .unwrap_or_default()
-                            .to_string(),
-                        returncode: j
-                            .get("returncode")
-                            .and_then(Json::as_int)
-                            .unwrap_or_default(),
-                        exception_info: j.get("exception_info").cloned(),
-                    })
-                    .collect(),
-            ),
+            Ok(Json::Arr(items)) => Some(items.iter().map(raw_observation).collect()),
             other => {
                 eprintln!("--obs must be a JSON array ({other:?})");
                 std::process::exit(2)
@@ -1616,5 +1629,25 @@ mod tests {
             "provider_specific_fields",
         );
         assert!(format!("{e:?}").contains("transport `stream`"));
+    }
+
+    // R7.3 — `l1-raws` emits `"exception_info": null` on every row; a
+    // present-but-null member must decode `None` — `execute_replay`
+    // maps any `Some` to `ToolError{Timeout}`, poisoning the replayed
+    // sequence (and the uname probe's positional serve) into timeouts.
+    #[test]
+    fn raw_observation_null_exception_info_decodes_absent() {
+        let j = parse("{\"output\":\"o\\nn\\nm\\nm\\n\",\"returncode\":0,\"exception_info\":null}")
+            .unwrap();
+        let r = raw_observation(&j);
+        assert!(r.exception_info.is_none());
+        assert_eq!(r.returncode, 0);
+        // a recorded exception channel survives verbatim
+        let j2 = parse(
+            "{\"output\":\"x\",\"returncode\":-1,\"exception_info\":{\"detail\":\"killed\"}}",
+        )
+        .unwrap();
+        let r2 = raw_observation(&j2);
+        assert!(r2.exception_info.is_some());
     }
 }

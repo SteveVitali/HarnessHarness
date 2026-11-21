@@ -275,9 +275,17 @@ impl ToolExecutor for UnameExec {
         request: &ExecutionRequest,
         sink: &mut dyn FnMut(ExecutorSignal),
     ) -> Result<TerminalReport, EnvError> {
+        // R7.3 — the probe spells its exec `argv`-form
+        // (`/bin/sh -c "uname -s; …"`): `LocalExecutor`
+        // whitespace-splits `command` while `hh-helper` shells it —
+        // `argv` is the portable spelling both exec verbatim.
         assert_eq!(
-            request.args.get("command").and_then(Json::as_str),
-            Some("uname -s; uname -r; uname -v; uname -m")
+            request.args.get("argv"),
+            Some(&Json::Arr(vec![
+                Json::str("/bin/sh"),
+                Json::str("-c"),
+                Json::str("uname -s; uname -r; uname -v; uname -m"),
+            ]))
         );
         sink(ExecutorSignal {
             token: request.attribution_token.clone(),
