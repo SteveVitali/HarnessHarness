@@ -9,8 +9,11 @@ before the first native slot (REQ-XH-124 — every P4X arm rides the
 native `hh-l1-drive --mode live` lane, so the hold binds all eight
 executable arms), then dispatches the seeded `random_permuted`
 schedule — X0's 3 tasks × 1 replicate × 8 arms and X1's 11 band-A
-tasks × k=5 × 8 arms in five rounds — at the declaration's C=4
-concurrency, unit-atomic under the dead-man cut-off, with the
+tasks × k=5 × 8 arms in five rounds — at the declaration's C=4 slot
+concurrency with the (task, replicate) unit as the schedule atom
+(its 8 members dispatch contiguously in arm order, admitting
+member-wise as C slots free — a literal same-instant admit cannot
+hold 8 > C and is not what the seeded order requires), with the
 round-2 continuation checkpoint folded to `hh-fp-checkpoint/1`.
 
 The arm surface is the sealed P4 level set: `baseline` plus V1–V7,
@@ -639,8 +642,11 @@ def main():
                        P_HAT_PRIOR[m["arm"]]) for m in rem)
         tmax = max((est(measured_walls[a_], T_HAT_PRIOR[a_])
                     for a_ in arms), default=1)
-        units_in_flight = max(1, a.concurrency // len(arms)) or 1
-        wall_ms = len(remaining_units) * tmax / units_in_flight
+        # member-slot makespan — the remaining slots at the slowest
+        # arm's t̂ spread over C slot capacity (the P4X unit is 8
+        # members > C; units dispatch member-wise in order, so the
+        # makespan is a slot count, not a unit count).
+        wall_ms = len(rem) * tmax / max(1, a.concurrency)
         deadline_ms = max(0, (a.dead_man_epoch - time.time()
                               - a.harvest_reserve_s) * 1000)
         fits = (cost + consumed <= a.model_budget_micros
@@ -649,7 +655,7 @@ def main():
                 f"{a.slot_prefix}-round-{a.checkpoint_round}",
                 "consumed_micros": consumed,
                 "projection": {"remaining_cost_micros": int(cost),
-                               "remaining_wall_ms": int(wall),
+                               "remaining_wall_ms": int(wall_ms),
                                "room_ms": int(deadline_ms)},
                 # the frozen design drops nothing — a misfit stops
                 # the batch at the budget class, verbatim.
@@ -687,11 +693,36 @@ def main():
                             if m["arm"] not in held_arms]
             if not live_members:
                 continue
-            # unit-atomic capacity admit — a unit never splits
-            while len(running) + len(live_members) > a.concurrency:
-                reap()
-                time.sleep(2.0)
+            # unit-ordered dispatch under C — the unit stays the
+            # schedule atom: all of its members dispatch, contiguously
+            # in arm order, before any member of a later unit (a unit
+            # never interleaves with another). A P4X unit carries 8
+            # members > C=4, so members admit one at a time as a slot
+            # frees — capacity gates in-flight slots, never the unit's
+            # membership. A member whose own deadline no longer fits
+            # withholds honestly; already-launched members settle.
             for m in live_members:
+                while len(running) >= a.concurrency:
+                    reap()
+                    # the native-lane hold: first-3 native slots
+                    # settled, any infra-failed → withhold every arm
+                    # (REQ-XH-124)
+                    if not native_held and len(infra_native) >= 3 \
+                            and any(infra_native):
+                        native_held = True
+                        held_arms = {
+                            a_: "withheld{admission:native_lane_hold}"
+                            for a_ in arms}
+                    time.sleep(2.0)
+                if stopped is not None:
+                    withhold(u, m, stopped)
+                    continue
+                if m["arm"] in held_arms:
+                    withhold(u, m, held_arms[m["arm"]])
+                    continue
+                if not slot_deadline_fits():
+                    withhold(u, m, "withheld{window_deadline}")
+                    continue
                 sd = os.path.join(slots_dir, m["slot_id"])
                 p, lf = launch_member(a, sess, m, sd)
                 if p is None:
@@ -699,15 +730,14 @@ def main():
                              "withheld{corpus_infra:launch}")
                 else:
                     running[m["slot_id"]] = (p, lf, m, sd, time.time())
-            # the native-lane hold: first-3 native slots settled, any
-            # infra-failed → withhold every arm (REQ-XH-124)
-            if not native_held and len(infra_native) >= 3:
-                if any(infra_native):
+                # post-launch infra probe + harvest of finished slots
+                if not native_held and len(infra_native) >= 3 \
+                        and any(infra_native):
                     native_held = True
                     held_arms = {
                         a_: "withheld{admission:native_lane_hold}"
                         for a_ in arms}
-            reap()
+                reap()
     while running:
         reap()
         time.sleep(3.0)
