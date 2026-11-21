@@ -1419,6 +1419,20 @@ class Guard:
         # expected classes: check|file|message-signature, one emitted warning each
         expected = {}
         for entry in bdata.get("legacy", []):
+            res = entry.get("resolved")
+            if res is not None:
+                # dated resolved-by-repair record: the diagnostic legitimately
+                # ceased emitting because its subject was repaired; the entry
+                # stays in the baseline for history, never cleared
+                if not (isinstance(res, dict) and res.get("date")
+                        and res.get("reason") and res.get("provenance")):
+                    self.err("baseline",
+                             "legacy resolved member lacks date/reason/provenance")
+                    continue
+                self.note("baseline",
+                          f"resolved-by-repair {res.get('date')}: "
+                          f"{res.get('reason', '')[:80]}")
+                continue
             cur = entry.get("current") or entry.get("baseline") or {}
             sig = self.warn_signature(cur.get("check", ""), cur.get("file", ""),
                                       cur.get("message", ""))

@@ -699,7 +699,7 @@ fn spawn_exec(
                 // inherits the cell's configured WORKDIR — the image/
                 // cell-spec value, never a host path), and a declared
                 // `deadline_ms` wraps the in-cell argv in
-                // `setsid timeout --kill-after` so the deadline's kill
+                // `setsid --wait timeout --kill-after` so the deadline's kill
                 // reaches the whole in-container process tree (the
                 // host-side pgid kill's reach is UNVERIFIED — the in-cell
                 // ladder is the enforcement-of-record; the helper's own

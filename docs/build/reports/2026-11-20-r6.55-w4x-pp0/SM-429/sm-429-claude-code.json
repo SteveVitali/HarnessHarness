@@ -1,0 +1,22 @@
+{
+ "agent_end_cause": "agent_timeout",
+ "arm_run_rc": 0,
+ "checks": {
+  "AG3": "fail",
+  "AG5": "pass",
+  "AG6": "pass",
+  "AG8": "pass"
+ },
+ "cost_attributed_count": 0,
+ "denied_hosts": [],
+ "endpoint_errors": [],
+ "harness": "claude-code",
+ "native_log_bytes": 13676,
+ "outcome": "withheld{sealed_until_results}",
+ "receipt_count": 9,
+ "schema": "hh-pp0-ag-evidence/1",
+ "task": "hh-smoke/write-file",
+ "trial_ref": "smoke/SM-429/sm-429-claude-code",
+ "unexpected_denied": [],
+ "variant": "SM-429"
+}

@@ -1,0 +1,61 @@
+{
+ "dataset": {
+  "contamination_scan_ref": "docs/build/reports/2026-11-19-fp-contamination-scan.json",
+  "revision": "a11591e931442908c34a5bc7a65e8e664f4752d7",
+  "secret_scan_ref": "docs/build/reports/2026-11-19-fp-answer-scan.json",
+  "visibility": "public"
+ },
+ "dataset_card_ref": {
+  "path": "docs/build/reports/2026-11-19-fp-dataset-card.md",
+  "sha256": "50c417b3c252bafffdae7f460e6d83572ef197fec6d313f0b7cd8d3e7212737a"
+ },
+ "dataset_flip": "done{human_h17:2026-11-19T04:23Z}",
+ "gate_row": "317 GATE-G31 (317_GATE-G31__pub-fp.md)",
+ "inputs": [
+  {
+   "path": "docs/build/reports/2026-11-19-fp-w4-results-p4-fp-frozen.json",
+   "sha256": "59a2b3656a4bd782b040230115ec4bce86e946c9ab0f139a83836e491255fbb2"
+  }
+ ],
+ "inputs_digest": "sha256:c62475cb8a1c18a4ee42c14cd49f214e7d8f38b2432a1c0d8b3413113bf19f7a",
+ "labels": {
+  "evidence_class": "recorded execution",
+  "outside_verified": false
+ },
+ "pages": [
+  "/phase-4/"
+ ],
+ "phase": "phase-4",
+ "readout": "docs/build/readouts/GATE-G31.md",
+ "recorded_at": "2026-11-20",
+ "scan_refs": [
+  {
+   "path": "docs/build/reports/2026-11-19-fp-answer-scan.json",
+   "sha256": "f836343a99c056a0567fb2027fb4c9f9db0f90f6728765bc2cb75bddf0b13853"
+  },
+  {
+   "path": "docs/build/reports/2026-11-19-fp-contamination-scan.json",
+   "sha256": "421399fd7025375b288ce7cc01ecd8cde39bb75ee0942a8996e90647f8284cdd"
+  },
+  {
+   "path": "docs/build/reports/2026-11-19-fp-w4-answer-scan.json",
+   "sha256": "907f38d350dd0034b77fbdb6b6ed6cbad071b136209fba11c49bfd2215a42d88"
+  },
+  {
+   "path": "docs/build/reports/2026-11-19-fp-w4-flagged-review.json",
+   "sha256": "d56c0d91c16cca6a98c307246598ff457e3f00ce9e06cbbe748de632e50d312e"
+  }
+ ],
+ "schema": "hh-site-publication/1",
+ "supersedes": "phase-4-2026-11-19-flip.json",
+ "supersession": {
+  "gate": "docs/adr/ADR-0452-w4-scope-amendment.md",
+  "reason": "ADR-0452's executed-W4 supersession \u2014 the phase pages re-pin to the W4 frozen packets folded over the executed evidence (HUMAN-H19 cleared 32/32 scan flags, 0 confirmed; the R6.50 pins stay append-only history)",
+  "review": {
+   "readout": "docs/build/readouts/HUMAN-H19.md",
+   "record": "docs/build/reports/2026-11-19-fp-w4-flagged-review.json",
+   "sha256": "d56c0d91c16cca6a98c307246598ff457e3f00ce9e06cbbe748de632e50d312e"
+  },
+  "ticket": "R6.54"
+ }
+}

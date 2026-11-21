@@ -510,13 +510,17 @@ if ev:
         if 'class="absent"' not in htmls[rel] \
                 and ph not in published_here:
             bad.append("%s renders non-absent with no packet/card" % rel)
-    # home channels: P2–P4 must be absent/withheld; P1 must not be
+    # home channels: P2–P4 must be absent/withheld (unpublished or the
+    # internal awaiting-gate stamp) or inconclusive (a published
+    # executed-W4 phase — landed values beside typed verdicts); P1 must
+    # not be
     home = htmls.get("index.html", "")
     for n in (2, 3, 4):
         m = re.search(r"P%d[^<]*</h3><p>(.*?)</p>" % n, home, re.S)
-        if m and not re.search(r'data-stamp="(absent|withheld)"',
+        if m and not re.search(r'data-stamp="(absent|withheld|inconclusive)"',
                                m.group(1)):
-            bad.append("home P%d channel not stamped absent/withheld" % n)
+            bad.append("home P%d channel not stamped "
+                       "absent/withheld/inconclusive" % n)
     m = re.search(r"P1[^<]*</h3><p>(.*?)</p>", home, re.S)
     if m and 'data-stamp="verified"' not in m.group(1) \
             and profile == "internal":

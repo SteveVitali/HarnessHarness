@@ -40,6 +40,10 @@ MANIFEST_REL = "docs/tickets/00_MANIFEST.md"
 # phase-2 stays gated until its own operator decision.
 PHASE_GATES = {
     "phase-1": "GATE-G22",
+    # phase-2's publication gate is GATE-G31 (README: "phase-2 first-pass"),
+    # extended to the publish decision by ADR-0453's verbatim operator ruling
+    # "Publish — same terms as G31" (2026-11-19).
+    "phase-2": "GATE-G31",
     "phase-3": "GATE-G31",
     "phase-4": "GATE-G31",
 }
@@ -199,7 +203,7 @@ def validate(doc, path, repo_root):
         # bare basename resolved inside the publication dir (the committed
         # -flip records use the basename form; repaired 2026-11-19).
         sup_rel = sup if isinstance(sup, str) and "/" in sup else (
-            PUB_DIR_REL + "/" + sup if isinstance(sup, str) else sup)
+            "%s/%s" % (PUB_DIR_REL, sup) if isinstance(sup, str) else sup)
         need(isinstance(sup_rel, str) and sup_rel.startswith(PUB_DIR_REL + "/"),
              "supersedes %r is not a docs/results/publication path" % sup)
         if isinstance(sup_rel, str):

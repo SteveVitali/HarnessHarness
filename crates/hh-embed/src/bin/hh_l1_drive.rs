@@ -604,12 +604,36 @@ fn apply_mswea_pack(
             _ => None,
         }
     }
-    fn patch_slots(slots: &mut Json, touched: &mut bool, pack_reasoning: &str) {
+    fn patch_slots(
+        slots: &mut Json,
+        touched: &mut bool,
+        pack_reasoning: &str,
+    ) -> Result<(), String> {
         let params = obj_mut(slots, "model_port")
             .and_then(|s| obj_mut(s, "one"))
             .and_then(|s| obj_mut(s, "params"));
-        let Some(params) = params else { return };
+        let Some(params) = params else { return Ok(()) };
         if let Json::Obj(pm) = params {
+            // R7.3 — the pack's lane contract is O's recorded wire:
+            // `non_stream` with the `stream` member absent. A doc that
+            // leaves `transport` undeclared decodes the default
+            // (`stream`); pin `non_stream` so the `stream_member:omit`
+            // arm below stays admissible. An explicit `stream`
+            // declaration cannot ride this surface — its wire would
+            // carry a member O never sent — refuse, never silently
+            // arm a lane the canon cannot match.
+            match pm.get("transport").and_then(Json::as_str) {
+                None => {
+                    pm.insert("transport".to_string(), Json::str("non_stream"));
+                }
+                Some("non_stream") => {}
+                Some(other) => {
+                    return Err(format!(
+                        "model_port.transport `{other}` cannot carry the mswea surface — \
+                         O's recorded lane is `non_stream`"
+                    ))
+                }
+            }
             pm.insert("model_surface".to_string(), Json::str("compiled"));
             // O's recording carries `reasoning_effort` — an extension
             // member `openai-compatible@1`'s plan_schema refuses by
@@ -623,7 +647,7 @@ fn apply_mswea_pack(
             // O's recorded request carries no `stream` member — the
             // family default emits `stream:false` (REQ-XE-107's
             // declared member-presence choice removes it; `transport`
-            // is already `non_stream`, so `omit` is admissible).
+            // is pinned `non_stream` above, so `omit` is admissible).
             pm.insert("stream_member".to_string(), Json::str("omit"));
             let pp = pm
                 .entry("provider_params".to_string())
@@ -650,11 +674,12 @@ fn apply_mswea_pack(
             }
             *touched = true;
         }
+        Ok(())
     }
     let mut touched = false;
     if let Some(asm) = doc.get_mut("assembly") {
         if let Some(slots) = obj_mut(asm, "slots") {
-            patch_slots(slots, &mut touched, pack_reasoning);
+            patch_slots(slots, &mut touched, pack_reasoning)?;
         }
     }
     if let Some(Json::Arr(items)) = doc.get_mut("nodes") {
@@ -670,7 +695,7 @@ fn apply_mswea_pack(
                     p.insert("profile_ref".to_string(), Json::str(coord.clone()));
                 }
                 if let Some(slots) = native.get_mut("slots") {
-                    patch_slots(slots, &mut touched, pack_reasoning);
+                    patch_slots(slots, &mut touched, pack_reasoning)?;
                 }
             }
         }
@@ -771,6 +796,13 @@ fn mswea_report_body(
     let mut probe_registry =
         hharness_registry::store::RegistryStore::open(probe_root.join("registry"), &kernel)
             .map_err(|e| format!("probe registry: {e:?}"))?;
+    // R7.3 (manifest 329) — the sealed P4 level docs pin the sweep
+    // store's variant version_ids (`hh/compactor` foremost); the
+    // Stage-1 seeds alone never carried them. Register the lab's
+    // pass-2 sweep records (one constructor home, CC1) so the probe
+    // resolve admits the sealed pins — no republish, the sealed docs
+    // resolve by version_id, never by name selector.
+    hharness_lab::p4::sweep_seed_into_p4(&mut probe_registry);
     let doc = hharness_hir::wire::document_from_json(doc_json)
         .map_err(|e| format!("derived doc parse: {e:?}"))?;
     let sealed = {
@@ -1025,6 +1057,35 @@ fn exec_arm_decl(surfaces_csv: &str, bash_surface_id: &Option<String>) -> Option
     }
 }
 
+/// `raw_observation(j)` — one `--obs` entry decoded to the replay
+/// queue's triple (R7.3, manifest 329): `l1-raws` emits an explicit
+/// `"exception_info": null` member on every recorded observation —
+/// a present-but-null member must decode to `None`, never
+/// `Some(Json::Null)`: `execute_replay` maps any `Some` to
+/// `ToolError{Timeout}`, which poisoned every replayed observation
+/// (the uname probe's own positional serve included) into a reported
+/// timeout before the first request rendered.
+fn raw_observation(j: &Json) -> RawObservation {
+    RawObservation {
+        output: j
+            .get("output")
+            .and_then(Json::as_str)
+            .unwrap_or_default()
+            .to_string(),
+        returncode: j
+            .get("returncode")
+            .and_then(Json::as_int)
+            .unwrap_or_default(),
+        exception_info: j.get("exception_info").and_then(|v| {
+            if matches!(v, Json::Null) {
+                None
+            } else {
+                Some(v.clone())
+            }
+        }),
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let store_root = PathBuf::from(req_arg(&args, "--store-root"));
@@ -1059,23 +1120,7 @@ fn main() {
     let raws: Option<Vec<RawObservation>> = if mode == "obs_replay" {
         let p = req_arg(&args, "--obs");
         match read_json_file(&p) {
-            Ok(Json::Arr(items)) => Some(
-                items
-                    .iter()
-                    .map(|j| RawObservation {
-                        output: j
-                            .get("output")
-                            .and_then(Json::as_str)
-                            .unwrap_or_default()
-                            .to_string(),
-                        returncode: j
-                            .get("returncode")
-                            .and_then(Json::as_int)
-                            .unwrap_or_default(),
-                        exception_info: j.get("exception_info").cloned(),
-                    })
-                    .collect(),
-            ),
+            Ok(Json::Arr(items)) => Some(items.iter().map(raw_observation).collect()),
             other => {
                 eprintln!("--obs must be a JSON array ({other:?})");
                 std::process::exit(2)
@@ -1217,6 +1262,23 @@ fn main() {
     // `exec` rides `open_session`'s params (not `spec`) — R6.38's arm
     // declaration for the definition's named ToolCapability surfaces.
     let exec_decl = exec_arm_decl(&surfaces_csv, &bash_surface_id);
+
+    // R7.3 (manifest 329) — pre-seed the session store's registry with
+    // the lab's pass-2 sweep records *before* `EmbedService::open`
+    // installs the Stage-1 seeds (idempotent on both sides — the check
+    // is the deterministic version_id). The sealed P4 level docs pin
+    // sweep version_ids the Stage-1 set never carried; session
+    // resolve/open would otherwise surface `RefUnresolved` for
+    // `hh/compactor` exactly as the probe did.
+    {
+        let seed_kernel = hharness_provenance::ProvenanceRecord::kernel("hh-l1-drive", 0);
+        let mut session_registry = hharness_registry::store::RegistryStore::open(
+            store_root.join("registry"),
+            &seed_kernel,
+        )
+        .expect("session registry opens for the p4 sweep seed");
+        hharness_lab::p4::sweep_seed_into_p4(&mut session_registry);
+    }
 
     let mut svc = match EmbedService::open(ServiceConfig {
         store_root: store_root.clone(),
@@ -1500,5 +1562,92 @@ mod tests {
             Some("provider_specific_fields")
         );
         assert_eq!(got("drop").as_deref(), Some("drop"));
+    }
+
+    // R7.3 — the pack pins `transport:"non_stream"` on a doc that
+    // leaves the member undeclared (the decode default is `stream`,
+    // which contradicted `stream_member:omit` at open_session — the
+    // p4x exact-H G-L1 rc=1 machinery failure). An explicit `stream`
+    // declaration refuses; `non_stream` is left verbatim.
+    #[test]
+    fn mswea_pack_pins_non_stream_transport() {
+        let dir = std::env::temp_dir().join(format!("l1-pack-tr-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("system_template.tmpl"), "sys {{instruction}}").unwrap();
+        std::fs::write(dir.join("instance_template.tmpl"), "inst {{task}}").unwrap();
+        let doc_with = |params: &str| {
+            parse(&format!(
+                "{{\"nodes\":[],\"assembly\":{{\"slots\":{{\"model_port\":{{\"one\":{{\"params\":{params}}}}}}}}}}}"
+            ))
+            .unwrap()
+        };
+        let transport_of = |d: &Json| {
+            d.get("assembly")
+                .and_then(|a| a.get("slots"))
+                .and_then(|s| s.get("model_port"))
+                .and_then(|p| p.get("one"))
+                .and_then(|p| p.get("params"))
+                .and_then(|p| p.get("transport"))
+                .and_then(Json::as_str)
+                .map(str::to_string)
+        };
+        let stream_member_of = |d: &Json| {
+            d.get("assembly")
+                .and_then(|a| a.get("slots"))
+                .and_then(|s| s.get("model_port"))
+                .and_then(|p| p.get("one"))
+                .and_then(|p| p.get("params"))
+                .and_then(|p| p.get("stream_member"))
+                .and_then(Json::as_str)
+                .map(str::to_string)
+        };
+        // undeclared transport → pinned non_stream + omit
+        let (d, _, _, _) = apply_mswea_pack(
+            &doc_with("{}"),
+            dir.to_str().unwrap(),
+            "m-test",
+            "provider_specific_fields",
+        )
+        .unwrap();
+        assert_eq!(transport_of(&d).as_deref(), Some("non_stream"));
+        assert_eq!(stream_member_of(&d).as_deref(), Some("omit"));
+        // declared non_stream stays
+        let (d, _, _, _) = apply_mswea_pack(
+            &doc_with("{\"transport\":\"non_stream\"}"),
+            dir.to_str().unwrap(),
+            "m-test",
+            "provider_specific_fields",
+        )
+        .unwrap();
+        assert_eq!(transport_of(&d).as_deref(), Some("non_stream"));
+        // declared stream refuses — the pack never silently arms a
+        // lane O's recording cannot match
+        let e = apply_mswea_pack(
+            &doc_with("{\"transport\":\"stream\"}"),
+            dir.to_str().unwrap(),
+            "m-test",
+            "provider_specific_fields",
+        );
+        assert!(format!("{e:?}").contains("transport `stream`"));
+    }
+
+    // R7.3 — `l1-raws` emits `"exception_info": null` on every row; a
+    // present-but-null member must decode `None` — `execute_replay`
+    // maps any `Some` to `ToolError{Timeout}`, poisoning the replayed
+    // sequence (and the uname probe's positional serve) into timeouts.
+    #[test]
+    fn raw_observation_null_exception_info_decodes_absent() {
+        let j = parse("{\"output\":\"o\\nn\\nm\\nm\\n\",\"returncode\":0,\"exception_info\":null}")
+            .unwrap();
+        let r = raw_observation(&j);
+        assert!(r.exception_info.is_none());
+        assert_eq!(r.returncode, 0);
+        // a recorded exception channel survives verbatim
+        let j2 = parse(
+            "{\"output\":\"x\",\"returncode\":-1,\"exception_info\":{\"detail\":\"killed\"}}",
+        )
+        .unwrap();
+        let r2 = raw_observation(&j2);
+        assert!(r2.exception_info.is_some());
     }
 }

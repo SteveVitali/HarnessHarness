@@ -1,0 +1,69 @@
+{
+ "dataset": {
+  "contamination_scan_ref": "docs/build/reports/2026-11-19-fp-contamination-scan.json",
+  "revision": "a11591e931442908c34a5bc7a65e8e664f4752d7",
+  "secret_scan_ref": "docs/build/reports/2026-11-19-fp-answer-scan.json",
+  "visibility": "public"
+ },
+ "dataset_card_ref": {
+  "path": "docs/build/reports/2026-11-19-fp-dataset-card.md",
+  "sha256": "50c417b3c252bafffdae7f460e6d83572ef197fec6d313f0b7cd8d3e7212737a"
+ },
+ "dataset_flip": "done{human_h17:2026-11-19T04:23Z}",
+ "gate_row": "317 GATE-G31 (317_GATE-G31__pub-fp.md)",
+ "inputs": [
+  {
+   "path": "docs/build/reports/compute/2026-11-18-fp-ws1-l1-conformance.json",
+   "sha256": "bdbb0bc93a66988947e7f1712f9c9c397ba6ebbb9642d568fcf29c594e763218"
+  },
+  {
+   "path": "docs/build/reports/2026-11-19-fp-w4-results-p3-l2-frozen.json",
+   "sha256": "de6081fca301813b740187bb7b7f26eb5f039524b7768e009d95f175398e1a00"
+  },
+  {
+   "path": "docs/build/reports/2026-11-19-fp-w4-l3-frozen.json",
+   "sha256": "bd0966eb5c7ba94b8bb182c2209bfb4f8103568951eb393c075fbc7031571295"
+  }
+ ],
+ "inputs_digest": "sha256:e0d68dc40a068cde18a410a65c191eb2effc3e1a01bd3baaad3af094ceb56b58",
+ "labels": {
+  "evidence_class": "recorded execution",
+  "outside_verified": false
+ },
+ "pages": [
+  "/phase-3/"
+ ],
+ "phase": "phase-3",
+ "readout": "docs/build/readouts/GATE-G31.md",
+ "recorded_at": "2026-11-20",
+ "scan_refs": [
+  {
+   "path": "docs/build/reports/2026-11-19-fp-answer-scan.json",
+   "sha256": "f836343a99c056a0567fb2027fb4c9f9db0f90f6728765bc2cb75bddf0b13853"
+  },
+  {
+   "path": "docs/build/reports/2026-11-19-fp-contamination-scan.json",
+   "sha256": "421399fd7025375b288ce7cc01ecd8cde39bb75ee0942a8996e90647f8284cdd"
+  },
+  {
+   "path": "docs/build/reports/2026-11-19-fp-w4-answer-scan.json",
+   "sha256": "907f38d350dd0034b77fbdb6b6ed6cbad071b136209fba11c49bfd2215a42d88"
+  },
+  {
+   "path": "docs/build/reports/2026-11-19-fp-w4-flagged-review.json",
+   "sha256": "d56c0d91c16cca6a98c307246598ff457e3f00ce9e06cbbe748de632e50d312e"
+  }
+ ],
+ "schema": "hh-site-publication/1",
+ "supersedes": "phase-3-2026-11-19-flip.json",
+ "supersession": {
+  "gate": "docs/adr/ADR-0452-w4-scope-amendment.md",
+  "reason": "ADR-0452's executed-W4 supersession \u2014 the phase pages re-pin to the W4 frozen packets folded over the executed evidence (HUMAN-H19 cleared 32/32 scan flags, 0 confirmed; the R6.50 pins stay append-only history)",
+  "review": {
+   "readout": "docs/build/readouts/HUMAN-H19.md",
+   "record": "docs/build/reports/2026-11-19-fp-w4-flagged-review.json",
+   "sha256": "d56c0d91c16cca6a98c307246598ff457e3f00ce9e06cbbe748de632e50d312e"
+  },
+  "ticket": "R6.54"
+ }
+}

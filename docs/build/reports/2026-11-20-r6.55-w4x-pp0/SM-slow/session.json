@@ -1,0 +1,20 @@
+{
+ "grants": {
+  "sm-slow-claude-code": {
+   "effort": "high",
+   "slice_micros": 850000,
+   "slot_token": "790e7c4b47e90e5399d2cc08b4f09406"
+  },
+  "sm-slow-pi": {
+   "effort": "high",
+   "slice_micros": 850000,
+   "slot_token": "bd81674eabe26d1572935b7100fb877f"
+  }
+ },
+ "listen": "127.0.0.1:49183",
+ "mode": "replay",
+ "registered_at": "2026-11-20T01:31:38Z",
+ "run_id": "w4x-pp0-r5-sm-slow",
+ "schema": "hh-w2-proxy-session/1",
+ "store_root": "store"
+}

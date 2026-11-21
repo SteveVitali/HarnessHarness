@@ -1,0 +1,163 @@
+2026-11-20T02:04:10.505Z [DEBUG] Writing to temp file: /logs/agent/sessions/.claude.json.tmp.47.1795140250505
+2026-11-20T02:04:10.506Z [DEBUG] Preserving file permissions: 100644
+2026-11-20T02:04:10.508Z [DEBUG] Temp file written successfully, size: 84 bytes
+2026-11-20T02:04:10.508Z [DEBUG] Applied original permissions to temp file
+2026-11-20T02:04:10.508Z [DEBUG] Renaming /logs/agent/sessions/.claude.json.tmp.47.1795140250505 to /logs/agent/sessions/.claude.json
+2026-11-20T02:04:10.508Z [DEBUG] File /logs/agent/sessions/.claude.json written atomically
+2026-11-20T02:04:10.508Z [DEBUG] [init] configureGlobalMTLS starting
+2026-11-20T02:04:10.508Z [DEBUG] [init] configureGlobalMTLS complete
+2026-11-20T02:04:10.508Z [DEBUG] [init] configureGlobalAgents starting
+2026-11-20T02:04:10.509Z [DEBUG] [init] configureGlobalAgents complete
+2026-11-20T02:04:10.514Z [DEBUG] Writing to temp file: /logs/agent/sessions/.claude.json.tmp.47.1795140250514
+2026-11-20T02:04:10.514Z [DEBUG] Preserving file permissions: 100644
+2026-11-20T02:04:10.514Z [DEBUG] Temp file written successfully, size: 120 bytes
+2026-11-20T02:04:10.514Z [DEBUG] Applied original permissions to temp file
+2026-11-20T02:04:10.514Z [DEBUG] Renaming /logs/agent/sessions/.claude.json.tmp.47.1795140250514 to /logs/agent/sessions/.claude.json
+2026-11-20T02:04:10.515Z [DEBUG] File /logs/agent/sessions/.claude.json written atomically
+2026-11-20T02:04:10.516Z [DEBUG] Writing to temp file: /logs/agent/sessions/.claude.json.tmp.47.1795140250516
+2026-11-20T02:04:10.516Z [DEBUG] Preserving file permissions: 100644
+2026-11-20T02:04:10.516Z [DEBUG] Temp file written successfully, size: 159 bytes
+2026-11-20T02:04:10.516Z [DEBUG] Applied original permissions to temp file
+2026-11-20T02:04:10.516Z [DEBUG] Renaming /logs/agent/sessions/.claude.json.tmp.47.1795140250516 to /logs/agent/sessions/.claude.json
+2026-11-20T02:04:10.516Z [DEBUG] File /logs/agent/sessions/.claude.json written atomically
+2026-11-20T02:04:10.521Z [DEBUG] [STARTUP] Loading MCP configs...
+2026-11-20T02:04:10.523Z [DEBUG] Git remote URL: null
+2026-11-20T02:04:10.523Z [DEBUG] No git remote URL found
+2026-11-20T02:04:10.524Z [DEBUG] Found 0 plugins (0 enabled, 0 disabled)
+2026-11-20T02:04:10.524Z [DEBUG] [claudeai-mcp] Checking gate (cached)...
+2026-11-20T02:04:10.524Z [DEBUG] [claudeai-mcp] Gate returned: false
+2026-11-20T02:04:10.524Z [DEBUG] [claudeai-mcp] Disabled via gate
+2026-11-20T02:04:10.525Z [DEBUG] [ToolSearch:optimistic] mode=tst-auto, ENABLE_TOOL_SEARCH=undefined, result=true
+2026-11-20T02:04:10.525Z [DEBUG] [STARTUP] Running setup()...
+2026-11-20T02:04:10.540Z [DEBUG] Loading skills from: managed=/etc/claude-code/.claude/skills, user=/logs/agent/sessions/skills, project=[]
+2026-11-20T02:04:10.541Z [DEBUG] Error log sink initialized
+2026-11-20T02:04:10.542Z [DEBUG] getPluginSkills: Processing 0 enabled plugins
+2026-11-20T02:04:10.542Z [DEBUG] Total plugin skills loaded: 0
+2026-11-20T02:04:10.542Z [DEBUG] Total plugin commands loaded: 0
+2026-11-20T02:04:10.542Z [DEBUG] [STARTUP] setup() completed in 17ms
+2026-11-20T02:04:10.542Z [DEBUG] [STARTUP] Loading commands and agents...
+2026-11-20T02:04:10.543Z [DEBUG] Registered 0 hooks from 0 plugins
+2026-11-20T02:04:10.543Z [DEBUG] Total plugin agents loaded: 0
+2026-11-20T02:04:10.543Z [DEBUG] Loaded 0 unique skills (0 unconditional, 0 conditional, managed: 0, user: 0, project: 0, additional: 0, legacy commands: 0)
+2026-11-20T02:04:10.545Z [DEBUG] Writing to temp file: /logs/agent/sessions/.claude.json.tmp.47.1795140250545
+2026-11-20T02:04:10.545Z [DEBUG] Preserving file permissions: 100644
+2026-11-20T02:04:10.545Z [DEBUG] Temp file written successfully, size: 236 bytes
+2026-11-20T02:04:10.545Z [DEBUG] Applied original permissions to temp file
+2026-11-20T02:04:10.545Z [DEBUG] Renaming /logs/agent/sessions/.claude.json.tmp.47.1795140250545 to /logs/agent/sessions/.claude.json
+2026-11-20T02:04:10.545Z [DEBUG] File /logs/agent/sessions/.claude.json written atomically
+2026-11-20T02:04:10.545Z [DEBUG] getSkills returning: 0 skill dir commands, 0 plugin skills, 3 bundled skills
+2026-11-20T02:04:10.546Z [DEBUG] [STARTUP] Commands and agents loaded in 4ms
+2026-11-20T02:04:10.546Z [DEBUG] [LSP MANAGER] initializeLspServerManager() called
+2026-11-20T02:04:10.546Z [DEBUG] [LSP MANAGER] Created manager instance, state=pending
+2026-11-20T02:04:10.546Z [DEBUG] [LSP MANAGER] Starting async initialization (generation 1)
+2026-11-20T02:04:10.547Z [DEBUG] Total LSP servers loaded: 0
+2026-11-20T02:04:10.547Z [DEBUG] Failed to fetch org fast mode status, defaulting to disabled
+2026-11-20T02:04:10.547Z [DEBUG] [STARTUP] MCP configs loaded in 26ms
+2026-11-20T02:04:10.547Z [DEBUG] [LSP SERVER MANAGER] getAllLspServers returned 0 server(s)
+2026-11-20T02:04:10.547Z [DEBUG] LSP manager initialized with 0 servers
+2026-11-20T02:04:10.547Z [DEBUG] LSP server manager initialized successfully
+2026-11-20T02:04:10.547Z [DEBUG] LSP notification handlers registered successfully for all 0 server(s)
+2026-11-20T02:04:10.549Z [DEBUG] installed_plugins.json doesn't exist, returning empty V2 object
+2026-11-20T02:04:10.549Z [DEBUG] Initialized versioned plugins system with 0 plugins
+2026-11-20T02:04:10.592Z [DEBUG] [Perfetto] initializePerfettoTracing called, env value: undefined
+2026-11-20T02:04:10.592Z [DEBUG] [3P telemetry] isTelemetryEnabled=false (CLAUDE_CODE_ENABLE_TELEMETRY=undefined)
+2026-11-20T02:04:10.594Z [DEBUG] Writing to temp file: /logs/agent/sessions/.claude.json.tmp.47.1795140250594
+2026-11-20T02:04:10.594Z [DEBUG] Preserving file permissions: 100644
+2026-11-20T02:04:10.594Z [DEBUG] Temp file written successfully, size: 316 bytes
+2026-11-20T02:04:10.594Z [DEBUG] Applied original permissions to temp file
+2026-11-20T02:04:10.594Z [DEBUG] Renaming /logs/agent/sessions/.claude.json.tmp.47.1795140250594 to /logs/agent/sessions/.claude.json
+2026-11-20T02:04:10.594Z [DEBUG] File /logs/agent/sessions/.claude.json written atomically
+2026-11-20T02:04:10.595Z [DEBUG] Plugin autoupdate: skipped (auto-updater disabled)
+2026-11-20T02:04:10.728Z [DEBUG] Getting matching hook commands for SessionStart with query: startup
+2026-11-20T02:04:10.728Z [DEBUG] Found 0 hook matchers in settings
+2026-11-20T02:04:10.728Z [DEBUG] Matched 0 unique hooks for query "startup" (0 before deduplication)
+2026-11-20T02:04:10.729Z [DEBUG] [FileIndex] getProjectFiles called, respectGitignore=true
+2026-11-20T02:04:10.729Z [DEBUG] [FileIndex] getFilesUsingGit called
+2026-11-20T02:04:10.730Z [DEBUG] [FileIndex] not a git repo, returning null
+2026-11-20T02:04:10.730Z [DEBUG] [FileIndex] git ls-files returned null, falling back to ripgrep
+2026-11-20T02:04:10.736Z [DEBUG] installPluginsForHeadless: starting
+2026-11-20T02:04:10.736Z [DEBUG] Found 0 installed plugins (V2 format)
+2026-11-20T02:04:10.736Z [DEBUG] installPluginsForHeadless: no missing plugins or marketplaces configured
+2026-11-20T02:04:10.743Z [DEBUG] Writing to temp file: /logs/agent/sessions/.claude.json.tmp.47.1795140250743
+2026-11-20T02:04:10.743Z [DEBUG] Preserving file permissions: 100644
+2026-11-20T02:04:10.743Z [DEBUG] Temp file written successfully, size: 316 bytes
+2026-11-20T02:04:10.743Z [DEBUG] Applied original permissions to temp file
+2026-11-20T02:04:10.743Z [DEBUG] Renaming /logs/agent/sessions/.claude.json.tmp.47.1795140250743 to /logs/agent/sessions/.claude.json
+2026-11-20T02:04:10.743Z [DEBUG] File /logs/agent/sessions/.claude.json written atomically
+2026-11-20T02:04:10.743Z [DEBUG] Total plugin output styles loaded: 0
+2026-11-20T02:04:10.748Z [DEBUG] Ripgrep first use test: PASSED (mode=builtin, path=/opt/hh-harness/claude-code-2.1.50/vendor/ripgrep/arm64-linux/rg)
+2026-11-20T02:04:10.749Z [DEBUG] Writing to temp file: /logs/agent/sessions/.claude.json.tmp.47.1795140250749
+2026-11-20T02:04:10.749Z [DEBUG] Preserving file permissions: 100644
+2026-11-20T02:04:10.749Z [DEBUG] Temp file written successfully, size: 316 bytes
+2026-11-20T02:04:10.749Z [DEBUG] Applied original permissions to temp file
+2026-11-20T02:04:10.749Z [DEBUG] Renaming /logs/agent/sessions/.claude.json.tmp.47.1795140250749 to /logs/agent/sessions/.claude.json
+2026-11-20T02:04:10.749Z [DEBUG] File /logs/agent/sessions/.claude.json written atomically
+2026-11-20T02:04:10.752Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-11-20T02:04:10.753Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-11-20T02:04:10.753Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-11-20T02:04:10.753Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-11-20T02:04:10.754Z [DEBUG] Sending 1 skills via attachment (initial, 1 total sent)
+2026-11-20T02:04:10.756Z [WARN] [3P telemetry] Event dropped (no event logger initialized): user_prompt
+2026-11-20T02:04:10.758Z [DEBUG] Getting matching hook commands for UserPromptSubmit with query: undefined
+2026-11-20T02:04:10.758Z [DEBUG] Found 0 hook matchers in settings
+2026-11-20T02:04:10.758Z [DEBUG] Matched 0 unique hooks for query "no match query" (0 before deduplication)
+2026-11-20T02:04:10.763Z [DEBUG] autocompact: tokens=428 threshold=167000 effectiveWindow=180000
+2026-11-20T02:04:10.764Z [DEBUG] Auto tool search disabled: 0 tokens (threshold: 20000, 10% of context) [source: query]
+2026-11-20T02:04:10.772Z [DEBUG] Writing to temp file: /logs/agent/sessions/.claude.json.tmp.47.1795140250772
+2026-11-20T02:04:10.772Z [DEBUG] Preserving file permissions: 100644
+2026-11-20T02:04:10.772Z [DEBUG] Temp file written successfully, size: 316 bytes
+2026-11-20T02:04:10.772Z [DEBUG] Applied original permissions to temp file
+2026-11-20T02:04:10.772Z [DEBUG] Renaming /logs/agent/sessions/.claude.json.tmp.47.1795140250772 to /logs/agent/sessions/.claude.json
+2026-11-20T02:04:10.772Z [DEBUG] File /logs/agent/sessions/.claude.json written atomically
+2026-11-20T02:04:10.774Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.50.b97; cc_entrypoint=sdk-cli; cch=00000;
+2026-11-20T02:04:10.774Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-11-20T02:04:10.774Z [DEBUG] [API:auth] OAuth token check starting
+2026-11-20T02:04:10.776Z [DEBUG] [API:auth] OAuth token check complete
+2026-11-20T02:04:10.791Z [DEBUG] [FileIndex] ripgrep: 0 files in 61ms
+2026-11-20T02:04:10.791Z [DEBUG] [FileIndex] Not in bundled mode, using Fuse.js fallback
+2026-11-20T02:04:10.791Z [DEBUG] [FileIndex] cache refresh completed in 62ms (0 files)
+2026-11-20T02:04:10.792Z [DEBUG] Fetching plugin security messages from https://raw.githubusercontent.com/anthropics/claude-plugins-official/refs/heads/security/security.json
+2026-11-20T02:04:10.839Z [ERROR] Failed to fetch plugin security messages: Request failed with status code 403
+2026-11-20T02:04:10.879Z [DEBUG] Stream started - received first chunk
+2026-11-20T02:04:10.886Z [DEBUG] executePreToolHooks called for tool: Bash
+2026-11-20T02:04:10.887Z [DEBUG] Getting matching hook commands for PreToolUse with query: Bash
+2026-11-20T02:04:10.887Z [DEBUG] Found 0 hook matchers in settings
+2026-11-20T02:04:10.887Z [DEBUG] Matched 0 unique hooks for query "Bash" (0 before deduplication)
+2026-11-20T02:04:10.942Z [DEBUG] tree-sitter: loaded from disk
+2026-11-20T02:04:10.990Z [DEBUG] Creating shell snapshot for bash (/bin/bash)
+2026-11-20T02:04:10.991Z [DEBUG] Looking for shell config file: /root/.bashrc
+2026-11-20T02:04:10.992Z [DEBUG] Snapshots directory: /logs/agent/sessions/shell-snapshots
+2026-11-20T02:04:10.993Z [DEBUG] Creating snapshot at: /logs/agent/sessions/shell-snapshots/snapshot-bash-1795140250992-xnteq9.sh
+2026-11-20T02:04:10.993Z [DEBUG] Execution timeout: 10000ms
+2026-11-20T02:04:11.018Z [DEBUG] Shell snapshot created successfully (1773 bytes)
+2026-11-20T02:04:11.020Z [DEBUG] No session environment scripts found
+2026-11-20T02:04:11.032Z [DEBUG] Tool search disabled: ToolSearchTool is not available (may have been disallowed via disallowedTools).
+2026-11-20T02:04:11.033Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.50.0a4; cc_entrypoint=sdk-cli; cch=00000;
+2026-11-20T02:04:11.034Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-11-20T02:04:11.034Z [DEBUG] [API:auth] OAuth token check starting
+2026-11-20T02:04:11.034Z [DEBUG] Getting matching hook commands for PostToolUse with query: Bash
+2026-11-20T02:04:11.034Z [DEBUG] Found 5 hook matchers in settings
+2026-11-20T02:04:11.034Z [DEBUG] Matched 0 unique hooks for query "Bash" (0 before deduplication)
+2026-11-20T02:04:11.034Z [DEBUG] [API:auth] OAuth token check complete
+2026-11-20T02:04:11.037Z [DEBUG] LSP Diagnostics: getLSPDiagnosticAttachments called
+2026-11-20T02:04:11.037Z [DEBUG] LSP Diagnostics: Checking registry - 0 pending
+2026-11-20T02:04:11.037Z [DEBUG] Hooks: Found 0 total hooks in registry
+2026-11-20T02:04:11.038Z [DEBUG] Hooks: checkForNewResponses returning 0 responses
+2026-11-20T02:04:11.038Z [DEBUG] autocompact: tokens=23 threshold=167000 effectiveWindow=180000
+2026-11-20T02:04:11.039Z [DEBUG] Auto tool search disabled: 0 tokens (threshold: 20000, 10% of context) [source: query]
+2026-11-20T02:04:11.041Z [DEBUG] Writing to temp file: /logs/agent/sessions/.claude.json.tmp.47.1795140251041
+2026-11-20T02:04:11.041Z [DEBUG] Preserving file permissions: 100644
+2026-11-20T02:04:11.041Z [DEBUG] Temp file written successfully, size: 316 bytes
+2026-11-20T02:04:11.041Z [DEBUG] Applied original permissions to temp file
+2026-11-20T02:04:11.041Z [DEBUG] Renaming /logs/agent/sessions/.claude.json.tmp.47.1795140251041 to /logs/agent/sessions/.claude.json
+2026-11-20T02:04:11.041Z [DEBUG] File /logs/agent/sessions/.claude.json written atomically
+2026-11-20T02:04:11.042Z [DEBUG] attribution header x-anthropic-billing-header: cc_version=2.1.50.b97; cc_entrypoint=sdk-cli; cch=00000;
+2026-11-20T02:04:11.042Z [DEBUG] [API:request] Creating client, ANTHROPIC_CUSTOM_HEADERS present: false, has Authorization header: false
+2026-11-20T02:04:11.042Z [DEBUG] [API:auth] OAuth token check starting
+2026-11-20T02:04:11.042Z [DEBUG] [API:auth] OAuth token check complete
+2026-11-20T02:04:11.089Z [ERROR] API error (attempt 1/11): 402 402 {"error":{"message":"slot budget exhausted","type":"budget_refused"}}
+2026-11-20T02:04:11.089Z [ERROR] Error in API request: 402 {"error":{"message":"slot budget exhausted","type":"budget_refused"}}
+2026-11-20T02:04:11.159Z [DEBUG] Stream started - received first chunk
+2026-11-20T02:04:11.161Z [DEBUG] Getting matching hook commands for Stop with query: undefined
+2026-11-20T02:04:11.161Z [DEBUG] Found 0 hook matchers in settings
+2026-11-20T02:04:11.161Z [DEBUG] Matched 0 unique hooks for query "no match query" (0 before deduplication)

@@ -534,6 +534,11 @@ fn ac5_l2_audit_refuses_w2_corpus() {
     .expect_err("a W2-corpus sample member refuses");
     match err {
         AuditError::NotW4O { id } => assert_eq!(id, "l10-ws1-corpus-01-a"),
+        // the leg-coverage variants belong to the R6.54a computed
+        // addendum emitter — l2_audit_packet never produces them.
+        AuditError::LegOutsideSample { .. } | AuditError::SampleMissingLeg { .. } => {
+            panic!("l2_audit_packet does not produce leg-coverage errors")
+        }
     }
     // an undeclared id refuses too.
     assert!(l2_audit_packet(&["nope".into()], &w4, &w2, 0, fixture_sources()).is_err());

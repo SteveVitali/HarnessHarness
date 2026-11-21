@@ -806,5 +806,12 @@ expect_rc 2 "overrun Wc cannot absorb refuses" \
   python3 -I "$SLIB" fpcheck "$REPO" "$DECLS/w1.json" "$DECLS/wc.json" \
   --export-measured-gib 300
 
+# ── the native-lane verifier leg (R6.56 continuation a5) ─────────────
+# run_verifier's commit-clone shape + typed dispositions against a
+# stubbed podman — the w4x/W4 verifier-absent regression battery.
+python3 scripts/gce-backend/test_w4_main_driver.py >/dev/null 2>&1 \
+  && ok "run_verifier commit-clone fixture battery" \
+  || bad "run_verifier commit-clone fixture battery"
+
 printf 'check-gce-backend: %d passed, %d failed\n' "$PASS" "$FAILED"
 [ "$FAILED" -eq 0 ] || exit 1

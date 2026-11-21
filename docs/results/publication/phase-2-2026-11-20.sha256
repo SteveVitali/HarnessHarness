@@ -1,0 +1,2 @@
+54b2a7a805ca64ae8773dadb38443251b7f38900fad06a5fc41fa9d197b9de54  docs/results/publication/phase-2-2026-11-20.json
+# recompute: shasum -a 256 -c phase-2-2026-11-20.sha256 (run from the repo root)

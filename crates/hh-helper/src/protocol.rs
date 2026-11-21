@@ -178,7 +178,7 @@ pub enum HelperRequest {
         /// ordered stream). The member's *presence* also arms the
         /// exec-defaults semantics: on the container backend a declared
         /// `deadline_ms` runs through the in-cell
-        /// `setsid timeout --kill-after` wrapper so the whole tree dies
+        /// `setsid --wait timeout --kill-after` wrapper so the whole tree dies
         /// inside the cell (G17 (d)); `cwd = "image_workdir"` resolves to
         /// the cell's WORKDIR (G17 (b)).
         stdio: Option<String>,

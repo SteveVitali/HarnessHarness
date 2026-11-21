@@ -1,0 +1,2 @@
+1dade7f9353004e95be02aba4782e83c43dacd69e0eb90bdc11e8c72134d01e1  docs/build/reports/2026-11-20-fp-p4-token-corpus.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-20-fp-p4-token-corpus.sha256 (run from the repo root — the record is canonical JSON)

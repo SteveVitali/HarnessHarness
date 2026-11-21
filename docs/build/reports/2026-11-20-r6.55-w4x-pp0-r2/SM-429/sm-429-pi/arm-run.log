@@ -1,0 +1,3 @@
+{"agent_end_cause":"exited{0}","denied_hosts":[],"native_log":{"files":{"pi.txt":{"bytes":2116,"sha256":"sha256:49ac35d0532d68c2e54540bf349d8f65ad557a32ff7666da7c6e34cef8260eff"},"pi/sessions/2026-11-20T02-03-41-290Z_9f804802-bd45-42b0-960d-a299f3b3047e.jsonl":{"bytes":1096,"sha256":"sha256:23001fd9df3596ff53f6f4104f92ee592b33c6ec87975c47ff6c834a9949e6d9"}},"manifest_sha256":"sha256:de6e3cf5b57d08b8315800ce8ab217a66265bdefcc1f5fb4c25c8121af960bd4"},"verify_attempts":1}
+
+--- stderr ---

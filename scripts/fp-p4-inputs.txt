@@ -1,0 +1,12 @@
+# fp-p4-inputs.txt — the inputs manifest for the `p4_admissibility`
+# emitter (manifest 326/R7.1). The reader rule keeps every docs/
+# relpath at script level, never in crates/**. Format: name=relpath.
+corpus=docs/build/reports/2026-11-20-fp-p4-token-corpus.json
+sweep_registry=docs/build/reports/2026-11-20-fp-p4-sweep-registry.json
+sweep_registry_sha256=docs/build/reports/2026-11-20-fp-p4-sweep-registry.sha256
+levels=docs/build/reports/2026-11-20-fp-p4-levels.json
+levels_sha256=docs/build/reports/2026-11-20-fp-p4-levels.sha256
+w_rule=docs/build/reports/2026-11-20-fp-p4-w-rule.json
+w_rule_sha256=docs/build/reports/2026-11-20-fp-p4-w-rule.sha256
+admissibility=docs/build/reports/2026-11-20-fp-p4-admissibility.json
+admissibility_sha256=docs/build/reports/2026-11-20-fp-p4-admissibility.sha256

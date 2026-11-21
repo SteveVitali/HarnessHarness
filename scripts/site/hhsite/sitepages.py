@@ -251,9 +251,11 @@ def home_page(sd, pkts, commit, published=None):
             state = stamp("withheld", "Not yet published")
             detail = "publication gate pending"
         elif published is not None and ph != "phase-1":
-            # a published first-pass phase: the page renders — every
-            # outcome a typed withhold under GATE-G31's decided scope
-            state = stamp("withheld", "first pass — withheld")
+            # a published first-pass phase: the page renders — the
+            # executed-W4 fold's landed values and typed verdicts
+            # verbatim under GATE-G31's decided scope (the R6.50
+            # withheld pins are superseded, never rewritten)
+            state = stamp("inconclusive", "first pass — landed W4")
             detail = "published — GATE-G31"
         body.append('<section class="card span-3 tile"><h3>%s</h3>'
                     '<p>%s</p><p class="micro">%s</p>'
@@ -696,8 +698,12 @@ def changelog_entries(publications):
     current or superseded-by-reference."""
     superseded = {}
     for rel, doc in publications:
-        if doc.get("supersedes"):
-            superseded[doc["supersedes"]] = rel
+        sup = doc.get("supersedes")
+        if isinstance(sup, str):
+            # the record may carry a bare basename — resolve it inside
+            # the publication dir so the head-of-chain marker lands
+            superseded[sup if "/" in sup
+                       else "docs/results/publication/%s" % sup] = rel
     entries = []
     for rel, doc in publications:
         status = ("superseded by %s" % superseded[rel]
@@ -1061,7 +1067,7 @@ def leaderboard_page(sd, pkts, commit):
     declared fixture packet (the seal keeps real outcomes out)."""
     claims = json.loads(sd["claims.json"])["body"]
     t = json.loads(sd["tfp.json"])["body"]
-    if t.get("withheld"):
+    if t.get("withheld") or t.get("verbatim_structure"):
         return _fp_withheld_page(sd, pkts, commit,
                                  "Phase 2 — first pass", "phase-2/fp/")
     fam = t["family"]
@@ -1129,7 +1135,7 @@ def frontier_page(sd, pkts, commit):
     Pareto membership captioned descriptive."""
     claims = json.loads(sd["claims.json"])["body"]
     t = json.loads(sd["tfp.json"])["body"]
-    if t.get("withheld"):
+    if t.get("withheld") or t.get("verbatim_structure"):
         return _fp_withheld_page(
             sd, pkts, commit, "Phase 2 — first-pass frontier",
             "phase-2/fp/frontier/")
@@ -1229,7 +1235,7 @@ def noise_page(sd, pkts, commit):
     R=⟨k⟩' below k = 2 (the reserved string, verbatim)."""
     claims = json.loads(sd["claims.json"])["body"]
     t = json.loads(sd["tfp.json"])["body"]
-    if t.get("withheld"):
+    if t.get("withheld") or t.get("verbatim_structure"):
         return _fp_withheld_page(sd, pkts, commit, "Phase 2 — noise",
                                  "phase-2/fp/noise/")
     harnesses = json.loads(
@@ -1568,7 +1574,7 @@ def fp_tasks_page(sd, pkts, commit):
     encodings, discordance/repair/pennant marks, links to trial pages."""
     claims = json.loads(sd["claims.json"])["body"]
     t = json.loads(sd["tfp.json"])["body"]
-    if t.get("withheld"):
+    if t.get("withheld") or t.get("verbatim_structure"):
         return _fp_withheld_page(
             sd, pkts, commit, "Phase 2 — per-task grid",
             "phase-2/fp/tasks/")

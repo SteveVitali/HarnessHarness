@@ -1,0 +1,2 @@
+67009098eb187a2a99c6c83c9646c2ba9b20d58962a3f5eda9573ab1238d3b35  docs/build/reports/2026-11-20-fp-p4x-selection-rule.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-20-fp-p4x-selection-rule.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)

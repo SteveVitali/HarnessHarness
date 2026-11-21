@@ -73,6 +73,19 @@ def main():
             else:
                 ok("noise", "withheld noise page carries the typed "
                    "withhold + pass@k markers")
+        elif tfpb2.get("verbatim_structure"):
+            # The executed-W4 packet: landed values beside typed
+            # not_run/unavailable markers, rendered verbatim.
+            if not no or ("not_run{" not in no
+                          and "unavailable{" not in no):
+                fail("noise", "W4 verbatim noise page lacks the typed "
+                     "dispositions")
+            elif 'class="absent-token"' not in no:
+                fail("noise", "W4 verbatim noise page lacks typed "
+                     "marker cells")
+            else:
+                ok("noise", "W4 verbatim noise page carries the typed "
+                   "dispositions")
         elif not no:
             fail("noise", "noise page absent")
         else:
@@ -99,6 +112,20 @@ def main():
             else:
                 ok("refusal", "withheld leaderboard renders typed "
                    "markers verbatim")
+        elif tfpb.get("verbatim_structure"):
+            # The executed packet (W4's not_run{admission:AG3}, then the
+            # executed-W4x fold's executed{adr-0453}): the packet-level
+            # disposition verbatim, landed values and typed markers.
+            disp = (tfpb.get("packet_disposition") or {}).get("text", "")
+            if not disp or disp not in lb:
+                fail("refusal", "verbatim leaderboard lacks the "
+                     "packet disposition verbatim")
+            elif 'class="absent-token"' not in lb:
+                fail("refusal", "W4 verbatim leaderboard lacks typed "
+                     "marker cells")
+            else:
+                ok("refusal", "W4 verbatim leaderboard renders landed "
+                   "values + typed markers")
         elif "refused — UnresolvedCell" not in lb \
                 or "all-planned" not in lb:
             fail("refusal", "typed refusal/bounds missing on leaderboard")
@@ -177,19 +204,24 @@ def main():
         tr = texts.get("phase-1/trial/fix-git/index.html", "")
         tfi = json.loads(bodies["trials-fp.json"])["body"]
         if tfi.get("packet_disposition"):
-            # The frozen first-pass packet withheld every arm: no
-            # tranche trial executed, so the fp trial index is the
-            # typed withhold — noindex, canary, no dataset link.
+            # A first-pass packet with a typed non-compute disposition:
+            # the fp trial index renders the disposition verbatim —
+            # withheld{…} under the R6.50 pins, not_run{admission:AG3}
+            # under the executed-W4 supersession — noindex, canary, no
+            # dataset link.
             fr = texts.get("phase-2/fp/trial/index.html", "")
             if 'name="robots" content="noindex"' not in tr \
                     or 'name="robots" content="noindex"' not in fr:
                 fail("trials", "noindex absent")
             if sitepages.CANARY not in tr or sitepages.CANARY not in fr:
                 fail("trials", "canary absent")
-            if "withheld{" not in fr or "huggingface.co" in fr:
-                fail("trials", "withheld trial index wrong")
+            if not any(m in fr for m in
+                       ("withheld{", "not_run{", "unavailable{",
+                        "refused{")) \
+                    or "huggingface.co" in fr:
+                fail("trials", "typed-disposition trial index wrong")
             else:
-                ok("trials", "noindex + canary + typed withhold, no "
+                ok("trials", "noindex + canary + typed disposition, no "
                    "dataset link")
         else:
             fr = texts.get(
@@ -240,9 +272,11 @@ def main():
             ok("golden", "p1 grid byte-equal committed golden")
 
         # fp grid sanity — the committed config names the frozen
-        # first-pass packet: every arm withheld, so the tasks/trial
-        # pages render the typed withhold instead of the grid
-        # (REQ-XH-020). A computed packet restores the 60-cell check.
+        # first-pass packet: a typed non-compute disposition renders
+        # the verbatim-structure pages instead of the grid
+        # (REQ-XH-020) — withheld{…} under the R6.50 pins,
+        # not_run{admission:AG3} under the executed-W4 supersession.
+        # A computed packet restores the 60-cell check.
         tfp = json.loads(bodies["tfp.json"])["body"]
         fg = texts.get("phase-2/fp/tasks/index.html", "")
         tr = texts.get("phase-2/fp/trial/index.html", "")
@@ -252,6 +286,15 @@ def main():
                      "disposition")
             else:
                 ok("fp-grid", "withheld fp pages carry the typed "
+                   "disposition")
+        elif tfp.get("verbatim_structure"):
+            if not any(m in fg and m in tr
+                       for m in ("withheld{", "not_run{",
+                                 "unavailable{", "refused{")):
+                fail("fp-grid", "verbatim fp pages lack the typed "
+                     "disposition")
+            else:
+                ok("fp-grid", "verbatim fp pages carry the typed "
                    "disposition")
         elif fg.count("grid-cell") < 60 or 'data-variant' in fg \
                 and "withheld{dataset_private}" not in tr:

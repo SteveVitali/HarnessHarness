@@ -1,0 +1,2 @@
+d2d2216633528a4f3682f0a55370a11023908f3713c3bbe8bd6e3959a16cb1cd  docs/build/reports/2026-11-20-fp-v5-supersession.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-20-fp-v5-supersession.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)

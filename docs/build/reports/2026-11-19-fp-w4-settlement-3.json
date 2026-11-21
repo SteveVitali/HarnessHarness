@@ -1,0 +1,56 @@
+{
+ "balance_delta_usd": 0.0,
+ "balance_observed": "46.30279 \u2192 46.30279 (unchanged \u2014 included-allowance plan; provider bills at period close)",
+ "boundary_flags": [
+  "provider_24h_total_covers_pre_window_calls"
+ ],
+ "clock_honest": "REQ-XC-127: the confirming reads ran 21:04\u201321:07Z \u2014 \u22652 h past the 18:00Z post-call boundary (last model call 17:40:19Z), so the clock conclusively elapsed. Provider total 9,179,890 \u00b5$ vs harness-tracked 6,983,035 \u00b5$ \u2014 diff 2,196,855 \u00b5$ ($2.20) > tolerance (max 2% / $0.05). The provider's range=24h total covers calls outside the w4 metered set (pre-window calls in the same trailing window; the w4 metered spend stays the harness-tracked micro_units) \u2014 the reconciled status lands settled_discrepant verbatim, never laundered to settled.",
+ "compute_estimate_usd": 3.373477,
+ "confirm_read_ref": "docs/build/reports/2026-11-19-fp-w4-settle-confirm-read.json",
+ "hh_facts": {
+  "micro_units": 6983035,
+  "requests_dispatched": 3372,
+  "requests_successful": 3368,
+  "source": "~/hh-retained/w4/settle/hh-facts.json \u2014 folded from the harvested proxy-store events.wal"
+ },
+ "metered_model_calls": 3372,
+ "model_line": "ollama-cloud glm-5.3-flash (effort high)",
+ "phase": "fp",
+ "provided": {
+  "OLLAMA_API_KEY": "yes"
+ },
+ "reads": [
+  {
+   "file": "~/hh-retained/w4/settle/confirm-balance-pre.json",
+   "kind": "balance-pre",
+   "read_at": "2026-11-19T21:04:17Z",
+   "status": 200
+  },
+  {
+   "file": "~/hh-retained/w4/settle/confirm-usage1.json",
+   "kind": "usage1",
+   "read_at": "2026-11-19T21:05:19Z",
+   "status": 200
+  },
+  {
+   "file": "~/hh-retained/w4/settle/confirm-usage2.json",
+   "kind": "usage2",
+   "read_at": "2026-11-19T21:06:24Z",
+   "status": 200
+  },
+  {
+   "file": "~/hh-retained/w4/settle/confirm-balance-post.json",
+   "kind": "balance-post",
+   "read_at": "2026-11-19T21:07:26Z",
+   "status": 200
+  }
+ ],
+ "reconcile_row": "docs/build/reports/live/PHASE_SPEND.jsonl \u2014 measurement.cost.reconciled{window:w4, status:settled_discrepant, ts:2026-11-19T21:07:36Z, diff_micros:2196855}",
+ "recorded_at": "2026-11-19T21:08:00Z",
+ "schema": "hh-settlement/1",
+ "status": "settled_discrepant",
+ "supersedes": "docs/build/reports/2026-11-19-fp-w4-settlement-2.json",
+ "ticket": "R6.54",
+ "usage_observed": "two agreeing /api/usage reads 1 min apart (21:05Z/21:06Z, status 200) \u2014 provider trailing-24h total 9,179,890 \u00b5$ ($9.17989), byte-stable since the pending read (17:54Z/17:55Z); the last accruing hourly bucket is 2026-11-19T17:00Z and every bucket \u226518:00Z is zero",
+ "window": "w4"
+}

@@ -1,0 +1,153 @@
+{
+ "adr": "ADR-0453",
+ "amendment_kind": "dated_amendment \u2014 the declared fixture is byte-untouched; this record supplies the discharged gate evidence",
+ "declaration": {
+  "fixture": "crates/hh-runner/tests/fixtures/r6_22/claude-code.json",
+  "fixture_sha256": "sha256:ff68ecf644668ab08c0e4ce87786856b489b0f820fd63c194fab1229466f3a6a",
+  "harness": {
+   "name": "claude-code",
+   "role": "comparator",
+   "version": "2.1.50"
+  },
+  "schema": "hh-harness-admission/1",
+  "verification_class_as_declared": "fixture-verified"
+ },
+ "executed_evidence": {
+  "battery_run_id": "w4x-pp0-r9",
+  "battery_sha256": "sha256:809ec6a08c204ca95fb6d9911252b05638fb517346645330326b2a01fd091a01",
+  "class": "fixture-verified (PP0 $0 replay \u2014 REQ-XC-324 battery, never live-service evidence)",
+  "evidence_dir": "docs/build/reports/2026-11-20-r6.55-w4x-pp0-r2/",
+  "legs": [
+   {
+    "agent_end_cause": "exited{0}",
+    "checks": {
+     "AG3": "pass",
+     "AG5": "pass",
+     "AG6": "pass",
+     "AG8": "pass"
+    },
+    "expected_end_cause": "exited{*}",
+    "leg_file": "docs/build/reports/2026-11-20-r6.55-w4x-pp0-r2/SM-pos/sm-pos-claude-code.json",
+    "leg_sha256": "sha256:ada0721ceb37d6905854d4524cbe1cfc1efed3d9850bf8f8976c96f7eb3779c2",
+    "native_log_bytes": 17670,
+    "outcome": "withheld{sealed_until_results}",
+    "receipt_count": 3,
+    "slot_id": "sm-pos-claude-code",
+    "variant": "SM-pos"
+   },
+   {
+    "agent_end_cause": "exited{0}",
+    "checks": {
+     "AG3": "pass",
+     "AG5": "pass",
+     "AG6": "pass",
+     "AG8": "pass"
+    },
+    "expected_end_cause": "exited{*}",
+    "leg_file": "docs/build/reports/2026-11-20-r6.55-w4x-pp0-r2/SM-429/sm-429-claude-code.json",
+    "leg_sha256": "sha256:feba21bad0019af79c700c3fb687a09715d6f0214d10ef415c2929b75528e715",
+    "native_log_bytes": 13536,
+    "outcome": "withheld{sealed_until_results}",
+    "receipt_count": 2,
+    "slot_id": "sm-429-claude-code",
+    "variant": "SM-429"
+   },
+   {
+    "agent_end_cause": "exited{0}",
+    "checks": {
+     "AG3": "pass",
+     "AG5": "pass",
+     "AG6": "pass",
+     "AG8": "pass"
+    },
+    "expected_end_cause": "exited{*}",
+    "leg_file": "docs/build/reports/2026-11-20-r6.55-w4x-pp0-r2/SM-402/sm-402-claude-code.json",
+    "leg_sha256": "sha256:2638254b804f1e4b803b29c47f5f8dae90b13a4a36905633a5826161794b0aa1",
+    "native_log_bytes": 17777,
+    "outcome": "withheld{sealed_until_results}",
+    "receipt_count": 3,
+    "slot_id": "sm-402-claude-code",
+    "variant": "SM-402"
+   },
+   {
+    "agent_end_cause": "exited{0}",
+    "checks": {
+     "AG3": "pass",
+     "AG5": "pass",
+     "AG6": "pass",
+     "AG8": "pass"
+    },
+    "expected_end_cause": "exited{*}",
+    "leg_file": "docs/build/reports/2026-11-20-r6.55-w4x-pp0-r2/SM-slow/sm-slow-claude-code.json",
+    "leg_sha256": "sha256:2af31bfb19918761ba4e84f64f2c1d3a5a2d2f9422f50390f729a78eac62feca",
+    "native_log_bytes": 17553,
+    "outcome": "withheld{sealed_until_results}",
+    "receipt_count": 3,
+    "slot_id": "sm-slow-claude-code",
+    "variant": "SM-slow"
+   },
+   {
+    "agent_end_cause": "agent_timeout",
+    "checks": {
+     "AG3": "pass",
+     "AG5": "pass",
+     "AG6": "pass",
+     "AG8": "pass"
+    },
+    "expected_end_cause": "agent_timeout",
+    "leg_file": "docs/build/reports/2026-11-20-r6.55-w4x-pp0-r2/SM-hang/sm-hang-claude-code.json",
+    "leg_sha256": "sha256:da37ec7fd5d3cd705ec65e3cfb17713d984a935e18b2f252c7d9bc2c786d85fc",
+    "native_log_bytes": 13110,
+    "outcome": "withheld{sealed_until_results}",
+    "receipt_count": 1,
+    "slot_id": "sm-hang-claude-code",
+    "variant": "SM-hang"
+   }
+  ],
+  "summary": "docs/build/reports/2026-11-20-r6.55-w4x-pp0-r2/_summary.json",
+  "summary_sha256": "sha256:afb737fc497d7b1c232b98bcd93357d1d418c44e59ea4655521e15fd0c5d5df6",
+  "union": {
+   "prior_ws1_union": "docs/build/reports/2026-11-19-fp-ws1-pp0-evidence.json (sha256:95f872641d41cc881d007b388a330ebeec54a4c5f1144094471441a0be2c30c5 \u2014 retained_unavailable, stands verbatim)",
+   "sets": [
+    "docs/build/reports/r6.55-w4x-pp0/ (10 legs \u2014 inconclusive{adapter:silent_exit}, byte-untouched history)",
+    "docs/build/reports/2026-11-20-r6.55-w4x-pp0/ (w4x-pp0-r5 \u2014 10 legs with receipts+native logs, 9 all-gates + 1 typed hold sm-429-claude-code discharged by r9)",
+    "docs/build/reports/2026-11-20-r6.55-w4x-pp0-r2/ (w4x-pp0-r9 \u2014 10/10 all-gates, authoritative)"
+   ]
+  }
+ },
+ "gate_evidence_discharge": {
+  "AG3": {
+   "discharged_by": "executed PP0 union \u2014 all five variant legs: exited{*} on SM-pos/429/402/slow and agent_timeout on SM-hang (the asserted terminal state per spec \u00a75.7)",
+   "prior_evidence_ref": "pending:W1-smoke-SM-pos"
+  },
+  "AG5": {
+   "discharged_by": "executed PP0 union \u2014 zero unexpected denied hosts on every leg (expected_denied verbatim)",
+   "prior_evidence_ref": "egress:expected_denied+pending:W1-smoke"
+  },
+  "AG6": {
+   "discharged_by": "executed PP0 union \u2014 receipt_count >= 1 on every leg (durable hh.model_proxy.receipt/1 docs scoped to the slot; replay mints no measurement.cost.attributed by \u00a74.9 contract \u2014 cost_attributed_count 0 recorded verbatim)",
+   "prior_evidence_ref": "proxy:receipts-only+pending:W1-smoke"
+  },
+  "AG8": {
+   "discharged_by": "executed PP0 union \u2014 zero endpoint_errors on every leg",
+   "prior_evidence_ref": "pending:W1-smoke-SM-pos"
+  }
+ },
+ "non_claims": [
+  "no live-service claim: every leg is $0 replay against committed recordings",
+  "no fixture rewrite: the r6_22 declarations are byte-untouched",
+  "no verdict evidence: admission gates are machinery, never a scored result"
+ ],
+ "provided": {
+  "HF_WRITE_TOKEN": "n/a",
+  "OLLAMA_API_KEY": "no (replay mode)"
+ },
+ "recorded_at": "2026-11-20T02:20:10Z",
+ "req_xh_127": {
+  "disposition": "repair \u2014 new_participant_version_later_pass: the W4-window AG3/AG6 union-of-failures (docs/build/reports/2026-11-19-fp-ws1-pp0-evidence.json sha256:95f87264\u2026) stands verbatim as family retained_unavailable; this later-pass PP0 union on the same declared versions admits the arm for the W4x extension pass only",
+  "prior_hold": "not_run{admission:AG3} (W4, ADR-0452 verbatim) \u2014 append-only history"
+ },
+ "schema": "hh-harness-admission-amend/1",
+ "ticket": "R6.56",
+ "window": "w4x"
+}

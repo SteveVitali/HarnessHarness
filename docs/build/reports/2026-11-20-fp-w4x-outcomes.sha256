@@ -1,0 +1,2 @@
+5a05748a6e100a7ae1c1d7c66e170491097e31809fb3b474dd106121da2bfc91  docs/build/reports/2026-11-20-fp-w4x-outcomes.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-20-fp-w4x-outcomes.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)

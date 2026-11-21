@@ -1,0 +1,8 @@
+{
+ "claude-code": {
+  "write-file": "sha256:4f5ae02f808a1866eb96e26b2d91866edd145a5890fb0d38acc3f63815a33b4e"
+ },
+ "pi": {
+  "write-file": "sha256:5db02b9aeff57b590c805e351c05e683a7f72662e7d75dd765f59c460976315f"
+ }
+}

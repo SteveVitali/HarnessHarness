@@ -109,12 +109,24 @@ def run_check(dest=SITE_DATA_DIR):
 
 def load_publications(inputs, repo_root=ROOT):
     """Committed hh-site-publication/1 records, validated. A malformed
-    record refuses (fail closed); a record whose pinned input set
-    mismatches the current one refuses the public build (REQ-XF-129)."""
+    record refuses (fail closed); the operative record — the head of
+    each phase's supersession chain — must pin the phase's exact
+    current input set or the public build refuses (REQ-XF-129).
+    Superseded records are append-only history: they pin the input set
+    they published, never the current one (R6.54 — the executed-W4
+    frozen packets supersede the R6.50 pins)."""
     records, errors = publication.load_dir(repo_root)
     for e in errors:
         raise values.Refusal("publication record — %s" % e)
+    superseded = set()
+    for _rel, doc in records:
+        sup = doc.get("supersedes")
+        if isinstance(sup, str):
+            superseded.add(sup if "/" in sup
+                           else "%s/%s" % (publication.PUB_DIR_REL, sup))
     for rel, doc in records:
+        if rel in superseded:
+            continue
         mism = publication.pin_errors(doc, inputs)
         for e in mism:
             raise values.Refusal(

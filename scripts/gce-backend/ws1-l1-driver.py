@@ -721,6 +721,33 @@ def main():
                         json.dump(raws, f)
             except Exception:
                 pass
+            # R7.3 — the compiled surface's `hh-tmpl.uname/1` probe is a
+            # setup-phase exec that serves positionally from the same
+            # replay queue (ws1r's verified raws shape): the drive
+            # cell's real `uname -s; -r; -v; -m` output must head the
+            # queue or the probe consumes the first recorded call's
+            # observation — stamping it as uname values and shifting the
+            # whole replay sequence off-by-one. Idempotent: a queue
+            # already headed by the probe entry is left verbatim.
+            if a.mswea_pack:
+                try:
+                    raws = read_json(raws_p) or []
+                    if not raws or raws[0].get("reconstructed") != \
+                            "host_uname_probe":
+                        u = subprocess.run(
+                            ["/bin/sh", "-c",
+                             "uname -s; uname -r; uname -v; uname -m"],
+                            capture_output=True, text=True, timeout=10)
+                        raws.insert(0, {
+                            "output": u.stdout,
+                            "returncode": u.returncode,
+                            "exception_info": None,
+                            "reconstructed": "host_uname_probe",
+                        })
+                        with open(raws_p, "w") as f:
+                            json.dump(raws, f)
+                except Exception:
+                    pass
         # ── L1.0: two O drives ───────────────────────────────────
         o_docs = []
         for run_tag in ("a", "b"):
@@ -883,6 +910,17 @@ def main():
                 store = os.path.join(a.run_root, slot, "store")
                 h_docs[leg], ep_firsts[leg] = h_drive(
                     store, slot, events, n_calls)
+                if rc != 0:
+                    # the drive never armed — stamp the machinery
+                    # refusal on the folded H drive so an empty
+                    # `requests`/`exception{unfinished}` doc reads as
+                    # the open/arm failure it is (the leg's own
+                    # statuses carry the same fact; a vacuous-gate
+                    # "pass" must never stand unqualified)
+                    h_docs[leg]["refusal"] = {
+                        "rule": "machinery{l1_drive:rc=%d}" % rc,
+                        "detail": (se or "")[:200],
+                    }
                 row[leg] = {"status": "exited{%d}" % rc if rc == 0
                             else "machinery{l1_drive:rc=%d}" % rc,
                             "detail": (se or "")[:200]}

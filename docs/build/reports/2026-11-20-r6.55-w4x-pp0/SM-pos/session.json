@@ -1,0 +1,20 @@
+{
+ "grants": {
+  "sm-pos-claude-code": {
+   "effort": "high",
+   "slice_micros": 850000,
+   "slot_token": "39b9be70f8d00d241055e30f7c17662b"
+  },
+  "sm-pos-pi": {
+   "effort": "high",
+   "slice_micros": 850000,
+   "slot_token": "36c177f505d81a5d36cae719d4e2a97b"
+  }
+ },
+ "listen": "127.0.0.1:49183",
+ "mode": "replay",
+ "registered_at": "2026-11-20T01:29:34Z",
+ "run_id": "w4x-pp0-r5-sm-pos",
+ "schema": "hh-w2-proxy-session/1",
+ "store_root": "store"
+}

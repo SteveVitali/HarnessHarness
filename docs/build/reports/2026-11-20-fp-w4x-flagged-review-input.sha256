@@ -1,0 +1,2 @@
+e4665d8f9bbe8a47aa5d7b6f2a9a97d41d2973b0367a4df9b4d08c95b86a3ef5  docs/build/reports/2026-11-20-fp-w4x-flagged-review-input.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-20-fp-w4x-flagged-review-input.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)

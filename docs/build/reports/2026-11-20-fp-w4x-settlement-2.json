@@ -1,0 +1,32 @@
+{
+ "act1": "2026-11-20-fp-w4x-settlement.json \u2014 pending{clock} at 11:29Z, same class pre-clock",
+ "attribution": {
+  "conclusion": "the provider trailing-24h (12.68) covers W4x window hours 03:00-10:00Z ($7.7627, 4,915 requests) plus the residual W4 remainder buckets (2026-11-19T12:00-17:00Z ~$4.9 within the trailing 24h). Inside the W4x window hours every provider call is window-attributable; the $6.02 window-internal gap vs metered $1.74 is pi+claude-code SSE usage-absent unmetered streaming \u2014 never laundered into the v5 metered figure.",
+  "w4x_window_requests_hh_attributed": 5001,
+  "w4x_window_requests_hh_dispatched": 5140,
+  "w4x_window_requests_provider": 4915,
+  "window_hourly_sum_usd": 7.7627
+ },
+ "boundary": "2026-11-20T11:00:00Z",
+ "clock": ">=2h elapsed at 13:03:24Z",
+ "diff_micros": 10944304,
+ "hh": {
+  "attributed_calls": 5001,
+  "attributed_micro_units": 1740556,
+  "requested_calls": 5140
+ },
+ "kind": "settlement_confirm",
+ "phase": "fp",
+ "provided": {
+  "OLLAMA_API_KEY": "yes"
+ },
+ "provider": {
+  "balance_usd_post": 38.54025,
+  "trailing_24h_micro_units": 12684860
+ },
+ "recorded_at": "2026-11-20T13:05:00Z",
+ "schema": "hh-settlement/1",
+ "status": "settled_discrepant{unmetered_streaming_usage} \u2014 REQ-XC-127 clock ran: boundary 11:00Z, confirming paced reads 13:00:40Z/13:01:03Z/13:02:14Z/13:02:58Z (balance-pre, usage-1, usage-2 \u226570s apart agreeing, balance-post); ollama-settle.sh w4x folded settled_discrepant into PHASE_SPEND.jsonl",
+ "ticket": "R6.56",
+ "window": "w4x"
+}

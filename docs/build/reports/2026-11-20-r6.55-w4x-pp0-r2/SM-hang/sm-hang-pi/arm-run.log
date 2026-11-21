@@ -1,0 +1,3 @@
+{"agent_end_cause":"agent_timeout","denied_hosts":[],"native_log":{"files":{"pi.txt":{"bytes":0,"sha256":"sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"},"pi/sessions/2026-11-20T02-04-45-614Z_00313a9b-4f25-41ce-8c59-8d8a6098d77e.jsonl":{"bytes":1133,"sha256":"sha256:81a94db92463b00c8a05dd69b2935de093f3f76d0a65c072825532202d70fe8c"}},"manifest_sha256":"sha256:6797a32147e229767d2c7758e65bda4b0dffe92691ab7dca2d2b3f0485c78786"},"verify_attempts":1}
+
+--- stderr ---

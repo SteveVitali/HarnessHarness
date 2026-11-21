@@ -1,0 +1,2 @@
+359db60246f1bfbd6d4f1b758bff1d40138ce7edccdce760541ddf5e309f244e  docs/build/reports/2026-11-20-fp-w4x-admission-pi-executed.json
+# recompute: shasum -a 256 -c 2026-11-20-fp-w4x-admission-pi-executed.sha256 (run from the repo root)

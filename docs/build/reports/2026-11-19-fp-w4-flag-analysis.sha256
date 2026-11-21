@@ -1,0 +1,2 @@
+da00b5bacf2a9801d0e0e7873f67261a65af00c30ad52c7fbe2ad0550f897ce2  docs/build/reports/2026-11-19-fp-w4-flag-analysis.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-19-fp-w4-flag-analysis.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)

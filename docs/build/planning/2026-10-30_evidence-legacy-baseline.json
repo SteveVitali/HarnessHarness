@@ -104,6 +104,16 @@
     "obligation": "",
     "evidence": "",
     "message": "BUILD_INDEX.md: 2 row(s) do not have the header's column count — an unescaped '|' in a cell? (BM-INDEX-01) (first: line 56 (12/11))"
+   },
+   "resolved": {
+    "date": "2026-11-20",
+    "recorded_by": "coordinator DF-R7.1-1 discharge — append-only; the entry is preserved, never cleared",
+    "reason": "resolved-by-repair — CAP6.2's BUILD_INDEX backfill (build rows 322, 2026-11-19) repaired the 2 malformed rows this diagnostic reported; the class legitimately ceased emitting — a vanished diagnostic after repair is not missing history",
+    "provenance": {
+     "repair": "docs/build/runs/CAP6.2.md — register normalization + 12 missing BUILD_INDEX landings backfilled (DF-CAP6.1-5 closure)",
+     "deferral": "docs/tickets/DEFERRALS.md DF-R7.1-1 — opened by R7.1 when the required-emission rule could not reconcile the repair",
+     "guard": "docs/build/tools/supplement_guard.py — resolved member honored same date"
+    }
    }
   },
   {
@@ -331,6 +341,24 @@
     "file_pattern": "^docs/build/reports/compute/harvest/fp-(wc9|wc10|ws1|ws1r)/(run-root[^/]*\\.tar\\.gz|journald\\.log)$",
     "message_pattern": "exceeds 5 MB",
     "max_emitted": 6
+   }
+  },
+  {
+   "id": "fp-w4x-harvest-size-4",
+   "date": "2026-11-20",
+   "recorded_by": "R7.1 (manifest 326) — append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
+   "kind": "bounded-family-classification",
+   "emission": "required within bound — the four committed W4/W4x-landing evidence artifacts exceed the stock validator's 5 MB size diagnostic; every additional >5 MB warning outside this family still fails unexplained-diagnostic",
+   "provenance": {
+    "finding": "docs/build/LEDGER.md OPEN FINDINGS — 2026-11-20 'Pre-existing guard residuals standing at the Round-7 registration'",
+    "committed_by": "the R6.55–R6.57 W4x landing chain (answer-scan record, fp-w4/fp-w4x journald logs, fp-w4xv run-root tarball — committed evidence, not bloat)",
+    "precedent": "fp-harvest-size-6 / wc4|wc6|wc7-runroot-size-1 / wc-journald-size-1 — the same bounded-family disposition for committed harvest artifacts"
+   },
+   "family": {
+    "check": "size",
+    "file_pattern": "^docs/build/reports/(compute/harvest/fp-w4x?/journald\\.log|compute/harvest/fp-w4xv/run-root\\.tar\\.gz|2026-11-20-fp-w4x-answer-scan\\.json)$",
+    "message_pattern": "exceeds 5 MB",
+    "max_emitted": 4
    }
   }
  ]

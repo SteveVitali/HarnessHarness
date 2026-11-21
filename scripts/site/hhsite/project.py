@@ -109,12 +109,12 @@ def manifest(inputs, inputs_digest):
                        for i in inputs],
         "phases": {
             "phase-1": "internal record; not outside-verified",
-            "phase-2": "fixture-rendered — internal profile only; "
-                       "publication pending",
-            "phase-3": "fixture-rendered — internal profile only; "
-                       "publication pending",
-            "phase-4": "fixture-rendered — internal profile only; "
-                       "publication pending",
+            "phase-2": "published — hh-site-publication/1 "
+                       "phase-2-2026-11-19 (GATE-G31 via ADR-0453)",
+            "phase-3": "published — hh-site-publication/1 "
+                       "phase-3-2026-11-20 (GATE-G31 / ADR-0452)",
+            "phase-4": "published — hh-site-publication/1 "
+                       "phase-4-2026-11-20 (GATE-G31 / ADR-0452)",
         },
         "site_files": ["changelog.json", "claims.json", "manifest.json",
                        "method.json", "phase1.json", "phase3.json",
@@ -650,12 +650,27 @@ def _cost_basis(pkt, ptr):
             out[name] = _absent_of(raw)
             continue
         iv, _ = field(pkt, "%s/%s/interval" % (ptr, name))
+        if isinstance(iv, dict) and iv.get("state"):
+            # the interval itself is a typed marker (the executed fold
+            # declares no interval route over the slot costs) — the
+            # member copies verbatim with its marker, and the integer
+            # point stays a site estimate point; never an invented kind.
+            t = _tree(pkt, "%s/%s" % (ptr, name))
+            if isinstance(raw.get("micros"), int):
+                t["point"] = _v(pkt, "%s/%s/micros" % (ptr, name),
+                                "micros_usd")
+            out[name] = t
+            continue
         out[name] = _iv3(pkt, "micros_usd", iv["kind"],
-                         iv["level_ppm"], "%s/%s/micros" % (ptr, name),
+                         iv.get("level_ppm"), "%s/%s/micros" % (ptr, name),
                          "%s/%s/interval/lo_ppm" % (ptr, name),
                          "%s/%s/interval/hi_ppm" % (ptr, name))
-    out["provenance"] = _t(pkt, "%s/provenance" % ptr)
-    out["label"] = _t(pkt, "%s/label" % ptr)
+    for k in ("provenance", "label"):
+        out[k] = (_t(pkt, "%s/%s" % (ptr, k))
+                  if _present(pkt, "%s/%s" % (ptr, k))
+                  else absent("not_computed",
+                              reason="packet cost block carries no %s "
+                                     "member" % k))
     return out
 
 
@@ -663,7 +678,7 @@ def _harness_row(pkt, hid):
     """One §9.2 leaderboard row over the packet's harness entry."""
     base = "/harnesses/%s" % hid
     th_iv, _ = field(pkt, "%s/theta/interval" % base)
-    th_kind, th_level = th_iv["kind"], th_iv["level_ppm"]
+    th_kind, th_level = th_iv["kind"], th_iv.get("level_ppm")
     b_iv, _ = field(pkt, "%s/theta/bounds" % base)
     theta = _iv3(pkt, "ppm", th_kind, th_level,
                  "%s/theta/ppm" % base,
@@ -698,7 +713,7 @@ def _harness_row(pkt, hid):
         delta = _absent_of(d_raw)
     else:
         d_iv = d_raw["interval"]
-        delta = _iv3(pkt, "ppm", d_iv["kind"], d_iv["level_ppm"],
+        delta = _iv3(pkt, "ppm", d_iv["kind"], d_iv.get("level_ppm"),
                      "%s/delta_vs_ref/ppm" % base,
                      "%s/delta_vs_ref/interval/lo_ppm" % base,
                      "%s/delta_vs_ref/interval/hi_ppm" % base)
@@ -710,13 +725,14 @@ def _harness_row(pkt, hid):
                                    "%s/delta_vs_ref/separated" % base)
         delta["label"] = _t(pkt, "%s/delta_vs_ref/label" % base)
 
+    lg_iv = pkt.resolve("%s/leader_group/diff_interval" % base)
     lg = {
         "member": _flag(pkt, "%s/leader_group/member" % base),
         "diff": _iv3(pkt, "ppm",
-                     pkt.resolve("%s/leader_group/diff_interval/kind"
-                                 % base),
-                     pkt.resolve("%s/leader_group/diff_interval/"
-                                 "level_ppm" % base),
+                     lg_iv.get("kind") if isinstance(lg_iv, dict)
+                     else None,
+                     lg_iv.get("level_ppm") if isinstance(lg_iv, dict)
+                     else None,
                      None,
                      "%s/leader_group/diff_interval/lo_ppm" % base,
                      "%s/leader_group/diff_interval/hi_ppm" % base),
@@ -780,7 +796,7 @@ def _flip3(inp, ptr):
     if isinstance(raw, dict) and raw.get("state"):
         return _absent_of(raw)
     return _iv3(inp, "ppm", raw["interval"]["kind"],
-                raw["interval"]["level_ppm"], "%s/ppm" % ptr,
+                raw["interval"].get("level_ppm"), "%s/ppm" % ptr,
                 "%s/interval/lo_ppm" % ptr, "%s/interval/hi_ppm" % ptr)
 
 
@@ -795,7 +811,8 @@ def _flip_pairs(inp, ptr):
             out.append({"other": other, "estimate": _absent_of(e)})
         elif "ppm" in e:
             out.append({"other": other,
-                        "estimate": _flip3(inp, "%s/%s" % (ptr, other))})
+                        "estimate": _flip3(inp, "%s/%s"
+                                           % (ptr, _esc(other)))})
         else:
             iv = e.get("interval", {})
             if isinstance(iv, dict) and iv.get("state"):
@@ -803,9 +820,9 @@ def _flip_pairs(inp, ptr):
                             "estimate": _absent_of(iv)})
             else:
                 out.append({"other": other, "estimate": _iv3(
-                    inp, "ppm", iv["kind"], iv["level_ppm"], None,
-                    "%s/%s/interval/lo_ppm" % (ptr, other),
-                    "%s/%s/interval/hi_ppm" % (ptr, other))})
+                    inp, "ppm", iv["kind"], iv.get("level_ppm"), None,
+                    "%s/%s/interval/lo_ppm" % (ptr, _esc(other)),
+                    "%s/%s/interval/hi_ppm" % (ptr, _esc(other)))})
     return out
 
 
@@ -865,11 +882,16 @@ def tfp(inputs):
     i = _by_id(inputs)
     pkt = i["p2-fp"]
 
-    if _is_withheld(pkt):
-        # The first-pass tranche withheld every arm — the page projects
-        # the packet's full computed structure verbatim (REQ-XH-020).
+    if _is_withheld(pkt) or not _present(pkt, "/tasks"):
+        # A typed non-compute disposition — the first-pass tranche
+        # withheld every arm, then the executed-W4 fold landed typed
+        # markers beside real values — the page projects the packet's
+        # full computed structure verbatim (REQ-XH-020). The executed
+        # W4x fold is disposition "executed{adr-0453}" but carries no
+        # fixture /tasks grid member — it takes the same verbatim
+        # route rather than an invented grid.
         return {
-            "withheld": True,
+            **_verbatim_flag(pkt),
             "claim": _t(pkt, "/claim"),
             "executed_evidence": _t(pkt, "/executed_evidence"),
             "expected_precision": _t(pkt, "/expected_precision"),
@@ -1240,7 +1262,10 @@ def phase3(inputs):
             "label": _t(l3, "/label"),
             "of": _t(l3, "/of"),
             "per_arm": _tree(l3, "/per_arm"),
-            "per_pair": _tree(l3, "/per_pair"),
+            # the w4x L3 supersession drops per_pair (its evaluation is
+            # not_applicable — no H-side verdicts on the extension arms);
+            # a dropped member renders the typed absent, never refuses.
+            "per_pair": _tree_or_absent(l3, "/per_pair"),
             "planned_pairs": _v(l3, "/planned_pairs", "count"),
             "req": _t(l3, "/req"),
             "served_pairs": _v(l3, "/served_pairs", "count"),
@@ -1257,12 +1282,31 @@ def phase3(inputs):
 
 
 def _is_withheld(pkt):
-    """A packet whose overall disposition is a typed withhold/refusal
-    renders its full computed structure — never a bare null page
-    (REQ-XH-020)."""
+    """A packet whose overall disposition is a typed non-compute
+    marker — ``withheld{``, ``refused{``, ``unavailable{`` or
+    ``not_run{`` — renders its full computed structure verbatim
+    (landed values where the packet carries them, typed markers
+    elsewhere), never a bare null page and never a leaderboard over
+    missing arms (REQ-XH-020). The executed-W4 packets carry exactly
+    this shape: landed arms beside ``not_run{admission:AG3}`` and
+    ``unavailable{…}`` verdicts."""
     d = pkt.doc.get("packet_disposition")
     return isinstance(d, str) and (
-        d.startswith("withheld{") or d.startswith("refused{"))
+        d.startswith("withheld{") or d.startswith("refused{")
+        or d.startswith("unavailable{") or d.startswith("not_run{"))
+
+
+def _verbatim_flag(pkt):
+    """The body's disposition flags: ``withheld`` stays the literal
+    ``withheld{…}`` case (the committed test vocabulary); every typed
+    non-compute disposition also carries ``verbatim_structure`` so the
+    renderer picks the verbatim-structure page without mislabelling a
+    landed-but-typed packet as withheld."""
+    d = pkt.doc.get("packet_disposition")
+    return {
+        "verbatim_structure": True,
+        "withheld": isinstance(d, str) and d.startswith("withheld{"),
+    }
 
 
 def _fp_arm_rows(pkt):
@@ -1345,10 +1389,14 @@ def trials_fp(inputs):
                          "not_yet_available",
                          reason="withheld{dataset_private}"))}
 
-    if _is_withheld(pkt):
-        # No tranche trial executed — the index renders zero rows and
-        # the packet's own withhold + executed-evidence text verbatim.
+    if _is_withheld(pkt) or not _present(pkt, "/trials"):
+        # A typed non-compute disposition — the index renders zero rows
+        # and the packet's own disposition + executed-evidence text
+        # verbatim. The executed W4x packet is not withheld but carries
+        # no per-trial /trials member — same verbatim route, zero
+        # invented trial rows.
         return {
+            **_verbatim_flag(pkt),
             "dataset": dataset,
             "scans": {
                 "secret_scan_ref": _t(idx, "/scans/secret_scan_ref"),

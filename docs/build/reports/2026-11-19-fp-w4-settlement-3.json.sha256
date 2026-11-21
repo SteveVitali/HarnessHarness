@@ -1,0 +1,2 @@
+7f832c8222319d5ab241f0c8f382c7974eefb090c5e33690c4fd60a8df959920  docs/build/reports/2026-11-19-fp-w4-settlement-3.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-19-fp-w4-settlement-3.json.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)

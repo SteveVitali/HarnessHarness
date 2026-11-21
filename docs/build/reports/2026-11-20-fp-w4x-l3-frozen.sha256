@@ -1,0 +1,2 @@
+1acf6f6c867d187a5c35a7985a773fd0798df9adbb2507982f3fe6cc5b4deba6  docs/build/reports/2026-11-20-fp-w4x-l3-frozen.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-20-fp-w4x-l3-frozen.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)

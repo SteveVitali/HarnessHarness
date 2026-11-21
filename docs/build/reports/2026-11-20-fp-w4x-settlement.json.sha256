@@ -1,0 +1,2 @@
+7c6c8f5684862dae34cd88ffc1965b796631508f4659ccab2d3169c8baa596af  docs/build/reports/2026-11-20-fp-w4x-settlement.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-20-fp-w4x-settlement.json.sha256 (run from the repo root)

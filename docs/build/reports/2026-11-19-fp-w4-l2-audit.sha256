@@ -1,0 +1,2 @@
+5453eda37d6963e44d558a8bd4648563a1f03ebbf8ac4ee3168375380e1a64b3  docs/build/reports/2026-11-19-fp-w4-l2-audit.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-19-fp-w4-l2-audit.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)
