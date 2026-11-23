@@ -223,3 +223,39 @@ Authorizations recorded verbatim (REQ-XH-004 — model and compute separately):
 verbatim_sha256 `ca8b1353cc3d` — to be stamped into the R7.3 declaration at flesh time.
 GATE DECISIONS row: 2026-11-20T21:55Z | GATE-G35
 Signed by: the operator. Recorded by devin-cli/swe-2-high, which does not sign.
+
+## Amendment — X1 re-authorization (2026-11-23)
+
+Context: R7.3's attempt-3 window executed G-L1 (gen-3 baseline `sha256:4142fb10…`,
+PASS `l1-pass:sha256:5b807c53…`) and X0 (24/24 slots, 1,834,017 µ$ model) but the
+operating session ended before launching X1 — 0/440 slots ran; the VM idled to its
+dead-man stop. Compute cycle settled 13,789,418 µ$ vs the `pq-59a49747bfa5bdf0`
+ceiling 13,486,340 µ$ (honest breach, dead-man idle). The X1 leg therefore required
+a fresh compute authorization; the model authorization stands under the original
+cap (1,834,017 of 157,760,000 µ$ consumed).
+
+Operator decision (verbatim, received 2026-11-23 via Devin CLI session): "Ok, I
+authorize X1, continue" — **disposition `run` for the X1 leg** (440 executable
+slots: 11 band-A development tasks × k=5 × baseline+V1–V7; V8/V9 stay
+`withheld{inert_at_admissible_window}`).
+
+Authorizations recorded verbatim (REQ-XH-004 — model and compute separately):
+- **Model:** the original GATE-G35 cap `cap_h = slots_h × p̂_h` = 157,760,000 µ$
+  covers X0+X1; 1,834,017 µ$ consumed by X0, the remainder governs X1. Expected
+  actual ≈ $33–45 at X0's observed rate.
+- **Compute:** `hh-compute-quote/1` **`pq-4263f129db914f88`**, ceiling
+  **18,512,580 µ$ ($18.51)** — e2-standard-8, debian-12, 300 GiB, D=56 h dead-man
+  bound (covers the projected ~35–50 h X1 work span with slack), C=4, 440 trials +
+  44 retries, planning micros 11,770,684 (~$11.77 expected at the planning prior);
+  declaration `scripts/gce-backend/declarations/fp-p4x1.json`.
+- **Exclusivity/teardown:** the established window posture verbatim; X1 launches
+  immediately at provision so the dead-man bound is spent on work, not idle.
+- **Stop rules:** the §8.4 declared set verbatim, unchanged.
+- **Scope:** this amendment authorizes the X1 leg only — it does not reopen G-L1
+  (passed on `sha256:4142fb10…`), does not re-execute X0, and does not extend to
+  the confirmation window (re-presents at GATE-G36).
+
+verbatim_sha256 `2be1a0d94581ef3d94937a7f1d7c405f893f09bae39ebd88b3317c49337e73cc`
+— stamped into `declarations/fp-p4x1.json`.
+GATE DECISIONS row: 2026-11-23T16:05Z | GATE-G35 (amendment)
+Signed by: the operator. Recorded by devin-cli/swe-2-high, which does not sign.
