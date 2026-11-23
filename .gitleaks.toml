@@ -84,3 +84,31 @@ rules = ["generic-api-key"]
 paths = ['''^docs/build/reports/2026-11-19-fp-w4-window\.json$''']
 regexTarget = "match"
 regexes = ['''^order_key": "[0-9a-f]{64}"$''']
+
+[[allowlists]]
+description = "R6.53/R6.55/R7.3 order_key schedule-ordering SHA-256 digests, not credentials; exact commits, files, field format"
+condition = "AND"
+commits = ["c89fbf94e4fe3efa845a517fa62c82a6584c800b", "5a7c936fa722f873bc261d564e99efc99bb52457", "22ce1eb0dfe5d2da8d6e4d3dedb5e8b56811c17e"]
+rules = ["generic-api-key"]
+paths = ['''^docs/build/reports/2026-11-20-fp-w4x-window\.json$''', '''^docs/build/reports/2026-11-20-fp-w4xv-window\.json$''', '''^docs/build/reports/2026-11-21-fp-p4x0-window\.json$''']
+regexTarget = "match"
+regexes = ['''^order_key": "[0-9a-f]{64}"$''']
+
+[[allowlists]]
+description = "sanitize-git-repo benchmark fixture: planted fake AWS keys echoed in recorded pytest output, not project credentials; exact commits, files, match format"
+condition = "AND"
+commits = ["5a7c936fa722f873bc261d564e99efc99bb52457", "f4f8484fd7b3df8b499e3edb705b925348b6da3a", "bde82fa512d16626e8655bb731cd1a002c01ca08"]
+rules = ["generic-api-key"]
+paths = ['''^docs/build/reports/2026-11-20-fp-w4xv-window\.json$''', '''^docs/build/reports/2026-11-20-fp-w4x-outcomes\.json$''']
+regexTarget = "match"
+regexes = ['''^(?i:aws_secret_access_key)=[A-Za-z0-9]{20,40}'$''']
+
+# Operator 2026-11-23 ("use your best judgement"): real but dead replay-mode loopback slot tokens; history allowlisted (no rewrite), forward fix owed on the R6.55 branch.
+[[allowlists]]
+description = "R6.55 PP0 replay-mode loopback session records: proxy slot tokens (process-lifetime, 127.0.0.1, replay — no upstream spend); exact commits, files, field format"
+condition = "AND"
+commits = ["83bb042809b2a6a7543d6a244acfad386b3ae91e", "612698557665a9ae06633dd8f31edb0f10d74b67"]
+rules = ["generic-api-key"]
+paths = ['''^docs/build/reports/2026-11-20-r6\.55-w4x-pp0(-r2)?/SM-[a-z0-9]+/session\.json$''']
+regexTarget = "match"
+regexes = ['''^slot_token": "[0-9a-f]{32}"$''']
