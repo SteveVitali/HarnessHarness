@@ -1,0 +1,2 @@
+2a6bfa807f9f37ce54dc30e3dfe7fb5ada051eeb4790968a90761f1ee16cf91a  docs/build/reports/compute/2026-11-19-fp-w4-teardown-2.json
+# recompute: shasum -a 256 -c docs/build/reports/compute/2026-11-19-fp-w4-teardown-2.json.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)
