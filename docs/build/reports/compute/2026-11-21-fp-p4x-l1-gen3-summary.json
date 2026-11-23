@@ -1,0 +1,156 @@
+{
+ "fold": {
+  "detail": "",
+  "status": "exited{0}"
+ },
+ "fold_dir": "/opt/p4x/l1/fold-g3/fold",
+ "gate_a": 8,
+ "legs": [
+  {
+   "l10_a": {
+    "status": "reused{durable}"
+   },
+   "l10_b": {
+    "status": "reused{durable}"
+   },
+   "l1_1": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "l1_2": {
+    "detail": "submit 1: Refused { reason: \"{\\\"code\\\":1403,\\\"data\\\":{\\\"kind\\\":\\\"Refused\\\",\\\"reason\\\":\\\"driver_append: AuditFieldsTooLarge { class: \\\\\\\"verification.gate.evaluated\\\\\\\", bytes: 1273, max: 512 } (classe",
+    "status": "machinery{l1_drive:rc=1}"
+   },
+   "task": "cobol-modernization",
+   "trajectory": "ws1-corpus-01"
+  },
+  {
+   "l10_a": {
+    "status": "reused{durable}"
+   },
+   "l10_b": {
+    "status": "reused{durable}"
+   },
+   "l1_1": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "l1_2": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "task": "cobol-modernization",
+   "trajectory": "ws1-corpus-02"
+  },
+  {
+   "l10_a": {
+    "status": "reused{durable}"
+   },
+   "l10_b": {
+    "status": "reused{durable}"
+   },
+   "l1_1": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "l1_2": {
+    "detail": "submit 1: Refused { reason: \"{\\\"code\\\":1403,\\\"data\\\":{\\\"kind\\\":\\\"Refused\\\",\\\"reason\\\":\\\"driver_append: AuditFieldsTooLarge { class: \\\\\\\"verification.gate.evaluated\\\\\\\", bytes: 794, max: 512 } (classes",
+    "status": "machinery{l1_drive:rc=1}"
+   },
+   "task": "cobol-modernization",
+   "trajectory": "ws1-corpus-03"
+  },
+  {
+   "l10_a": {
+    "status": "reused{durable}"
+   },
+   "l10_b": {
+    "status": "reused{durable}"
+   },
+   "l1_1": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "l1_2": {
+    "detail": "submit 1: Refused { reason: \"{\\\"code\\\":1403,\\\"data\\\":{\\\"kind\\\":\\\"Refused\\\",\\\"reason\\\":\\\"driver_append: AuditFieldsTooLarge { class: \\\\\\\"verification.gate.evaluated\\\\\\\", bytes: 1080, max: 512 } (classe",
+    "status": "machinery{l1_drive:rc=1}"
+   },
+   "task": "cobol-modernization",
+   "trajectory": "ws1-corpus-04"
+  },
+  {
+   "l10_a": {
+    "status": "reused{durable}"
+   },
+   "l10_b": {
+    "status": "reused{durable}"
+   },
+   "l1_1": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "l1_2": {
+    "detail": "submit 1: Refused { reason: \"{\\\"code\\\":1403,\\\"data\\\":{\\\"kind\\\":\\\"Refused\\\",\\\"reason\\\":\\\"driver_append: AuditFieldsTooLarge { class: \\\\\\\"verification.gate.evaluated\\\\\\\", bytes: 1133, max: 512 } (classe",
+    "status": "machinery{l1_drive:rc=1}"
+   },
+   "task": "sqlite-with-gcov",
+   "trajectory": "ws1-corpus-25"
+  },
+  {
+   "l10_a": {
+    "status": "reused{durable}"
+   },
+   "l10_b": {
+    "status": "reused{durable}"
+   },
+   "l1_1": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "l1_2": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "task": "sqlite-with-gcov",
+   "trajectory": "ws1-corpus-26"
+  },
+  {
+   "l10_a": {
+    "status": "reused{durable}"
+   },
+   "l10_b": {
+    "status": "reused{durable}"
+   },
+   "l1_1": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "l1_2": {
+    "detail": "submit 1: Refused { reason: \"{\\\"code\\\":1403,\\\"data\\\":{\\\"kind\\\":\\\"Refused\\\",\\\"reason\\\":\\\"driver_append: AuditFieldsTooLarge { class: \\\\\\\"verification.gate.evaluated\\\\\\\", bytes: 605, max: 512 } (classes",
+    "status": "machinery{l1_drive:rc=1}"
+   },
+   "task": "sqlite-with-gcov",
+   "trajectory": "ws1-corpus-27"
+  },
+  {
+   "l10_a": {
+    "status": "reused{durable}"
+   },
+   "l10_b": {
+    "status": "reused{durable}"
+   },
+   "l1_1": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "l1_2": {
+    "detail": "submit 1: Refused { reason: \"{\\\"code\\\":1403,\\\"data\\\":{\\\"kind\\\":\\\"Refused\\\",\\\"reason\\\":\\\"driver_append: AuditFieldsTooLarge { class: \\\\\\\"verification.gate.evaluated\\\\\\\", bytes: 639, max: 512 } (classes",
+    "status": "machinery{l1_drive:rc=1}"
+   },
+   "task": "sqlite-with-gcov",
+   "trajectory": "ws1-corpus-28"
+  }
+ ],
+ "run_at": "2026-11-21T03:44:48Z",
+ "schema": "hh-ws1-l1-summary/1"
+}

@@ -75,3 +75,9 @@ description = "R6.42 fp-partition/dev-projection records: generic-api-key false 
 condition = "AND"
 rules = ["generic-api-key"]
 paths = ['''^docs/build/reports/2026-11-11-fp-partition\.json$''', '''^docs/build/reports/2026-11-11-fp-dev-projection\.json$''']
+
+[[allowlists]]
+description = "R7.3 p4x0 window record: generic-api-key false positives on `order_key` members — 64-hex sha256 deterministic schedule-ordering digests (same member shape as committed fp-w4/fp-w4x window records), not credentials. Scoped to this file; any new hit elsewhere still reports"
+condition = "AND"
+rules = ["generic-api-key"]
+paths = ['''^docs/build/reports/2026-11-21-fp-p4x0-window\.json$''']

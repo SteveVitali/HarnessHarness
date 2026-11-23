@@ -1,0 +1,2 @@
+55af8a7576349d9730b22e4bc766af5b814a0181a2715d588ab29043c944c66f  docs/build/reports/2026-11-21-fp-p4x0-window.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-21-fp-p4x0-window.json.sha256 (run from the repo root)
