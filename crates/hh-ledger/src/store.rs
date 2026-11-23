@@ -975,7 +975,11 @@ impl Store {
         // The writer lease's expiry must be representable before any
         // durable act (run dir, `lifecycle.run.created`): a refusal here
         // leaves no half-created run behind.
-        lease_expiry_ms(self.clock.now_ms(), manifest.lease_ttl.writer_ms)?;
+        // One clock sample supplies the check, `acquired_at` and the expiry
+        // (R6.52 review m1a): the lease written after `run.created` can no
+        // longer be refused on a later, larger reading.
+        let lease_now = self.clock.now_ms();
+        let lease_expires = lease_expiry_ms(lease_now, manifest.lease_ttl.writer_ms)?;
         // Lineage anchors: `forked_from`/`continued_from` must resolve and bind the
         // source head hash at `at_seq` (ADR-0027 §6; ADR-0131 §5).
         for link in [&manifest.forked_from, &manifest.continued_from]
@@ -1102,8 +1106,8 @@ impl Store {
             lease_id: self.ids.alloc("lease"),
             holder: holder.to_string(),
             generation: 1,
-            acquired_at_ms: self.clock.now_ms(),
-            expires_at_ms: lease_expiry_ms(self.clock.now_ms(), manifest.lease_ttl.writer_ms)?,
+            acquired_at_ms: lease_now,
+            expires_at_ms: lease_expires,
             status: LeaseStatus::Active,
         };
         write_lease_file(&state.dir, &rec)?;

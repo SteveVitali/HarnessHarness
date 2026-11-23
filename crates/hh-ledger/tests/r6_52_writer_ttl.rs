@@ -143,3 +143,31 @@ fn takeover_with_unrepresentable_ttl_refuses_without_fencing() {
     let ok = s.acquire_writer("writer-b", &run, 60_000).unwrap();
     assert_eq!(ok.generation, 2);
 }
+
+#[test]
+fn renewal_near_the_representable_boundary_refuses_without_writing() {
+    // A lease expiring exactly at i64::MAX: renewing one ms later would
+    // need now + interval > i64::MAX — refused typed, never wrapped or
+    // serialized negative, and the live lease is left untouched.
+    let (mut s, clock, _d) = store("renew-edge");
+    let ttl = i64::MAX as u64 - NOW_MS;
+    let (run, lease) = s.open_run(manifest(ttl), "writer-a").unwrap();
+    clock.advance(1);
+    let r = s.renew(&lease);
+    assert!(
+        matches!(r, Err(LedgerError::ManifestInvalid { .. })),
+        "expected ManifestInvalid, got {r:?}"
+    );
+    // Nothing was written: the original lease still blocks a takeover.
+    assert!(matches!(
+        s.acquire_writer("writer-b", &run, 60_000),
+        Err(LedgerError::WouldBlock { .. })
+    ));
+}
+
+#[test]
+fn creation_records_one_clock_sample_for_acquisition_and_expiry() {
+    let (mut s, _clock, _d) = store("one-sample");
+    let (_run, lease) = s.open_run(manifest(1_800_000), "writer-a").unwrap();
+    assert_eq!(lease.expires_at_ms - 1_800_000, NOW_MS);
+}
