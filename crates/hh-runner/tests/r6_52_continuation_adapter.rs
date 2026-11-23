@@ -484,3 +484,304 @@ fn the_binary_transports_byte_identically_and_exits_typed() {
     assert_eq!(code, Some(2));
     assert!(stdout.contains("refused"));
 }
+
+// ── R6.52 review fixes (2026-11-23): strict envelope + canonical probe ──
+
+#[test]
+fn duplicate_keys_and_noncanonical_requests_refuse() {
+    let req = checkpoint_req(input(2, 30, &[], 0, 0, ROOT), None);
+    let canon = req.to_canonical_string();
+    let (_, ok) = respond(&canon);
+    assert!(ok, "the canonical request is accepted");
+    // A duplicated member (last-wins in the lenient reader) refuses.
+    let dup = canon.replacen("{\"input\":", "{\"op\":\"admit\",\"input\":", 1);
+    assert_ne!(dup, canon);
+    let (body, ok) = respond(&dup);
+    assert!(!ok && body.get("refused").is_some(), "{body:?}");
+    // Whitespace / non-canonical spelling refuses too.
+    let (_, ok) = respond(&format!(" {canon}"));
+    assert!(!ok);
+}
+
+#[test]
+fn unknown_envelope_members_refuse() {
+    let mut req = checkpoint_req(input(2, 30, &[], 0, 0, ROOT), None);
+    if let Json::Obj(m) = &mut req {
+        m.insert("bogus".into(), Json::Int(1));
+    }
+    let err = handle(&req).unwrap_err().to_string();
+    assert!(err.contains("bogus"), "{err}");
+    let mut w = wall(28_000_000);
+    if let Json::Obj(m) = &mut w {
+        m.insert("slack_ms".into(), Json::Int(0));
+    }
+    assert!(handle(&checkpoint_req(input(2, 30, &[], 0, 0, ROOT), Some(w))).is_err());
+}
+
+fn pricing(input_per_1m: i64, output_per_1m: i64) -> Json {
+    Json::obj([
+        ("schema", Json::str("hh-w4-probe-pricing/1")),
+        (
+            "model_ref",
+            Json::obj([
+                ("profile_ref", Json::str("glm-5.3-flash")),
+                ("provider_model_id", Json::str("glm-5.3-flash")),
+                ("serving_route", Json::str("ollama")),
+            ]),
+        ),
+        (
+            "table",
+            Json::obj([
+                ("table_id", Json::str("ollama")),
+                ("version", Json::str("2026-10-22")),
+                ("currency", Json::str("USD")),
+                ("rate_unit", Json::str("micro_per_1k_tokens")),
+                ("input_micro_per_1m", Json::Int(input_per_1m)),
+                ("cache_read_micro_per_1m", Json::Int(30_000)),
+                ("output_micro_per_1m", Json::Int(output_per_1m)),
+                ("valid_from", Json::str("2026-10-22")),
+                ("source", Json::str("fixture")),
+            ]),
+        ),
+    ])
+}
+
+fn plan_req(p: Json, efforts: &[&str]) -> Json {
+    Json::obj([
+        ("schema", Json::str(ADAPTER_SCHEMA)),
+        ("op", Json::str("lane_probe_plan")),
+        ("pricing", p),
+        ("surface", Json::str("openai.chat")),
+        (
+            "effort_paths",
+            Json::Arr(efforts.iter().map(|e| Json::str(*e)).collect()),
+        ),
+    ])
+}
+
+#[test]
+fn lane_probe_plan_prices_the_whole_plan_before_any_call() {
+    let out = handle(&plan_req(pricing(150_000, 500_000), &["high", "low"])).unwrap();
+    assert_eq!(out.get("calls").and_then(Json::as_arr).unwrap().len(), 2);
+    let worst = out.get("worst_case_micros").and_then(Json::as_int).unwrap();
+    assert!(worst > 0 && worst <= 50_000, "{worst}");
+    assert_eq!(out.get("cap_micros").and_then(Json::as_int), Some(50_000));
+    // A plan priced above $0.05 refuses before any call.
+    let err = handle(&plan_req(pricing(150_000_000_000, 500_000), &["high"]))
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("plan_bound"), "{err}");
+    // An unrepresentable rate refuses typed (never rounded).
+    assert!(handle(&plan_req(pricing(150_001, 500_000), &["high"])).is_err());
+    // No effort path → refused.
+    assert!(handle(&plan_req(pricing(150_000, 500_000), &[])).is_err());
+}
+
+fn addr(bytes: &[u8]) -> String {
+    hharness_identity::idp::address(bytes, "application/json").id()
+}
+
+struct Obs {
+    receipt: String,
+    body: String,
+    rref: String,
+}
+
+fn obs(slot: &str, run: &str, effort: &str, route: &str) -> Obs {
+    let body = format!(
+        "{{\"model\": \"glm-5.3-flash\", \"reasoning_effort\": \"{effort}\", \"max_tokens\": 8}}"
+    );
+    let receipt = Json::obj([(
+        "proxy",
+        Json::obj([
+            ("slot_id", Json::str(slot)),
+            ("phase_run_id", Json::str(run)),
+            (
+                "downstream",
+                Json::obj([
+                    ("path", Json::str(route)),
+                    ("body_ref", Json::str(addr(body.as_bytes()))),
+                ]),
+            ),
+        ]),
+    )])
+    .to_canonical_string();
+    let rref = addr(receipt.as_bytes());
+    Obs {
+        receipt,
+        body,
+        rref,
+    }
+}
+
+fn record_req(o: &Obs, rref: &str, http: i64, cost: Option<i64>, disposition: &str) -> Json {
+    let mut m = match plan_req(pricing(150_000, 500_000), &["high"]) {
+        Json::Obj(m) => m,
+        _ => unreachable!(),
+    };
+    m.insert("op".into(), Json::str("lane_probe_record"));
+    m.insert(
+        "slot".into(),
+        Json::obj([
+            ("token_ref", Json::str("slot:w4-lane-probe")),
+            ("slice_micros", Json::Int(50_000)),
+        ]),
+    );
+    m.insert("recorded_at".into(), Json::str("2026-11-23T00:00:00Z"));
+    m.insert("probe_slot_id".into(), Json::str("w4-lane-probe"));
+    m.insert("phase_run_id".into(), Json::str("run-1"));
+    m.insert(
+        "observations".into(),
+        Json::Arr(vec![Json::obj([
+            ("probe_id", Json::str("lane-probe-high")),
+            ("http_status", Json::Int(http)),
+            (
+                "terminal",
+                Json::obj([
+                    ("class", Json::str("model.call.completed")),
+                    ("disposition", Json::str(disposition)),
+                    ("response_ref", Json::str(rref)),
+                ]),
+            ),
+            ("receipt", Json::str(&o.receipt)),
+            ("downstream_body", Json::str(&o.body)),
+            ("cost_micros", cost.map(Json::Int).unwrap_or(Json::Null)),
+        ])]),
+    );
+    Json::Obj(m)
+}
+
+fn stage_call(out: &Json) -> (String, Json) {
+    let st = out.get("stage").unwrap();
+    let c = st.get("calls").and_then(Json::as_arr).unwrap()[0].clone();
+    (
+        st.get("disposition")
+            .and_then(Json::as_str)
+            .unwrap()
+            .to_string(),
+        c,
+    )
+}
+
+#[test]
+fn lane_probe_record_passes_only_a_verified_bound_receipt() {
+    let good = obs("w4-lane-probe", "run-1", "high", "/v1/chat/completions");
+    let (d, c) = stage_call(
+        &handle(&record_req(
+            &good,
+            &good.rref,
+            200,
+            Some(1_234),
+            "forwarded",
+        ))
+        .unwrap(),
+    );
+    assert_eq!(d, "pass");
+    assert_eq!(c.get("cost_micros").and_then(Json::as_int), Some(1_234));
+    assert_eq!(
+        c.get("receipt_ref").and_then(Json::as_str),
+        Some(good.rref.as_str())
+    );
+    // The canonical stage record (holds.rs) — not a driver-side emitter.
+    let st = handle(&record_req(&good, &good.rref, 200, Some(1), "forwarded")).unwrap();
+    assert_eq!(
+        st.get("stage")
+            .and_then(|s| s.get("schema"))
+            .and_then(Json::as_str),
+        Some("hh-lane-probe/1")
+    );
+    let cases: Vec<(Json, &str)> = vec![
+        // receipt bytes that do not hash to the recorded ref
+        (
+            record_req(&good, &addr(b"other"), 200, Some(1), "forwarded"),
+            "receipt_hash_mismatch",
+        ),
+        // a receipt bound to another slot / another run
+        (
+            {
+                let o = obs(
+                    "w4-mini-swe-agent-t0-r1",
+                    "run-1",
+                    "high",
+                    "/v1/chat/completions",
+                );
+                record_req(&o, &o.rref, 200, Some(1), "forwarded")
+            },
+            "receipt_unbound",
+        ),
+        (
+            {
+                let o = obs("w4-lane-probe", "run-2", "high", "/v1/chat/completions");
+                record_req(&o, &o.rref, 200, Some(1), "forwarded")
+            },
+            "receipt_unbound",
+        ),
+        // the downstream call was not the planned effort path / route
+        (
+            {
+                let o = obs("w4-lane-probe", "run-1", "low", "/v1/chat/completions");
+                record_req(&o, &o.rref, 200, Some(1), "forwarded")
+            },
+            "downstream_mismatch",
+        ),
+        (
+            {
+                let o = obs("w4-lane-probe", "run-1", "high", "/v1/messages");
+                record_req(&o, &o.rref, 200, Some(1), "forwarded")
+            },
+            "route_mismatch",
+        ),
+        // not a forwarded 2xx; or over the $0.05 cap
+        (
+            record_req(&good, &good.rref, 200, Some(1), "upstream_error"),
+            "terminal:upstream_error",
+        ),
+        (
+            record_req(&good, &good.rref, 500, Some(1), "forwarded"),
+            "http:500",
+        ),
+        (
+            record_req(&good, &good.rref, 200, Some(50_001), "forwarded"),
+            "probe_cap_exceeded",
+        ),
+    ];
+    for (req, want) in cases {
+        let (d, c) = stage_call(&handle(&req).unwrap());
+        assert_eq!(d, "failed", "{want}");
+        let got = c
+            .get("disposition")
+            .and_then(Json::as_str)
+            .unwrap()
+            .to_string();
+        assert!(got.contains(want), "{want}: {got}");
+    }
+}
+
+#[test]
+fn lane_probe_record_keeps_an_unknown_cost_unknown() {
+    let good = obs("w4-lane-probe", "run-1", "high", "/v1/chat/completions");
+    let (d, c) =
+        stage_call(&handle(&record_req(&good, &good.rref, 200, None, "forwarded")).unwrap());
+    assert_eq!(d, "pass");
+    assert_eq!(c.get("cost_micros"), Some(&Json::Null));
+    assert_eq!(
+        c.get("cost").and_then(Json::as_str),
+        Some("unknown{no_attribution_row}")
+    );
+}
+
+#[test]
+fn probe_precedes_native_is_the_canonical_predicate() {
+    let req = |p: i64, n: i64| {
+        Json::obj([
+            ("schema", Json::str(ADAPTER_SCHEMA)),
+            ("op", Json::str("probe_precedes_native")),
+            ("probe_end_seq", Json::Int(p)),
+            ("first_native_seq", Json::Int(n)),
+        ])
+    };
+    let get = |j: Json| handle(&j).unwrap().get("precedes").and_then(Json::as_bool);
+    assert_eq!(get(req(4, 9)), Some(true));
+    assert_eq!(get(req(9, 9)), Some(false));
+    assert_eq!(get(req(12, 9)), Some(false));
+}
