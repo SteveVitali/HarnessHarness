@@ -165,9 +165,34 @@ fn renewal_near_the_representable_boundary_refuses_without_writing() {
     ));
 }
 
+/// A clock that advances on every read — exposes any extra sample.
+struct Ticking(std::sync::Arc<std::sync::atomic::AtomicU64>);
+impl hharness_ledger::ids::Clock for Ticking {
+    fn now_ms(&self) -> u64 {
+        self.0.fetch_add(7, Ordering::SeqCst)
+    }
+}
+
 #[test]
 fn creation_records_one_clock_sample_for_acquisition_and_expiry() {
-    let (mut s, _clock, _d) = store("one-sample");
-    let (_run, lease) = s.open_run(manifest(1_800_000), "writer-a").unwrap();
-    assert_eq!(lease.expires_at_ms - 1_800_000, NOW_MS);
+    let d = dir("one-sample");
+    let mut s = Store::open_with(
+        &d,
+        Box::new(Ticking(std::sync::Arc::new(AtomicU64::new(NOW_MS)))),
+        Some(Box::new(SeqIds::new())),
+        DEFAULT_BLOB_MAX_BYTES,
+    )
+    .unwrap();
+    let (run, _lease) = s.open_run(manifest(1_800_000), "writer-a").unwrap();
+    // The lease record on disk: acquired_at and expiry from ONE reading.
+    let text = std::fs::read_dir(d.join("runs"))
+        .unwrap()
+        .flatten()
+        .map(|e| e.path().join("lease.json"))
+        .find(|p| p.exists())
+        .map(|p| std::fs::read_to_string(p).unwrap());
+    assert!(!run.is_empty());
+    let rec = hharness_wire::json::parse(&text.expect("lease.json")).unwrap();
+    let get = |k: &str| rec.get(k).and_then(|v| v.as_int()).unwrap();
+    assert_eq!(get("expires_at_ms") - get("acquired_at_ms"), 1_800_000);
 }

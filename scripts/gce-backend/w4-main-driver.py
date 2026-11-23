@@ -432,10 +432,12 @@ def probe_precedes_native_record(adapter, evs, store_root, run_id,
               and e.get("run_id", run_id) == run_id
               and (e.get("payload") or {}).get("model_call_id") in native_mcs
               and isinstance(e.get("seq"), int)]
-    if probe_end_seq is None:
-        return {"precedes": False, "detail": "no_probe_receipt"}
+    # No native call at all (e.g. a failed probe already held both native
+    # arms) — the ordering proof is not applicable, not false (review n4).
     if not starts:
         return {"precedes": None, "detail": "n/a{no_native_call}"}
+    if probe_end_seq is None:
+        return {"precedes": False, "detail": "no_probe_receipt"}
     try:
         rep_ = adapter({"schema": CONT_ADAPTER_SCHEMA,
                         "op": "probe_precedes_native",
@@ -1333,7 +1335,8 @@ def main():
             probe_rec.get("probe_end_seq"),
             [m["slot_id"] for m in sched.planned if m["arm"] in NATIVE_ARMS])
         if window["probe_precedes_native"].get("precedes") is False:
-            rc_out = 3
+            # 6: the WAL-order proof failed — distinct from a closure failure (3)
+            rc_out = rc_out or 6
     except Exception as e:
         eprint(f"driver failure: {type(e).__name__}: {e}")
         window["driver_failure"] = f"{type(e).__name__}"

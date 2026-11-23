@@ -785,3 +785,19 @@ fn probe_precedes_native_is_the_canonical_predicate() {
     assert_eq!(get(req(9, 9)), Some(false));
     assert_eq!(get(req(12, 9)), Some(false));
 }
+
+#[test]
+fn downstream_body_bytes_must_hash_to_the_receipt_body_ref() {
+    // n1: the receipt is genuine and bound, but the body bytes handed over
+    // are not the ones its `body_ref` names — refused, never trusted.
+    let mut o = obs("w4-lane-probe", "run-1", "high", "/v1/chat/completions");
+    o.body = o.body.replace("\"max_tokens\": 8", "\"max_tokens\": 9");
+    let rref = o.rref.clone();
+    let (d, c) = stage_call(&handle(&record_req(&o, &rref, 200, Some(1), "forwarded")).unwrap());
+    assert_eq!(d, "failed");
+    assert!(c
+        .get("disposition")
+        .and_then(Json::as_str)
+        .unwrap()
+        .contains("downstream_mismatch"));
+}

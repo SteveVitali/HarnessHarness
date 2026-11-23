@@ -373,6 +373,26 @@ class ReviewFixTests(unittest.TestCase):
         self.assertIn("live", consts)
         self.assertNotIn("--seal-recordings", consts)
 
+    def test_plan_member_order_and_rolled_back_native_partner_is_not_observed(self):
+        # n3: today mini-swe-agent launches before hh_native, so a native
+        # partner is never rolled back; pin that order, and pin the
+        # judgement for the reverse order (a rolled-back hh_native is our
+        # termination, not its own failure → no hold on hh_native).
+        rounds = drv.plan_schedule(["t0"], 1, drv.ARMS, "seed")
+        self.assertEqual([m["arm"] for m in rounds[0][0]["members"]],
+                         ["mini-swe-agent", "hh_native", "v5"])
+        def boom(m):
+            if m["arm"] == "mini-swe-agent":
+                raise OSError("spawn")
+        h = Harness(launch_raise=boom, tasks=["t0"], replicates=1,
+                    arms=["hh_native", "mini-swe-agent", "v5"])
+        closure = h.run()
+        self.assertTrue(closure["ok"], closure)
+        hn = h.sched.results["w4-hh_native-t0-r1"]
+        self.assertIn("pair_launch_rollback", hn["end"])
+        self.assertNotIn("w4-hh_native-t0-r1", h.sched.first3_obs)
+        self.assertEqual(h.sched.holds, [])
+
     def test_closure_detects_missing_duplicate_and_foreign_ids(self):
         h = Harness(tasks=["t0"], replicates=1)
         self.assertTrue(h.run()["ok"])
@@ -593,8 +613,15 @@ class ProbeTests(unittest.TestCase):
         got = drv.probe_precedes_native_record(adapter, evs, self.d, "run-1", 10,
                                                ["w4-hh_native-t0-r1"])
         self.assertIs(got["precedes"], False)
+        # n4: a failed probe with no native call is "not applicable"…
+        na = drv.probe_precedes_native_record(adapter, [], self.d, "run-1",
+                                              None, [])
+        self.assertIsNone(na["precedes"])
+        self.assertEqual(na["detail"], "n/a{no_native_call}")
+        # …but native calls with no probe receipt are a failed proof.
         self.assertIs(drv.probe_precedes_native_record(
-            adapter, [], self.d, "run-1", None, [])["precedes"], False)
+            adapter, evs, self.d, "run-1", None,
+            ["w4-hh_native-t0-r1"])["precedes"], False)
 
 
 class ConfigAndTeardownTests(unittest.TestCase):
