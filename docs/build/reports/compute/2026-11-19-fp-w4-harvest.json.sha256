@@ -1,0 +1,2 @@
+3182fbf1a1ade140ad6525a7b10fedadc7dbdca28de980beebb6b15388db6579  docs/build/reports/compute/2026-11-19-fp-w4-harvest.json
+# recompute: shasum -a 256 -c docs/build/reports/compute/2026-11-19-fp-w4-harvest.json.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)

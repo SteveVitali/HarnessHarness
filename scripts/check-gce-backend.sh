@@ -806,5 +806,20 @@ expect_rc 2 "overrun Wc cannot absorb refuses" \
   python3 -I "$SLIB" fpcheck "$REPO" "$DECLS/w1.json" "$DECLS/wc.json" \
   --export-measured-gib 300
 
+# ── R6.52: the W4 driver + session-shim offline batteries ───────────────
+# test_w4_driver.py drives the driver's Scheduler/probe through the real
+# `fp_continuation` adapter binary (built by the workspace Build step; an
+# absent binary FAILS here, never skips). Neither battery calls a provider,
+# cloud API, container or the driver's main.
+for t in scripts/gce-backend/tests/test_w4_driver.py \
+         scripts/gce-backend/tests/test_ws1_proxy_session_end.py; do
+  if PYTHONDONTWRITEBYTECODE=1 python3 "$t" >"$T/$(basename "$t").log" 2>&1; then
+    ok "$(basename "$t") ($(grep -Eo '^Ran [0-9]+ tests' "$T/$(basename "$t").log"))"
+  else
+    tail -n 40 "$T/$(basename "$t").log" >&2
+    bad "$(basename "$t")"
+  fi
+done
+
 printf 'check-gce-backend: %d passed, %d failed\n' "$PASS" "$FAILED"
 [ "$FAILED" -eq 0 ] || exit 1

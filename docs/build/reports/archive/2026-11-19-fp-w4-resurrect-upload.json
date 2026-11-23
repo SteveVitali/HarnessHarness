@@ -1,0 +1,35 @@
+{
+ "basis": "ADR-0452 supersedes GATE-G30 for the W4 scope: the project was undeleted and the window declared, but the metered legs did not run under the delegated ~$15 worker bound vs the ~$51 projected spend (stop_and_report). No W4 harvest exists; there is nothing to upload.",
+ "commands": [],
+ "dataset": {
+  "repo": "SteveVitali/harnessharness-archive",
+  "revision": "main",
+  "visibility": "private"
+ },
+ "files": [],
+ "kind": "upload",
+ "phase": "fp",
+ "provided": {
+  "HF_WRITE_TOKEN": "no"
+ },
+ "recipe": {
+  "git_head": "3352da49379fba30c5e3fd504e0c27970ac6bff4",
+  "path": "scripts/hf-upload.sh",
+  "sha256": "2f0c75a2d0e5c96e1a9c60a550d81e4f7570983cd979c0df88b30611fb58fe84"
+ },
+ "recorded_at": "2026-11-19T07:36:45Z",
+ "schema": "hh-archive-upload/1",
+ "status": "n/a{window_not_executed}",
+ "supersedes_note": "R6.47's n/a{scope_end} upload record (archive/2026-11-19-fp-w4-upload.json) stays append-only history",
+ "ticket": "R6.52",
+ "tool": {
+  "admission": "ADR-0437",
+  "name": "hf",
+  "package": "huggingface_hub",
+  "scope": "one private HF dataset repository",
+  "token_handling": "HF_TOKEN env per invocation; no login",
+  "version": "not invoked"
+ },
+ "verification": "n/a{window_not_executed}",
+ "window": "w4"
+}

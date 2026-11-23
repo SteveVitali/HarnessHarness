@@ -1,0 +1,119 @@
+{
+ "admission_evidence": {
+  "claude-code": "not_run{admission:AG3} \u2014 same PP0 evidence and repair path; recorded verbatim per ADR-0452",
+  "pi": "not_run{admission:AG3} \u2014 AG3 PP0 union-of-failures (AG3+AG6) in docs/build/reports/2026-11-19-fp-ws1-pp0-evidence.json sha256 95f872641d41cc881d007b388a330ebeec54a4c5f1144094471441a0be2c30c5; family retained_unavailable; repair new_participant_version_later_pass (REQ-XH-127a); recorded verbatim per ADR-0452 \u2014 no fabricated admission"
+ },
+ "arm_dispositions": {
+  "claude-code": "not_run{admission:AG3}",
+  "hh_native": "not_run{delegated_spend_bound}",
+  "mini-swe-agent": "not_run{delegated_spend_bound}",
+  "pi": "not_run{admission:AG3}",
+  "v5": "not_run{delegated_spend_bound}"
+ },
+ "authorization": {
+  "amends": "GATE-G30 re-scope{end-first-pass-early} \u2014 superseded for the W4 scope; the deletion receipt stays append-only history (docs/build/reports/compute/2026-11-19-fp-w4-teardown.json, DELETE_REQUESTED 2026-11-19T02:01:58Z)",
+  "ceiling_micros": 7988890,
+  "gate": "ADR-0452",
+  "quote_id": "pq-4f15fc7015dc1db1",
+  "readout_path": "docs/adr/ADR-0452-w4-scope-amendment.md",
+  "verbatim_basis": "operator ruling 2026-11-19 recorded verbatim in ADR-0452: undelete the project, amend the compute pool, run the admissible arms (protected pair + V5), record Pi/CC not_run{admission}",
+  "verbatim_sha256": "bd0b3e5df4b8e62502dbdb5bbe406cad6673e276a8e43311fc488ce0c3d88a6f"
+ },
+ "ceiling": {
+  "bound_basis": "implement-spec worker dispatch: standing <=$50/day operator authorization + 'increase the budget if that is a constraint'; stop + report if the plan would exceed ~$15 total (model+compute)",
+  "declared_before_first_metered_call": true,
+  "delegated_bound_usd": 15.0,
+  "disposition": "stop_and_report \u2014 projected ~$51.06 expected (~$72.18 ceiling-shape) exceeds the delegated ~$15 bound before the first metered call. Per the dispatch bound the metered legs are not started: a bound-truncated protected pair would re-create the k<5/R<5 evidence failure (withheld{window_deadline}:protected_pair_truncated) that ADR-0452 exists to remove, so partial execution is not a valid substitute. Reported for re-dispatch with a bound that covers the quoted plan (the operator's 'increase the budget if that is a constraint' covers the gap in principle; the delegated worker bound does not).",
+  "projection": {
+   "compute_ceiling_micros": 7988890,
+   "model_ceiling_micros": 64188120,
+   "model_expected_micros": 43068050,
+   "sources": [
+    "docs/build/reports/2026-11-19-fp-e-comparative-quote.json row fp_e_full (n_trials 150, arms [mini-swe-agent, hh_native, v5], model expected 43,068,050 / ceiling 64,188,120 \u00b5$)",
+    "docs/build/reports/2026-11-19-fp-w4-quote.json pq-4f15fc7015dc1db1 ceiling 7,988,890 \u00b5$ (D 22.5 h dead-man + restart + residual disk + egress)"
+   ],
+   "total_ceilingish_micros": 72177010,
+   "total_expected_micros": 51056940
+  }
+ },
+ "declaration": {
+  "note": "the committed W4 quantities verbatim (per_trial_bound_seconds 3738, D 22.5 h, h_r 6, restart 1 h, 300 GiB pd-balanced, e2-standard-8, IAP-only tcp:22, no service account); stamped ticket R6.52, authorization ADR-0452 + verbatim sha256, quote pq-4f15fc7015dc1db1 ceiling 7,988,890 \u00b5$, runner.commit 3352da49\u2026, phase_close true; validate_decl.py PASS",
+  "path": "scripts/gce-backend/declarations/fp-w4-r652.json",
+  "sha256": "c8d6a04db064d8382b26098aa2750a825c8f9f63864dd02597783dab07fd84d0"
+ },
+ "kind": "window_status",
+ "leg_dispositions": {
+  "archive_upload": "n/a{window_not_executed}",
+  "deliver_secret": "not_run{delegated_spend_bound} (OLLAMA_API_KEY never delivered; provided: no)",
+  "harvest": "n/a{window_not_executed}",
+  "load": "not_run{delegated_spend_bound}",
+  "provision": "not_run{delegated_spend_bound}",
+  "settlement": "n/a{no_model_calls} \u2014 the REQ-XC-127 clock never starts",
+  "teardown": "n/a{no_provision} \u2014 no instance was created; compute-open.sh empty exit 0 (read 2026-11-19T07:34Z)",
+  "undelete": "executed \u2014 ACTIVE verified 2026-11-19T07:33:43Z",
+  "w4-lane-probe": "not_run{delegated_spend_bound}",
+  "w4-main": "not_run{delegated_spend_bound}"
+ },
+ "phase": "fp",
+ "project_end_state": "ACTIVE and empty (resurrected 2026-11-19T07:33:36Z; zero billable resources \u2014 no instances/disks/addresses; an empty ACTIVE project bills $0). If W4 is abandoned the close act is `gcloud projects delete hh-fp-a1b2c3`.",
+ "provided": {
+  "HF_WRITE_TOKEN": "no",
+  "OLLAMA_API_KEY": "no"
+ },
+ "recorded_at": "2026-11-19T07:36:00Z",
+ "schema": "hh-fp-window-status/1",
+ "spend": {
+  "compute_micros": 0,
+  "model_micros": 0,
+  "total_usd": 0.0
+ },
+ "ticket": "R6.52",
+ "undelete": {
+  "post_describe": {
+   "argv": [
+    "gcloud",
+    "projects",
+    "describe",
+    "hh-fp-a1b2c3",
+    "--format",
+    "json"
+   ],
+   "createTime": "2026-11-09T21:21:53.431Z",
+   "ended_at": "2026-11-19T07:33:43Z",
+   "exit": 0,
+   "lifecycleState": "ACTIVE",
+   "project_id": "hh-fp-a1b2c3",
+   "project_number": 290612983212,
+   "stdout_sha256": "b804af0b2dece555855978dce4277a395bc055ff6f36de5122c4a98206edefd3"
+  },
+  "pre_describe": {
+   "argv": [
+    "gcloud",
+    "projects",
+    "describe",
+    "hh-fp-a1b2c3",
+    "--format",
+    "json"
+   ],
+   "ended_at": "2026-11-19T07:33:33Z",
+   "exit": 0,
+   "lifecycleState": "DELETE_REQUESTED",
+   "note": "within the ~30-day GCP soft-delete restore window (deleted 2026-11-19T02:01:58Z; ~5.5 h elapsed)",
+   "stdout_sha256": "9987b0aa6de61b501f4812c5ce8907ab11fa4071a75e9362741ec9dadf68d055"
+  },
+  "undelete": {
+   "argv": [
+    "gcloud",
+    "projects",
+    "undelete",
+    "hh-fp-a1b2c3"
+   ],
+   "ended_at": "2026-11-19T07:33:36Z",
+   "exit": 0,
+   "started_at": "2026-11-19T07:33:34Z",
+   "stdout_excerpt": "Restored project [https://cloudresourcemanager.googleapis.com/v1/projects/hh-fp-a1b2c3].",
+   "stdout_sha256": "e5d60072d74f4fc926bdd91d77e2d77543b6a892a8486aef628a2c8481a4d13f"
+  }
+ },
+ "window": "w4"
+}

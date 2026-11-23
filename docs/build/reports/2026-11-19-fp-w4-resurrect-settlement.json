@@ -1,0 +1,19 @@
+{
+ "balance_delta_usd": 0.0,
+ "balance_observed": "n/a{window_not_executed} \u2014 no provider reads; nothing to reconcile",
+ "basis": "ADR-0452 supersedes GATE-G30 for the W4 scope (operator verbatim 2026-11-19, sha256 bd0b3e5d\u2026): undelete executed + verified ACTIVE 2026-11-19T07:33:43Z; declaration stamped (fp-w4-r652.json, pq-4f15fc7015dc1db1). The metered legs did not run under the delegated ~$15 worker bound vs the ~$51 projected spend (fp_e_full expected 43,068,050 \u00b5$ model + 7,988,890 \u00b5$ compute ceiling) \u2014 stop_and_report per the dispatch bound. No metered call was made; the REQ-XC-127 settlement clock never starts.",
+ "boundary_flags": [],
+ "clock_honest": "the REQ-XC-127 settlement clock runs from a window's last model call; the resurrection window made none",
+ "compute_estimate_usd": 0.0,
+ "metered_model_calls": 0,
+ "model_line": "none (OLLAMA_API_KEY never delivered; provided: no)",
+ "phase": "fp",
+ "reads": [],
+ "recorded_at": "2026-11-19T07:36:30Z",
+ "schema": "hh-settlement/1",
+ "status": "n/a{window_not_executed}",
+ "supersedes_note": "R6.47's n/a{scope_end} settlement record (2026-11-19-fp-w4-settlement.json) stays append-only history; this record carries the resurrection attempt's honest non-execution",
+ "ticket": "R6.52",
+ "usage_observed": "n/a{window_not_executed} \u2014 no metered calls",
+ "window": "w4"
+}

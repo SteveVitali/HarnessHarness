@@ -550,7 +550,7 @@ fn node_json_with_text(n: &hharness_hir::document::Node) -> Json {
     j
 }
 
-/// `apply_mswea_pack(document, dir)` — inject the surface layer the
+/// `apply_mswea_pack(document, dir, model_id, pack_reasoning)` — inject the surface layer the
 /// authored HIR's `sha256:profile` placeholder never carried:
 /// template + bash nodes, the compiled-surface lane params, and the
 /// profile pin rewrite. Returns `(doc, profile_body, profile)` — the
@@ -561,6 +561,7 @@ fn apply_mswea_pack(
     document: &Json,
     dir: &str,
     model_id: &str,
+    pack_reasoning: &str,
 ) -> Result<(Json, Json, hharness_compiler::profile::ModelProfile, String), String> {
     let sys_tmpl = std::fs::read_to_string(PathBuf::from(dir).join("system_template.tmpl"))
         .map_err(|e| format!("{dir}/system_template.tmpl: {e}"))?;
@@ -603,7 +604,7 @@ fn apply_mswea_pack(
             _ => None,
         }
     }
-    fn patch_slots(slots: &mut Json, touched: &mut bool) {
+    fn patch_slots(slots: &mut Json, touched: &mut bool, pack_reasoning: &str) {
         let params = obj_mut(slots, "model_port")
             .and_then(|s| obj_mut(s, "one"))
             .and_then(|s| obj_mut(s, "params"));
@@ -639,10 +640,11 @@ fn apply_mswea_pack(
                 // reasoning]}` and positional `index` members on its
                 // `tool_calls[]` — the lane's declared echo/index
                 // members (REQ-XE-108), never a verbatim `null`.
-                ar.insert(
-                    "reasoning".to_string(),
-                    Json::str("provider_specific_fields"),
-                );
+                // R6.52 — `--pack-reasoning`: O's baseline replay pins
+                // `provider_specific_fields`; the V5 `rsn-drop` level's
+                // sealed doc declares `drop` and the pack must not
+                // silently flatten it back.
+                ar.insert("reasoning".to_string(), Json::str(pack_reasoning));
                 ar.insert("tool_call_index".to_string(), Json::str("emit"));
                 ar.insert("provider_specific_fields".to_string(), Json::str("echo"));
             }
@@ -652,7 +654,7 @@ fn apply_mswea_pack(
     let mut touched = false;
     if let Some(asm) = doc.get_mut("assembly") {
         if let Some(slots) = obj_mut(asm, "slots") {
-            patch_slots(slots, &mut touched);
+            patch_slots(slots, &mut touched, pack_reasoning);
         }
     }
     if let Some(Json::Arr(items)) = doc.get_mut("nodes") {
@@ -668,7 +670,7 @@ fn apply_mswea_pack(
                     p.insert("profile_ref".to_string(), Json::str(coord.clone()));
                 }
                 if let Some(slots) = native.get_mut("slots") {
-                    patch_slots(slots, &mut touched);
+                    patch_slots(slots, &mut touched, pack_reasoning);
                 }
             }
         }
@@ -1043,6 +1045,12 @@ fn main() {
     let out_dir = PathBuf::from(req_arg(&args, "--out"));
     let overrides_path = opt_arg(&args, "--override");
     let mswea_pack = opt_arg(&args, "--mswea-pack");
+    // R6.52 — the pack's assistant-replay `reasoning` spelling: O's
+    // baseline is `provider_specific_fields`; the V5 `rsn-drop` level
+    // drives with `--pack-reasoning drop` (the sealed level's own
+    // param the pack must not flatten).
+    let pack_reasoning = opt_arg(&args, "--pack-reasoning")
+        .unwrap_or_else(|| "provider_specific_fields".to_string());
 
     if !["live", "obs_replay"].contains(&mode.as_str()) {
         eprintln!("mode must be live|obs_replay");
@@ -1100,7 +1108,7 @@ fn main() {
     // `bash` nodes, `model_surface:"compiled"`, the profile record
     // itself) and rewrites the pin to the registered coordinate.
     let (document, mswea_profile_body, mswea_profile, bash_surface_id) = match &mswea_pack {
-        Some(dir) => match apply_mswea_pack(&document, dir, &model) {
+        Some(dir) => match apply_mswea_pack(&document, dir, &model, &pack_reasoning) {
             Ok((d, b, p, s)) => (d, Some(b), Some(p), Some(s)),
             Err(e) => {
                 eprintln!("mswea-pack: {e}");
@@ -1452,5 +1460,45 @@ mod tests {
     #[test]
     fn exec_arm_decl_no_pack_no_flag_stays_unarmed() {
         assert!(exec_arm_decl("", &None).is_none());
+    }
+
+    // R6.52 — the V5 `rsn-drop` level: `--pack-reasoning drop` keeps the
+    // sealed level's own assistant-replay param; the default still pins
+    // O's `provider_specific_fields` replay.
+    #[test]
+    fn mswea_pack_reasoning_flag_respects_the_level() {
+        let dir = std::env::temp_dir().join(format!("l1-pack-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("system_template.tmpl"), "sys {{instruction}}").unwrap();
+        std::fs::write(dir.join("instance_template.tmpl"), "inst {{task}}").unwrap();
+        let port = |r: &str| {
+            format!(
+                "{{\"model_port\":{{\"one\":{{\"params\":{{\"transcript_render\":{{\"assistant_replay\":{{\"reasoning\":\"{r}\"}}}}}}}}}}}}"
+            )
+        };
+        let doc = parse(&format!(
+            "{{\"nodes\":[],\"assembly\":{{\"slots\":{}}}}}",
+            port("verbatim")
+        ))
+        .unwrap();
+        let got = |reasoning: &str| {
+            let (d, _, _, _) =
+                apply_mswea_pack(&doc, dir.to_str().unwrap(), "m-test", reasoning).unwrap();
+            d.get("assembly")
+                .and_then(|a| a.get("slots"))
+                .and_then(|s| s.get("model_port"))
+                .and_then(|p| p.get("one"))
+                .and_then(|p| p.get("params"))
+                .and_then(|p| p.get("transcript_render"))
+                .and_then(|t| t.get("assistant_replay"))
+                .and_then(|a| a.get("reasoning"))
+                .and_then(Json::as_str)
+                .map(str::to_string)
+        };
+        assert_eq!(
+            got("provider_specific_fields").as_deref(),
+            Some("provider_specific_fields")
+        );
+        assert_eq!(got("drop").as_deref(), Some("drop"));
     }
 }

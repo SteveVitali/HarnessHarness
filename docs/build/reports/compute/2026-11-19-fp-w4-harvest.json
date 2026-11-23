@@ -1,0 +1,146 @@
+{
+ "authorization": {
+  "ceiling_micros": 7988890,
+  "gate": "ADR-0452",
+  "quote_id": "pq-c05c7e05e074159d",
+  "readout_path": "docs/adr/ADR-0452-w4-scope-amendment.md",
+  "verbatim_sha256": "bd0b3e5df4b8e62502dbdb5bbe406cad6673e276a8e43311fc488ce0c3d88a6f"
+ },
+ "commands": [
+  {
+   "argv_redacted": [
+    "gcloud",
+    "auth",
+    "list",
+    "--format=value(account)"
+   ],
+   "ended_at": "2026-11-19T17:58:22Z",
+   "exit": 0,
+   "started_at": "2026-11-19T17:58:21Z",
+   "stderr_excerpt": "",
+   "stdout_excerpt": "14stevevitali@gmail.com\n",
+   "stdout_sha256": "664266223ad53c9a2e5c5b893f89cc7a92975b49c96485cff8ed26ecaa89e950"
+  },
+  {
+   "argv_redacted": [
+    "gzip",
+    "-t",
+    "/Users/stevenvitali/hh-retained/w4/harvest/run-root-w4.tar.gz"
+   ],
+   "ended_at": "2026-11-19T17:58:24Z",
+   "exit": 0,
+   "started_at": "2026-11-19T17:58:22Z",
+   "stderr_excerpt": "",
+   "stdout_excerpt": "",
+   "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+   "argv_redacted": [
+    "shasum",
+    "-a",
+    "256",
+    "/Users/stevenvitali/hh-retained/w4/harvest/run-root-w4.tar.gz"
+   ],
+   "ended_at": "2026-11-19T17:58:26Z",
+   "exit": 0,
+   "started_at": "2026-11-19T17:58:24Z",
+   "stderr_excerpt": "",
+   "stdout_excerpt": "4b5020058dca021aacb411acdfba649af31b8605f0156bc3dc872fbe0ee5df6b  /Users/stevenvitali/hh-retained/w4/harvest/run-root-w4.tar.gz\n",
+   "stdout_sha256": "2233a4c6c265318944a1be7eaa59c6c461bc925ced6e79cdd41b22e77b4e7309"
+  },
+  {
+   "argv_redacted": [
+    "shasum",
+    "-a",
+    "256",
+    "-c",
+    "/tmp/hh-r6.52c-wt/docs/build/reports/compute/harvest/fp-w4/MANIFEST.sha256"
+   ],
+   "ended_at": "2026-11-19T17:58:31Z",
+   "exit": 1,
+   "started_at": "2026-11-19T17:58:30Z",
+   "stderr_excerpt": "shasum: ./driver-attempt1.log: No such file or directory\nshasum: ./driver-attempt10.log: No such file or directory\nshasum: ./driver-attempt11.log: No such file or directory\nshasum: ./driver-attempt2.log: No such file or directory\nshasum: ./driver-attempt5-crashed.log: No such file or directory\nshasum: ./driver-attempt9a.log: No such file or directory\nshasum: ./driver.log: No such file or directory\nshasum: ./oom: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/00a1d661066dd377cae2c0e97533aaf4c19bb9ddc78fcc9ee70af17fcc292f89: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/01357cf3ce0026b20f61d42c387686b78da8e761babc86254ce171184353496c: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/023d54c7d90f59b25c5ed8118232e5d1887c050f4df73d852836217c47e1be21: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/0256b101c024d9133e849a8df67edc08e39f95f99739ee3810bbd8a1aa943dd4: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/02d37bcdd59357f8d9ba9c4157b63c26006f5b92a1f0107e69fefecb9341dc13: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/03533a956c02913e57c100288a98d6b10e06ed97c8f38bdd3f5622c349f80420: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/041a5152c8d47cee11fa89e197e5ae4906bfc68596977aa12e8d7d08d6191430: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/04c245eac0f71bedc6da3b3522bbff87cc75ee8efcedd16d53cabe28f0fe6649: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/055ce6f8b82b751ffc02a42fcbc622bbb24d3ccd2d61c7c4c9024059318a1ded: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/061c25d72ae5e6cf9241f3dd73c6c4d4a21ba753bec5965d1120b6304b80ef0d: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/064da31a03353fbdcbd98db95bb199abdcc584e97246579faa098e88c1e97f6c: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/06bf3576d823ad8acca8396b7d6cacb87b310e61d1a5cd0859d0725254637a3d: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/0783e5ce7e889e738bdca5eff05d60a5edf10b1002c6c1faabc823b24a98a3df: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/07c1e48eba9ffb0bca16303f00c2bfeae2b48d9870cbd80f04c29c0a3cc9a0fb: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/07cea036dc8a67b745342ca7a83be1e05381ec102a2d8e98c1b19ec03c8c01a4: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/089baa6520a3b486de5972468591e32f11ea4a8f3e4daff78efe50ab695c8c32: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/08d12eaf5e670dbce20f3ee486ce5b0f77a3f67682e2de7e6ce642e2bc545929: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/090a5041dc4cc8a2582036b972ba621a5e3ec9013cae4cf668f99e1b5fd92796: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/094003233c02307b50a27f89aa985dc864747d81c9b6c6d151a671b3e50bed93: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/094dc5b3a35be1e29e61e2441b7dc52c3eb83edb8e6c5d6b66dc0728b19c7431: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/09d2c1d74497b22debe599d605861f3eb7963554ffc167578cafa47d0f025a25: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/09d6ee5897d1e16727695c37afd1346236d2c987ddda400dccddc362d07c45b0: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/0a14e8f7979f33da5b0bf106859587e77d04eee2b288666b8e27a094ad2df410: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/0adffa879f852e5ccfcb94dfd2a39e66d850469ddb69aa96b3aaab0d03b72dc3: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/0b05c71826610ecd2d4dcab2710864ead1ad540f54c181ba5be269e7850058b3: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/0b7e6755780f23814827be657bd9bde44cc02de76e014bd63c0e30a59e9175e7: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/0c2147fe7b4ba5215ec6427bcdac0b2a0ae70f2393917a891228011b133ec19a: No such file or directory\nshasum: ./proxy-store-attempt10/blobs/0c74ee6c212b48aa53f16ca7ef3d02e6f4228e11c523c611a6c1c6fad423f908: No such file or directory\nshasum: ./prox",
+   "stdout_excerpt": "./driver-attempt1.log: FAILED open or read\n./driver-attempt10.log: FAILED open or read\n./driver-attempt11.log: FAILED open or read\n./driver-attempt2.log: FAILED open or read\n./driver-attempt5-crashed.log: FAILED open or read\n./driver-attempt9a.log: FAILED open or read\n./driver.log: FAILED open or read\n./oom: FAILED open or read\n./proxy-store-attempt10/blobs/00a1d661066dd377cae2c0e97533aaf4c19bb9ddc78fcc9ee70af17fcc292f89: FAILED open or read\n./proxy-store-attempt10/blobs/01357cf3ce0026b20f61d42c387686b78da8e761babc86254ce171184353496c: FAILED open or read\n./proxy-store-attempt10/blobs/023d54c7d90f59b25c5ed8118232e5d1887c050f4df73d852836217c47e1be21: FAILED open or read\n./proxy-store-attempt10/blobs/0256b101c024d9133e849a8df67edc08e39f95f99739ee3810bbd8a1aa943dd4: FAILED open or read\n./proxy-store-attempt10/blobs/02d37bcdd59357f8d9ba9c4157b63c26006f5b92a1f0107e69fefecb9341dc13: FAILED open or read\n./proxy-store-attempt10/blobs/03533a956c02913e57c100288a98d6b10e06ed97c8f38bdd3f5622c349f80420: FAILED open or read\n./proxy-store-attempt10/blobs/041a5152c8d47cee11fa89e197e5ae4906bfc68596977aa12e8d7d08d6191430: FAILED open or read\n./proxy-store-attempt10/blobs/04c245eac0f71bedc6da3b3522bbff87cc75ee8efcedd16d53cabe28f0fe6649: FAILED open or read\n./proxy-store-attempt10/blobs/055ce6f8b82b751ffc02a42fcbc622bbb24d3ccd2d61c7c4c9024059318a1ded: FAILED open or read\n./proxy-store-attempt10/blobs/061c25d72ae5e6cf9241f3dd73c6c4d4a21ba753bec5965d1120b6304b80ef0d: FAILED open or read\n./proxy-store-attempt10/blobs/064da31a03353fbdcbd98db95bb199abdcc584e97246579faa098e88c1e97f6c: FAILED open or read\n./proxy-store-attempt10/blobs/06bf3576d823ad8acca8396b7d6cacb87b310e61d1a5cd0859d0725254637a3d: FAILED open or read\n./proxy-store-attempt10/blobs/0783e5ce7e889e738bdca5eff05d60a5edf10b1002c6c1faabc823b24a98a3df: FAILED open or read\n./proxy-store-attempt10/blobs/07c1e48eba9ffb0bca16303f00c2bfeae2b48d9870cbd80f04c29c0a3cc9a0fb: FAILED open or read\n./proxy-store-attempt10/blobs/07cea036dc8a67b745342ca7a83be1e05381ec102a2d8e98c1b19ec03c8c01a4: FAILED open or read\n./proxy-store-attempt10/blobs/089baa6520a3b486de5972468591e32f11ea4a8f3e4daff78efe50ab695c8c32: FAILED open or read\n./proxy-store-attempt10/blobs/08d12eaf5e670dbce20f3ee486ce5b0f77a3f67682e2de7e6ce642e2bc545929: FAILED open or read\n./proxy-store-attempt10/blobs/090a5041dc4cc8a2582036b972ba621a5e3ec9013cae4cf668f99e1b5fd92796: FAILED open or read\n./proxy-store-attempt10/blobs/094003233c02307b50a27f89aa985dc864747d81c9b6c6d151a671b3e50bed93: FAILED open or read\n./proxy-store-attempt10/blobs/094dc5b3a35be1e29e61e2441b7dc52c3eb83edb8e6c5d6b66dc0728b19c7431: FAILED open or read\n./proxy-store-attempt10/blobs/09d2c1d74497b22debe599d605861f3eb7963554ffc167578cafa47d0f025a25: FAILED open or read\n./proxy-store-attempt10/blobs/09d6ee5897d1e16727695c37afd1346236d2c987ddda400dccddc362d07c45b0: FAILED open or read\n./proxy-store-attempt10/blobs/0a14e8f7979f33da5b0bf106859587e77d04eee2b288666b8e27a094ad2df410: FAILED open or read\n./proxy-store-attempt10/blobs/0adffa879f852e5ccfcb94dfd2a39e66d850469ddb69aa96b3aaab0d03b72dc3: FAILED open or read\n./proxy-store-attempt10/blobs/0b05c71826610ecd2d4dcab2710864ead1ad540f54c181ba5be269e7850058b3: FAILED open or read\n./proxy-store-attempt10/blobs/0b7e6755780f23814827be657bd9bde44cc02de76e014bd63c0e30a59e9175e7: FAILED open or read\n./proxy-store-attempt10/blobs/0c2147fe7b4ba5215ec6427bcdac0b2a0ae70f2393917a891228011b133ec19a: FAILED open or read\n./proxy-store-attempt10/blobs/0c74ee6c212b48aa53f16ca7ef3d02e6f4228e11c523c611a6c1c6fad423f908: FAILED open or read\n./proxy-store-attempt10/blobs/0dc3693b038cc0dab5c025770202381bfc2f9833e29ff1038a335d6f05bd7608: FAILED open or read\n./proxy-store-attempt10/blobs/0ef9dca9b2ba848ff75a1e70016f0397c277fcd7e53ba18f86ab2e2cfe620ffa: FAILED open or read\n./proxy-store-attempt10/blobs/0f051d27f3c0eb94d043f32fb89bce13517daee85464b754b84719580669d0ee: FAILED open or read\n./proxy-store-attempt10/blobs/0f6918ec11077138218a51a6baca700ed21252a5cacd0c745adfa51295804979: FAILED open or read\n./proxy-store-attempt10/blobs/1014905f4ebd409786deab63",
+   "stdout_sha256": "7a4c7bef006146d2891d871f060f96ba35e60b21cb6967f103bb2aa74c272359"
+  },
+  {
+   "argv_redacted": [
+    "shasum",
+    "-a",
+    "256",
+    "-c",
+    "MANIFEST.sha256",
+    "(in retained run-root-w4/)"
+   ],
+   "ended_at": "2026-11-19T17:59:15Z",
+   "exit": 0,
+   "started_at": "2026-11-19T17:57:15Z",
+   "stderr_excerpt": "",
+   "stdout_excerpt": "./driver-attempt1.log: OK\n./driver-attempt10.log: OK\n./driver-attempt11.log: OK\n./driver-attempt2.log: OK\n./driver-attempt5-crashed.log: OK\n./driver-attempt9a.log: OK\n./driver.log: OK\n./oom: OK\n./proxy-store-attempt10/blobs/00a1d661066dd377cae2c0e97533aaf4c19bb9ddc78fcc9ee70af17fcc292f89: OK\n./proxy-store-attempt10/blobs/01357cf3ce0026b20f61d42c387686b78da8e761babc86254ce171184353496c: OK\n./proxy-store-attempt10/blobs/023d54c7d90f59b25c5ed8118232e5d1887c050f4df73d852836217c47e1be21: OK\n./proxy-store-attempt10/blobs/0256b101c024d9133e849a8df67edc08e39f95f99739ee3810bbd8a1aa943dd4: OK\n./proxy-store-attempt10/blobs/02d37bcdd59357f8d9ba9c4157b63c26006f5b92a1f0107e69fefecb9341dc13: OK\n./proxy-store-attempt10/blobs/03533a956c02913e57c100288a98d6b10e06ed97c8f38bdd3f5622c349f80420: OK\n./proxy-store-attempt10/blobs/041a5152c8d47cee11fa89e197e5ae4906bfc68596977aa12e8d7d08d6191430: OK\n./proxy-store-attempt10/blobs/04c245eac0f71bedc6da3b3522bbff87cc75ee8efcedd16d53cabe28f0fe6649: OK\n./proxy-store-attempt10/blobs/055ce6f8b82b751ffc02a42fcbc622bbb24d3ccd2d61c7c4c9024059318a1ded: OK\n./proxy-store-attempt10/blobs/061c25d72ae5e6cf9241f3dd73c6c4d4a21ba753bec5965d1120b6304b80ef0d: OK\n./proxy-store-attempt10/blobs/064da31a03353fbdcbd98db95bb199abdcc584e97246579faa098e88c1e97f6c: OK\n./proxy-store-attempt10/blobs/06bf3576d823ad8acca8396b7d6cacb87b310e61d1a5cd0859d0725254637a3d: OK\n./proxy-store-attempt10/blobs/0783e5ce7e889e738bdca5eff05d60a5edf10b1002c6c1faabc823b24a98a3df: OK\n./proxy-store-attempt10/blobs/07c1e48eba9ffb0bca16303f00c2bfeae2b48d9870cbd80f04c29c0a3cc9a0fb: OK\n./proxy-store-attempt10/blobs/07cea036dc8a67b745342ca7a83be1e05381ec102a2d8e98c1b19ec03c8c01a4: OK\n./proxy-store-attempt10/blobs/089baa6520a3b486de5972468591e32f11ea4a8f3e4daff78efe50ab695c8c32: OK\n./proxy-store-attempt10/blobs/08d12eaf5e670dbce20f3ee486ce5b0f77a3f67682e2de7e6ce642e2bc545929: OK\n./proxy-store-attempt10/blobs/090a5041dc4cc8a2582036b972ba621a5e3ec9013cae4cf668f99e1b5fd92796: OK\n./proxy-store-attempt10/blobs/094003233c02307b50a27f89aa985dc864747d81c9b6c6d151a671b3e50bed93: OK\n./proxy-store-attempt10/blobs/094dc5b3a35be1e29e61e2441b7dc52c3eb83edb8e6c5d6b66dc0728b19c7431: OK\n./proxy-store-attempt10/blobs/09d2c1d74497b22debe599d605861f3eb7963554ffc167578cafa47d0f025a25: OK\n./proxy-store-attempt10/blobs/09d6ee5897d1e16727695c37afd1346236d2c987ddda400dccddc362d07c45b0: OK\n./proxy-store-attempt10/blobs/0a14e8f7979f33da5b0bf106859587e77d04eee2b288666b8e27a094ad2df410: OK\n./proxy-store-attempt10/blobs/0adffa879f852e5ccfcb94dfd2a39e66d850469ddb69aa96b3aaab0d03b72dc3: OK\n./proxy-store-attempt10/blobs/0b05c71826610ecd2d4dcab2710864ead1ad540f54c181ba5be269e7850058b3: OK\n./proxy-store-attempt10/blobs/0b7e6755780f23814827be657bd9bde44cc02de76e014bd63c0e30a59e9175e7: OK\n./proxy-store-attempt10/blobs/0c2147fe7b4ba5215ec6427bcdac0b2a0ae70f2393917a891228011b133ec19a: OK\n./proxy-store-attempt10/blobs/0c74ee6c212b48aa53f16ca7ef3d02e6f4228e11c523c611a6c1c6fad423f908: OK\n./proxy-store-attempt10/blobs/0dc3693b038cc0dab5c025770202381bfc2f9833e29ff1038a335d6f05bd7608: OK\n./proxy-store-attempt10/blobs/0ef9dca9b2ba848ff75a1e70016f0397c277fcd7e53ba18f86ab2e2cfe620ffa: OK\n./proxy-store-attempt10/blobs/0f051d27f3c0eb94d043f32fb89bce13517daee85464b754b84719580669d0ee: OK\n./proxy-store-attempt10/blobs/0f6918ec11077138218a51a6baca700ed21252a5cacd0c745adfa51295804979: OK\n./proxy-store-attempt10/blobs/1014905f4ebd409786deab63c591a7828348b4cf217e82d81da16fef22c9aecc: OK\n./proxy-store-attempt10/blobs/10156f6448587fb5472a0c49fe8dcd50d6209d3cfff930083bb76669f28339cd: OK\n./proxy-store-attempt10/blobs/119f92cd4bb2ff3ec47c6bd4d5617ce462439f4fe665e351770dbc80f0f83c2e: OK\n./proxy-store-attempt10/blobs/11a13ef04d9d1337a02fb3fd2a54b8966333982865392935cd245a4ea8a3b470: OK\n./proxy-store-attempt10/blobs/12260c4d2fb4fd0c0f4b020b451bc99b4ba78cfcb523f59889a5c57897537ccf: OK\n./proxy-store-attempt10/blobs/12e90ac10c47e4be743287b2618d0b6c808632d63f27554cea63fe04e549523f: OK\n./proxy-store-attempt10/blobs/13359c7651e198a919f073321ed59af3b4f6f0477ad47fb8ec6d2d2dfa3179d7: OK\n./proxy-store-attempt10/blobs/137b3a22268",
+   "stdout_sha256": "37ca77198822f0390c802107eefdc247a3842a64edf12326750f014cc6145bf1"
+  }
+ ],
+ "declaration": {
+  "path": "scripts/gce-backend/declarations/fp-w4-r652.json",
+  "sha256": "f6c07a8a2b4b8b2b33f28bfc992814ddc3d3131afd6726972092fbed9658da5f"
+ },
+ "harvest": {
+  "contents": "run-root-w4: w4-main (attempt-12 authoritative: w4-window.json hh-fp-window/1, checkpoint-r2.json, lane-probe.json, proxy-session.json/.end/.log, proxy.sentinel, 122 slot dirs) + w4-main-attempt{1,2,3-crashed,4,5-crashed,6,10,11} + proxy-store-attempt{2,3-crashed,4,5-crashed,6,8,10,11} + proxy-store + driver-attempt*.log + driver.log + jobs/",
+  "logs": [
+   "journald.log (19,072 lines)",
+   "serial.log (4,579 lines)",
+   "usage.txt"
+  ],
+  "manifest": "docs/build/reports/compute/harvest/fp-w4/MANIFEST.sha256",
+  "manifest_check": "28062/28062 OK \u2014 shasum -a 256 -c over the extracted retained tree (see commands[])",
+  "manifest_entries": 28062,
+  "tarball": {
+   "bytes": 702780604,
+   "committed": false,
+   "members": 31291,
+   "note": "~703 MB \u2014 gitignored per the large-tar rule (same as fp-ws1 1.6 GB / fp-ws1r 444 MB); MANIFEST.sha256 is the committed integrity anchor",
+   "retained_path": "~/hh-retained/w4/harvest/run-root-w4.tar.gz",
+   "sha256": "4b5020058dca021aacb411acdfba649af31b8605f0156bc3dc872fbe0ee5df6b"
+  }
+ },
+ "kind": "harvest",
+ "phase": "fp",
+ "provided": {
+  "HF_WRITE_TOKEN": "yes",
+  "OLLAMA_API_KEY": "yes",
+  "gcloud_auth": "yes"
+ },
+ "recipe": {
+  "git_head": "1af57a20b616d331fff50698a9ef2b90ec4d0365",
+  "path": "scripts/gce-backend.sh",
+  "sha256": "7a415c041c6660f6e1f1fa7814eff0f62c721e64ed67d2a4acbeeb32ae138590"
+ },
+ "recorded_at": "2026-11-19T18:08:00Z",
+ "resources": {
+  "creation_timestamp": "2026-11-19T08:15:04Z",
+  "deletion_operation_end": null,
+  "disks": [
+   {
+    "created": "2026-11-19T08:15:04Z",
+    "deleted": null,
+    "name": "hh-fp-w4",
+    "size_gib": 300,
+    "type": "pd-balanced"
+   }
+  ],
+  "external_ipv4": "present",
+  "instance_id": 4440563254385905383,
+  "instance_name": "hh-fp-w4",
+  "machine_type": "e2-standard-8",
+  "project_id": "hh-fp-a1b2c3",
+  "project_number": 290612983212,
+  "zone": "us-central1-a"
+ },
+ "schema": "hh-compute-receipt/1",
+ "ticket": "R6.52",
+ "verification": {
+  "manifest_integrity": "all 28,062 members verified against the retained extraction",
+  "window_record": "docs/build/reports/2026-11-19-fp-w4-window.json (hh-fp-window/1) pulled before teardown; sha256 sidecar committed"
+ },
+ "window": "w4"
+}
