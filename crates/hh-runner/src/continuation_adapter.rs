@@ -8,8 +8,8 @@
 //! with a different wall formula, no orphan/C×s reserve, float
 //! truncation and an ignored protected-pair breach. This adapter adds
 //! **no rule of its own**: it strictly decodes a request envelope,
-//! calls [`continuation::run_checkpoint`], [`continuation::admit_slot`]
-//! or [`holds::native_lane_hold`] and returns their canonical JSON. A
+//! calls [`crate::continuation::run_checkpoint`], [`crate::continuation::admit_slot`]
+//! or [`crate::holds::native_lane_hold`] and returns their canonical JSON. A
 //! decode failure, an outcome member anywhere in the request, or a
 //! rule refusal returns a typed `refused` member — the driver treats
 //! that as "stop admitting", never as a default.
