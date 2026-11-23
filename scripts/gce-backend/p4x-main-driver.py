@@ -32,9 +32,12 @@ does not fit stops the batch and the remaining slots record
 Per-slot evidence: the drive's own out dir + the proxy's durable
 WAL + the commit-clone verify leg (cell.rs ST5 ordering — every
 P4X slot is a native slot). Secrets ride env only: the slot tokens
-are per-slot files, `HH_L1_API_KEY` names the credential env the
-model_port `credential_ref` binds — values never enter records
-(`provided: yes/no` only).
+are per-slot files and ride the doc's declared
+`credential_ref: env:OPENAI_API_KEY` spelling (the sealed identity
+is fixed — the env name is part of it; an `overrides[]` pointer to
+`credential_ref` is outside inject.rs's tunable coordinate space
+and never applies). Values never enter records (`provided: yes/no`
+only).
 
 usage (on the compute VM):
   p4x-main-driver.py --cfg cfg.json --w1-bin hh-w1 \
@@ -379,7 +382,8 @@ def launch_member(a, sess, m, slot_dir):
     # Every P4X arm is the native lane: `hh-l1-drive --mode live`
     # with the session's declared `local_container` env — the task
     # image as the cell, model calls on the proxy's loopback with
-    # the slot token bound via `credential_ref: env:HH_L1_API_KEY`.
+    # the slot token bound via the doc's sealed
+    # `credential_ref: env:OPENAI_API_KEY`.
     doc = os.path.join(a.docs_dir, f"{arm}.json")
     if not os.path.isfile(doc):
         logf.write(f"withheld{{corpus_infra:arm_doc_absent:{arm}}}\n")
@@ -425,8 +429,13 @@ def launch_member(a, sess, m, slot_dir):
            "--mode", "live", "--max-submits", "1",
            "--out", slot_dir]
     env = dict(os.environ)
-    env["HH_L1_API_KEY"] = token
-    eprint(f"{sid}: launch ({arm})")
+    # The sealed doc's credential_ref is `env:OPENAI_API_KEY` — the
+    # slot token must ride that env name (the attempted overrides[]
+    # rewrite to env:HH_L1_API_KEY is outside the tunable coordinate
+    # space and is inert; recorded here so the slot evidence keeps
+    # showing the attempt verbatim).
+    env["OPENAI_API_KEY"] = token
+    eprint(f"{sid}: launch ({arm}) credential_ref=env:OPENAI_API_KEY")
     return subprocess.Popen(cmd, stdout=logf, stderr=subprocess.STDOUT,
                             env=env), logf
 
