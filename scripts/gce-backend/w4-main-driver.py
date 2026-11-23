@@ -45,7 +45,7 @@ PROTECTED = ["mini-swe-agent", "hh_native"]
 # measured trials of an arm land (the continuation rule's own prior leg).
 P_HAT_PRIOR = {"mini-swe-agent": 386_163, "hh_native": 374_000, "v5": 374_000}
 T_HAT_PRIOR = {"mini-swe-agent": 477_792, "hh_native": 477_792, "v5": 477_792}
-PROBE_SLICE_MICROS = 250_000
+PROBE_SLICE_MICROS = 50_000
 
 def eprint(*a): print(*a, file=sys.stderr)
 
@@ -555,6 +555,11 @@ def main():
             while len(running) + len(live_members) > a.concurrency:
                 reap()
                 time.sleep(2.0)
+            # Capacity waits consume the same admission window.
+            if not slot_deadline_fits():
+                for m in live_members:
+                    withhold(u, m, "withheld{window_deadline}")
+                continue
             for m in live_members:
                 sd = os.path.join(slots_dir, m["slot_id"])
                 p, lf = launch_member(a, sess, m, sd)
