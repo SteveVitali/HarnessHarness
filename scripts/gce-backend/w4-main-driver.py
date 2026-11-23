@@ -1200,8 +1200,11 @@ def main():
               "--authorization-file", a.authorization_file,
               "--store-root", a.store_root,
               "--run-id", a.run_id, "--listen", a.listen,
+              # live mode: no `--seal-recordings` — the proxy refuses
+              # seal_recording outside record mode ("mode is not record";
+              # all 151 attempt-12 seals errored so), which the repaired
+              # shim would rightly record as seal failures.
               "--slots", ",".join(slot_lines), "--mode", "live",
-              "--seal-recordings",
               "--session-out", sess_file, "--sentinel", sentinel,
               "--max-wait-seconds", "86400"]
     shim_log = open(os.path.join(a.out, "proxy-session.log"), "w")

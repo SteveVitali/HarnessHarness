@@ -361,6 +361,18 @@ class ReviewFixTests(unittest.TestCase):
                   if "pair_launch_rollback" in r.get("end", "")]
         self.assertEqual([r["arm"] for r in rolled], ["mini-swe-agent"])
 
+    def test_live_session_never_requests_record_mode_seals(self):
+        # attempt-12's proxy refused all 151 live-mode seals ("mode is not
+        # record"); with the repaired shim that would read as seal failures.
+        main = next(n for n in ast.parse(DRIVER.read_text()).body
+                    if isinstance(n, ast.FunctionDef) and n.name == "main")
+        ps = next(n for n in ast.walk(main) if isinstance(n, ast.Assign)
+                  and any(isinstance(x, ast.Name) and x.id == "ps_cmd"
+                          for x in n.targets))
+        consts = [c.value for c in ast.walk(ps) if isinstance(c, ast.Constant)]
+        self.assertIn("live", consts)
+        self.assertNotIn("--seal-recordings", consts)
+
     def test_closure_detects_missing_duplicate_and_foreign_ids(self):
         h = Harness(tasks=["t0"], replicates=1)
         self.assertTrue(h.run()["ok"])
