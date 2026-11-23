@@ -435,6 +435,12 @@ def launch_member(a, sess, m, slot_dir):
     # space and is inert; recorded here so the slot evidence keeps
     # showing the attempt verbatim).
     env["OPENAI_API_KEY"] = token
+    # R6.52c's live repair verbatim: a live turn can span the 60 s
+    # manifest-default writer TTL with no appends (renewal cannot
+    # reach inside the await) → SessionDetached{fenced} on submit.
+    # 30 min covers any single append gap (≤ 300 s read deadline);
+    # recorded verbatim in run.created.lease_ttl.writer.
+    env["HH_WRITER_TTL_MS"] = "1800000"
     eprint(f"{sid}: launch ({arm}) credential_ref=env:OPENAI_API_KEY")
     return subprocess.Popen(cmd, stdout=logf, stderr=subprocess.STDOUT,
                             env=env), logf
