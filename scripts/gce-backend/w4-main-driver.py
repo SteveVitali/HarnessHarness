@@ -66,6 +66,28 @@ def seeded_key(seed, parts):
     """Mirrors build_schedule's `seeded_key` — sha256 over `seed|p1|p2…`."""
     return sha256_hex("|".join([seed] + [str(p) for p in parts]).encode())
 
+class DuplicateKey(ValueError):
+    pass
+
+def _no_duplicate_keys(pairs):
+    out = {}
+    for k, v in pairs:
+        if k in out:
+            raise DuplicateKey(f"duplicate key {k!r}")
+        out[k] = v
+    return out
+
+def read_json_strict(p):
+    """A pinned input file: a duplicated member refuses (never last-wins)."""
+    with open(p) as f:
+        return json.load(f, object_pairs_hook=_no_duplicate_keys)
+
+def adapter_bytes(j):
+    """The exact canonical bytes `fp-continuation` accepts (sorted keys,
+    tight separators, UTF-8 — `parse_canonical` refuses anything else)."""
+    return json.dumps(j, sort_keys=True, separators=(",", ":"),
+                      ensure_ascii=False).encode("utf-8")
+
 def read_json(p):
     with open(p) as f:
         return json.load(f)
@@ -192,7 +214,9 @@ def load_continuation_config(path):
     they were read from). Missing or unknown members refuse — a pinned
     input is never zero or a hard-coded fallback."""
     try:
-        cfg = read_json(path)
+        cfg = read_json_strict(path)
+    except DuplicateKey as e:
+        raise ContinuationConfigError(str(e))
     except Exception as e:
         raise ContinuationConfigError(f"unreadable: {type(e).__name__}")
     if not isinstance(cfg, dict):
@@ -234,12 +258,12 @@ def load_continuation_config(path):
 def call_adapter(bin_path, req, timeout=60):
     """One `fp-continuation` round trip. Any failure → AdapterRefused."""
     try:
-        p = subprocess.run([bin_path], input=canonical(req),
-                           capture_output=True, text=True, timeout=timeout)
+        p = subprocess.run([bin_path], input=adapter_bytes(req),
+                           capture_output=True, timeout=timeout)
     except Exception as e:
         raise AdapterRefused(f"invoke:{type(e).__name__}")
     try:
-        body = json.loads(p.stdout)
+        body = json.loads(p.stdout.decode("utf-8"))
     except Exception:
         raise AdapterRefused(f"output_unparsable:rc={p.returncode}")
     if not isinstance(body, dict):
@@ -268,15 +292,12 @@ def _wal_recordings():
         _WAL_RECORDINGS = mod
     return _WAL_RECORDINGS
 
-def bound_receipts(evs, store_root, slot_id, run_id):
-    """Every terminal model-call row whose receipt names exactly this
-    slot under this phase run: `[(class, event payload, receipt)]`.
-    A receipt that is unreadable, unparsable, unbound or bound to
-    another slot/run is never attributed to `slot_id`."""
-    rows = []
+def bound_receipts_seq(evs, store_root, slot_id, run_id):
+    """`bound_receipts` with each row's WAL seq: `[(seq, class, payload,
+    receipt)]` (candidate selection only — the adapter verifies)."""
+    out = []
     for e in evs:
-        cls = e.get("class")
-        if cls not in ("model.call.completed", "model.call.failed"):
+        if e.get("class") not in ("model.call.completed", "model.call.failed"):
             continue
         p = e.get("payload") or {}
         ref = p.get("response_ref")
@@ -289,80 +310,141 @@ def bound_receipts(evs, store_root, slot_id, run_id):
             continue
         px = (rec or {}).get("proxy") or {}
         if px.get("slot_id") == slot_id and px.get("phase_run_id") == run_id:
-            rows.append((cls, p, rec))
-    return rows
+            out.append((e.get("seq"), e.get("class"), p, rec))
+    return out
 
-def probe_call_verdict(rows, store_root, model, effort, route):
-    """`pass` only for a receipted, forwarded call whose downstream
-    request is the planned probe call (model, effort, route). Anything
-    else is a typed failure — HTTP status alone never passes."""
-    if not rows:
-        return "unreceipted{no_bound_receipt}", ""
-    for cls, p, rec in rows:
-        px = rec.get("proxy") or {}
-        dn = px.get("downstream") or {}
-        if cls != "model.call.completed" or p.get("disposition") != "forwarded":
-            continue
-        if dn.get("path") != route:
-            continue
-        try:
-            with open(_wal_recordings().blob_path(
-                    store_root, dn.get("body_ref") or "x:x")) as f:
-                body = json.load(f)
-        except Exception:
-            continue
-        if body.get("model") == model and body.get("reasoning_effort") == effort:
-            return "pass", p.get("response_ref") or ""
-    return "failed{receipt_mismatch}", rows[-1][1].get("response_ref") or ""
+def bound_receipts(evs, store_root, slot_id, run_id):
+    """Every terminal model-call row whose receipt names exactly this
+    slot under this phase run: `[(class, event payload, receipt)]`.
+    A receipt that is unreadable, unparsable, unbound or bound to
+    another slot/run is never attributed to `slot_id`."""
+    return [(c, p, r) for _s, c, p, r in
+            bound_receipts_seq(evs, store_root, slot_id, run_id)]
 
-def run_lane_probe(a, sess, out_dir, http=None, events=None):
-    """`hh-lane-probe/1` — one receipted call per pinned effort path on
-    the probe slot token through the loopback listener, before the
-    first HH-native slot (REQ-XH-124; holds.rs's committed shape). The
-    pass verdict is bound to the durable receipt naming the probe slot
-    and phase run — never inferred from an HTTP status."""
+def read_blob_text(store_root, ref):
+    """A blob's bytes (UTF-8) via the existing blob-pool reader, or None.
+    Never trusted here: the adapter verifies them against `ref` with the
+    one content-addressing primitive (hharness-identity idp::address)."""
+    try:
+        with open(_wal_recordings().blob_path(store_root, ref), "rb") as f:
+            return f.read().decode("utf-8")
+    except Exception:
+        return None
+
+PROBE_SLOT_ID = "w4-lane-probe"
+PROBE_SURFACE = "openai.chat"
+
+def load_probe_pricing(path, model):
+    """`hh-w4-probe-pricing/1` (strict; duplicate keys refuse). The served
+    model must be the drive's model; the rates are decoded and priced by
+    the adapter, never here."""
+    pr = read_json_strict(path)
+    mr = (pr.get("model_ref") or {}) if isinstance(pr, dict) else {}
+    if mr.get("provider_model_id") != model:
+        raise ValueError("pricing model_ref.provider_model_id differs from --model")
+    return pr
+
+def lane_probe_plan(adapter, pricing, effort):
+    """The canonical plan + whole-plan priced bound (holds.rs), refused
+    before any credential is minted or call issued."""
+    return adapter({"schema": CONT_ADAPTER_SCHEMA, "op": "lane_probe_plan",
+                    "pricing": pricing, "surface": PROBE_SURFACE,
+                    "effort_paths": [effort]})
+
+def run_lane_probe(a, sess, out_dir, adapter, pricing, plan, http=None,
+                   events=None):
+    """`hh-lane-probe/1` through holds.rs `run_lane_probe` (R6.52 review
+    M3): the planned calls go out on the probe slot token; each observed
+    terminal row's receipt + downstream body bytes are handed to the
+    adapter, which verifies them against their content addresses and
+    binds them to the slot, phase run, route, model and effort. The
+    driver judges nothing. Returns (record, passed)."""
     http = http or http_call
     events = events or read_events
-    probe_id = "w4-lane-probe"
-    route = "/v1/chat/completions"
     store = sess.get("store_root") or a.store_root
-    grant = (sess.get("grants") or {}).get(probe_id) or {}
+    grant = (sess.get("grants") or {}).get(PROBE_SLOT_ID) or {}
     token = grant.get("slot_token")
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     if not token:
         rec = {"schema": "hh-lane-probe/1", "stage": "lane-probe",
                "window": "W4", "gate": "FP-E",
                "disposition": "failed{no_slot_grant}",
-               "evidence_label": "live-executed", "recorded_at": now}
+               "evidence_label": "recorded_execution", "recorded_at": now}
         return rec, False
-    body = {"model": a.model, "max_tokens": 8, "stream": False,
-            "reasoning_effort": a.effort,
-            "messages": [{"role": "user", "content":
-                          "HH-native lane probe — answer with the single token ok."}]}
-    status = http(a.listen, route, body, token)
+    calls = plan["calls"]
+    statuses = [http(a.listen, c["route"], c["body"], token) for c in calls]
     evs = events(store)
-    rows = bound_receipts(evs, store, probe_id, a.run_id)
-    disp, receipt = probe_call_verdict(rows, store, a.model, a.effort, route)
-    if disp == "pass" and not (200 <= status < 300):
-        disp = f"failed{{http:{status}}}"
-    cost = slot_cost_micros(evs, probe_id)
-    if cost > PROBE_SLICE_MICROS:
-        disp = "failed{probe_cap_exceeded}"
-    rec = {"schema": "hh-lane-probe/1", "stage": "lane-probe",
-           "window": "W4", "gate": "FP-E",
-           "slot": {"token_ref": f"slot:{probe_id}",
-                    "slice_micros": PROBE_SLICE_MICROS},
-           "plan": {"calls": 1, "cap_micros": PROBE_SLICE_MICROS},
-           "calls": [{"probe_id": f"lane-probe-{a.effort}",
-                      "surface": "openai.chat", "route": route,
-                      "http_status": status, "disposition": disp,
-                      "receipt_ref": receipt, "cost_micros": cost}],
-           "precedes": "first_hh_native_slot",
-           "disposition": "pass" if disp == "pass" else "failed",
-           "evidence_label": "live-executed", "recorded_at": now}
+    rows = sorted(bound_receipts_seq(evs, store, PROBE_SLOT_ID, a.run_id),
+                  key=lambda r: (not isinstance(r[0], int), r[0] or 0))
+    total = slot_cost_micros(evs, PROBE_SLOT_ID)
+    has_attr = any(e.get("class") == "measurement.cost.attributed"
+                   and _has_exact_str(e.get("payload") or {}, PROBE_SLOT_ID)
+                   for e in evs)
+    observations = []
+    for k, c in enumerate(calls):
+        row = rows[k] if k < len(rows) else None
+        o = {"probe_id": c["probe_id"], "http_status": statuses[k],
+             "terminal": None, "receipt": None, "downstream_body": None,
+             # per-call attribution is only exact for a one-call plan
+             "cost_micros": total if (has_attr and len(calls) == 1) else None}
+        if row:
+            _seq, cls, p, rec = row
+            o["terminal"] = {"class": cls,
+                             "disposition": p.get("disposition") or "",
+                             "response_ref": p.get("response_ref") or ""}
+            o["receipt"] = read_blob_text(store, p.get("response_ref") or "x:x")
+            dn = ((rec or {}).get("proxy") or {}).get("downstream") or {}
+            o["downstream_body"] = read_blob_text(store, dn.get("body_ref") or "x:x")
+        observations.append(o)
+    try:
+        out = adapter({"schema": CONT_ADAPTER_SCHEMA, "op": "lane_probe_record",
+                       "pricing": pricing, "surface": PROBE_SURFACE,
+                       "effort_paths": [a.effort],
+                       "slot": {"token_ref": f"slot:{PROBE_SLOT_ID}",
+                                "slice_micros": PROBE_SLICE_MICROS},
+                       "recorded_at": now, "probe_slot_id": PROBE_SLOT_ID,
+                       "phase_run_id": a.run_id,
+                       "observations": observations})
+        rec = out["stage"]
+    except (AdapterRefused, KeyError) as e:
+        rec = {"schema": "hh-lane-probe/1", "stage": "lane-probe",
+               "window": "W4", "gate": "FP-E",
+               "disposition": f"failed{{adapter_refused:{e}}}",
+               "evidence_label": "recorded_execution", "recorded_at": now}
+    rec["probe_end_seq"] = max((r[0] for r in rows if isinstance(r[0], int)),
+                               default=None)
     with open(os.path.join(out_dir, "lane-probe.json"), "w") as f:
         json.dump(rec, f, indent=1, sort_keys=True)
-    return rec, disp == "pass"
+    return rec, rec.get("disposition") == "pass"
+
+def probe_precedes_native_record(adapter, evs, store_root, run_id,
+                                 probe_end_seq, native_slots):
+    """The REQ-XH-124 ordering proof over the proxy WAL: every probe
+    receipt precedes the first native-lane slot's first model call
+    (holds.rs `probe_precedes_native`)."""
+    native_mcs = set()
+    for slot in native_slots:
+        for _seq, _cls, p, _rec in bound_receipts_seq(evs, store_root, slot, run_id):
+            if p.get("model_call_id"):
+                native_mcs.add(p["model_call_id"])
+    starts = [e.get("seq") for e in evs
+              if e.get("class") == "model.call.requested"
+              and e.get("run_id", run_id) == run_id
+              and (e.get("payload") or {}).get("model_call_id") in native_mcs
+              and isinstance(e.get("seq"), int)]
+    if probe_end_seq is None:
+        return {"precedes": False, "detail": "no_probe_receipt"}
+    if not starts:
+        return {"precedes": None, "detail": "n/a{no_native_call}"}
+    try:
+        rep_ = adapter({"schema": CONT_ADAPTER_SCHEMA,
+                        "op": "probe_precedes_native",
+                        "probe_end_seq": probe_end_seq,
+                        "first_native_seq": min(starts)})
+        return {"precedes": rep_.get("precedes"),
+                "probe_end_seq": probe_end_seq, "first_native_seq": min(starts)}
+    except AdapterRefused as e:
+        return {"precedes": None, "detail": f"adapter_refused:{e}"}
 
 def podman_containers():
     try:
@@ -413,8 +495,26 @@ def run_verifier(slot_dir):
     except Exception as e:
         row = {"disposition": "verifier_unavailable{exec_error}",
                "detail": str(e)}
-    subprocess.run(["podman", "rm", "-f", cid], capture_output=True)
+    remove_container(cid)
     return row
+
+def remove_container(cid):
+    """Remove one exact, recorded slot container (never a sweep), bounded."""
+    try:
+        p = subprocess.run(["podman", "rm", "-f", cid], capture_output=True,
+                           timeout=120)
+        return p.returncode == 0
+    except Exception:
+        return False
+
+def remove_slot_container(slot_dir):
+    """A terminated/rolled-back native slot is not verified, but its
+    preserved container is still removed (R6.52 review: no leak)."""
+    ws = os.path.abspath(os.path.join(slot_dir, "ws"))
+    for c in podman_containers():
+        if any(os.path.abspath(m) == ws for m in c["mounts"]):
+            return {"container_removed": remove_container(c["id"])}
+    return {"container_removed": None}
 
 class LaunchRefused(Exception):
     """A pre-launch prerequisite failed — nothing was started and no
@@ -656,21 +756,37 @@ class Scheduler:
             row = self.finish(m, h, rc, started, end)
             del self.running[sid]
             self.results[sid] = row
-            if any(sid in ids for ids in self.first3.values()):
-                self.first3_obs[sid] = classify_first3(row)
-                changed = True
+            obs = classify_first3(row)
+            changed |= self.observe(
+                sid, obs, end or ("infra" if obs else "unclassified"))
         if changed:
             self.evaluate_holds()
+
+    def note_admitted(self, m):
+        """First-3 identity is fixed at admission — before the launch is
+        attempted — so a launch failure is still one of the arm's first 3
+        (R6.52 review M2); completion order never replaces it."""
+        ids = self.first3.get(m["arm"])
+        if ids is not None and len(ids) < 3 and m["slot_id"] not in ids:
+            ids.append(m["slot_id"])
+
+    def observe(self, sid, obs, cause):
+        """Record a first-3 hold observation (True infra / False clear /
+        None unclassified) with its cause; True iff it was a first-3 id."""
+        if not any(sid in ids for ids in self.first3.values()):
+            return False
+        self.first3_obs[sid] = (obs, cause)
+        return True
 
     def evaluate_holds(self):
         for arm in NATIVE_ARMS:
             if arm in self.arm_closed or arm not in [m["arm"] for m in self.planned]:
                 continue
             settled = [s for s in self.first3[arm] if s in self.first3_obs]
-            obs = [self.first3_obs[s] for s in settled]
+            obs = [self.first3_obs[s][0] for s in settled]
             remaining = [m["slot_id"] for m in self.planned
                          if m["arm"] == arm and self.pending(m)]
-            cause_bits = [f"{s}:{'infra' if o else 'unclassified'}"
+            cause_bits = [f"{s}:{self.first3_obs[s][1]}"
                           for s, o in zip(settled, obs) if o is not False]
             if not self.probe_passed:
                 cause_bits.insert(0, "lane_probe:failed")
@@ -742,6 +858,8 @@ class Scheduler:
                 if o and h and self.pending(o) and self.pending(h):
                     pairs.append({"o_slot": o["slot_id"], "h_slot": h["slot_id"]})
         room = (self.dead_man_epoch - self.harvest_reserve_s - self.now()) * 1000
+        # A window already past its D budget is clamped to 0 ms remaining —
+        # the conservative reading (nothing more fits), never negative.
         return {"d_limit_ms": max(0, int(room)),
                 "cutoff_ms": self.cfg["cutoff_ms"],
                 "overhead_ms": self.cfg["overhead_ms"],
@@ -802,6 +920,8 @@ class Scheduler:
                 out.append(m)
                 continue
             try:
+                # after_round 0: every unadmitted slot counts as remaining —
+                # admit_slot reads only consumed/in-flight/p̂ from it.
                 rep = self.call({"op": "admit",
                                  "input": self.continuation_input(0),
                                  "arm": m["arm"],
@@ -837,39 +957,56 @@ class Scheduler:
         return out
 
     def launch_unit(self, members):
-        started = []
-        for i, m in enumerate(members):
+        """Launch one unit. Only the protected O/H pair is reserved and
+        rolled back together (R6.52 review M2): an unprotected member's
+        (V5's) launch failure is that slot's own attempted/withheld
+        evidence and never touches the pair. Every launch failure of a
+        native-lane first-3 slot feeds that arm's hold immediately."""
+        started_pair = []
+        pair_failed = None
+        changed = False
+        for m in members:
             sid = m["slot_id"]
+            in_pair = m["arm"] in self.protected
+            if in_pair and pair_failed is not None:
+                self.withhold(m, "withheld{infra}",
+                              f"pair_launch_failed:{pair_failed}")
+                continue
+            self.note_admitted(m)
+            failed = None
             try:
                 h = self.launch(m)
             except LaunchRefused as e:
                 self.withhold(m, "withheld{infra}", f"launch_refused:{e}")
-                self.abandon_unit(started, m, members[i + 1:])
-                return
+                failed = f"launch_refused:{e}"
             except Exception as e:
+                failed = f"launch_failed:{type(e).__name__}"
                 self.results[sid] = {"slot_id": sid, "arm": m["arm"],
                                      "task": m["task"],
                                      "replicate": m["replicate"],
                                      "launch": f"failed{{{type(e).__name__}}}"}
-                self.abandon_unit(started, m, members[i + 1:])
-                return
-            self.running[sid] = (h, m, self.now())
-            started.append(m)
-            if m["arm"] in self.first3 and len(self.first3[m["arm"]]) < 3:
-                self.first3[m["arm"]].append(sid)
+            if failed is None:
+                self.running[sid] = (h, m, self.now())
+                if in_pair:
+                    started_pair.append(m)
+                continue
+            changed |= self.observe(sid, None, failed)
+            if in_pair:
+                pair_failed = sid
+                self.rollback(started_pair, sid)
+                started_pair = []
+        if changed:
+            self.evaluate_holds()
 
-    def abandon_unit(self, started, failed, unlaunched):
-        """A unit member failed to launch: terminate and record its
-        already-started partners (attempted, never retro-withheld); the
-        members never started are `withheld{infra}` naming the failure."""
-        for m in unlaunched:
-            self.withhold(m, "withheld{infra}",
-                          f"unit_launch_failed:{failed['slot_id']}")
+    def rollback(self, started, failed_sid):
+        """Terminate and record the already-started pair partner
+        (attempted, never retro-withheld). Its termination is ours, not
+        its own failure, so it is not a hold observation for its arm."""
         for m in started:
             h, _, st = self.running.pop(m["slot_id"])
             rc = self.terminate(h)
             self.results[m["slot_id"]] = self.finish(
-                m, h, rc, st, f"terminated{{unit_launch_rollback:{failed['slot_id']}}}")
+                m, h, rc, st, f"terminated{{pair_launch_rollback:{failed_sid}}}")
 
     def run(self):
         # A failed probe holds the native-lane arms before any admission.
@@ -896,8 +1033,11 @@ class Scheduler:
                     if len(self.running) + len(members) > self.concurrency:
                         self.sleep(2.0)
                 # Holds/caps may have changed and the wait consumed the
-                # same admission window — decide again before starting.
+                # same admission window — decide again before starting:
+                # the cap verdict is re-run over the costs that settled
+                # while waiting (R6.52 review M1), then the cut-off.
                 members = self.live(members)
+                members = self.live(self.cap_admit(members))
                 if not members:
                     continue
                 if not self.deadline_fits():
@@ -933,9 +1073,15 @@ def verify_session_end(sess_file, grants, shim_rc):
     """Clean teardown needs the shim's own acknowledgement: exit 0 and a
     `.end` record whose acknowledged revocations cover every grant with
     no recorded seal/revoke/stop failure. Anything else is
-    `incomplete{…}` — never claimed clean."""
-    why = []
-    if shim_rc != 0:
+    `incomplete{…}` — never claimed clean. A failed §4.6 run-end catalog
+    probe on `stop` (the proxy still stops) is reported as its own
+    evidence deficit, `incomplete{run_end_evidence}`, distinct from an
+    unrevoked grant or a failed seal (R6.52 review m4)."""
+    why, deficit = [], []
+    if shim_rc == 4:
+        # the shim's own code for "only the run-end probe evidence is missing"
+        deficit.append("shim_rc:4")
+    elif shim_rc != 0:
         why.append(f"shim_rc:{shim_rc}")
     try:
         end = read_json(sess_file + ".end")
@@ -948,12 +1094,21 @@ def verify_session_end(sess_file, grants, shim_rc):
     for k in ("revoke_failed", "seal_failed"):
         if end.get(k):
             why.append(f"{k}:{len(end[k])}")
-    if end.get("stop") not in (None, "ok"):
-        why.append(f"stop:{end.get('stop')}")
+    stop = end.get("stop")
     if "stop" not in end:
         why.append("stop:unacknowledged")
-    return {"status": "clean" if not why else "incomplete{session_end}",
-            "detail": why, "unrevoked": missing}
+    elif stop != "ok":
+        if str(stop).startswith("failed{run_end_probe:"):
+            deficit.append(f"stop:{stop}")
+        else:
+            why.append(f"stop:{stop}")
+    if why:
+        status = "incomplete{session_end}"
+    elif deficit:
+        status = "incomplete{run_end_evidence}"
+    else:
+        status = "clean"
+    return {"status": status, "detail": why + deficit, "unrevoked": missing}
 
 def main():
     ap = argparse.ArgumentParser()
@@ -1010,6 +1165,15 @@ def main():
         return 2
     if not os.access(a.fp_continuation_bin, os.X_OK):
         eprint("fp-continuation binary is not executable")
+        return 2
+    adapter = lambda req: call_adapter(a.fp_continuation_bin, req)  # noqa: E731
+    try:
+        pricing = load_probe_pricing(a.pricing, a.model)
+        probe_plan = lane_probe_plan(adapter, pricing, a.effort)
+    except (AdapterRefused, ValueError, OSError) as e:
+        # The whole probe plan is priced (holds.rs lane_probe_bound)
+        # before any credential exists; a refusal never reaches a call.
+        eprint(f"lane-probe plan refused before any call: {e}")
         return 2
     cfg = read_json(a.cfg)
     a.tasks_dir = cfg["tasks_dir"]
@@ -1085,13 +1249,20 @@ def main():
             return 2
         store = sess.get("store_root") or a.store_root
 
-        probe_rec, probe_ok = run_lane_probe(a, sess, a.out)
+        probe_rec, probe_ok = run_lane_probe(a, sess, a.out, adapter,
+                                             pricing, probe_plan)
         window["lane_probe"] = probe_rec
+        # An unknown probe cost is accounted at its priced worst case.
+        pcalls = probe_rec.get("calls") or []
+        if any(c.get("cost_micros") is None for c in pcalls):
+            probe_cost = probe_plan.get("worst_case_micros", 0)
+        else:
+            probe_cost = sum(c.get("cost_micros") or 0 for c in pcalls)
 
         def launch(m):
             p, lf, tok = launch_member(a, sess, m,
                                        os.path.join(slots_dir, m["slot_id"]))
-            owned[m["slot_id"]] = p
+            owned[m["slot_id"]] = (p, tok)
             return (p, lf, tok)
 
         def poll(h):
@@ -1119,8 +1290,9 @@ def main():
                    "wall_ms": int((time.time() - started) * 1000)}
             if end:
                 row["end"] = end
-            if m["arm"] in NATIVE_ARMS and not end:
-                row["verifier"] = run_verifier(sd)
+            if m["arm"] in NATIVE_ARMS:
+                row["verifier"] = (run_verifier(sd) if not end
+                                   else remove_slot_container(sd))
             evs = read_events(store)
             row["cost_micros"] = slot_cost_micros(evs, sid)
             row["infra"] = slot_infra(evs, store, sid, a.run_id)
@@ -1140,8 +1312,7 @@ def main():
             os.replace(path + ".tmp", path)
 
         sched = Scheduler(
-            rounds, ccfg,
-            lambda req: call_adapter(a.fp_continuation_bin, req),
+            rounds, ccfg, adapter,
             launch=launch, poll=poll, terminate=terminate, finish=finish,
             cost_of=lambda sid: slot_cost_micros(read_events(store), sid),
             orphans=lambda: orphaned_call_ids(read_events(store)),
@@ -1150,10 +1321,15 @@ def main():
             slot_deadline_s=a.slot_deadline_s,
             harvest_reserve_s=a.harvest_reserve_s,
             dead_man_epoch=a.dead_man_epoch, probe_passed=probe_ok,
-            probe_cost_micros=probe_rec.get("calls", [{}])[0].get("cost_micros", 0)
-            if probe_rec.get("calls") else 0)
+            probe_cost_micros=probe_cost)
         window["closure"] = sched.run()
         if not window["closure"]["ok"]:
+            rc_out = 3
+        window["probe_precedes_native"] = probe_precedes_native_record(
+            adapter, read_events(store), store, a.run_id,
+            probe_rec.get("probe_end_seq"),
+            [m["slot_id"] for m in sched.planned if m["arm"] in NATIVE_ARMS])
+        if window["probe_precedes_native"].get("precedes") is False:
             rc_out = 3
     except Exception as e:
         eprint(f"driver failure: {type(e).__name__}: {e}")
@@ -1161,7 +1337,7 @@ def main():
         rc_out = 4
     finally:
         # Only recorded, owned children — never a broad process sweep.
-        for sid, p in list(owned.items()):
+        for sid, (p, tok) in list(owned.items()):
             if p.poll() is None:
                 p.terminate()
                 try:
@@ -1169,6 +1345,8 @@ def main():
                 except subprocess.TimeoutExpired:
                     p.kill()
                 window.setdefault("terminated_at_close", []).append(sid)
+            if tok and os.path.exists(tok):
+                os.remove(tok)
         if sched is not None:
             window["slot_results"] = dict(sched.results)
             window["withheld"] = [sched.withheld[k] for k in sorted(sched.withheld)]

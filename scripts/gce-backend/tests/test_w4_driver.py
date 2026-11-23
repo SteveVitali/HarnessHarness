@@ -281,7 +281,7 @@ class SchedulerProtocolTests(unittest.TestCase):
         closure = h.run()
         self.assertTrue(closure["ok"], closure)
         mini = h.sched.results["w4-mini-swe-agent-t0-r1"]
-        self.assertTrue(mini["end"].startswith("terminated{unit_launch_rollback"))
+        self.assertTrue(mini["end"].startswith("terminated{pair_launch_rollback"))
         self.assertEqual(h.sched.results["w4-hh_native-t0-r1"]["launch"], "failed{OSError}")
 
     def test_prelaunch_refusal_is_withheld_infra_and_partner_rolled_back(self):
@@ -293,7 +293,7 @@ class SchedulerProtocolTests(unittest.TestCase):
         self.assertTrue(closure["ok"], closure)
         self.assertEqual(h.sched.withheld["w4-hh_native-t0-r1"]["disposition"],
                          "withheld{infra}")
-        self.assertIn("terminated{unit_launch_rollback",
+        self.assertIn("terminated{pair_launch_rollback",
                       h.sched.results["w4-mini-swe-agent-t0-r1"]["end"])
 
     def test_hung_slot_is_terminated_and_recorded_attempted(self):
@@ -304,6 +304,99 @@ class SchedulerProtocolTests(unittest.TestCase):
         self.assertTrue(closure["ok"])
         first = h.launches[0]
         self.assertEqual(h.sched.results[first]["end"], "terminated{slot_deadline}")
+
+
+class ReviewFixTests(unittest.TestCase):
+    """R6.52 independent-review M1/M2 + negative closure/whitelist controls."""
+
+    def test_cap_verdict_is_refreshed_after_the_capacity_wait(self):
+        # M1 (reviewer's case): V5 cap 800,000 µ$; each V5 slot costs
+        # 1,000,000 µ$ — the second V5 slot must not launch.
+        def behave(m, n):
+            return (10.0, 0, 1_000_000 if m["arm"] == "v5" else 100_000, False)
+        h = Harness(cfg(caps_v5=800_000), behave=behave, tasks=["t0", "t1"],
+                    replicates=1)
+        closure = h.run()
+        self.assertTrue(closure["ok"], closure)
+        v5 = [s for s in h.launches if "-v5-" in s]
+        self.assertEqual(len(v5), 1, v5)
+        rows = withheld_of(h.sched, "v5", "withheld{budget}")
+        self.assertEqual(len(rows), 1)
+        self.assertTrue(rows[0]["cause"].startswith("cap:expected"), rows)
+
+    def test_every_v5_launch_failing_never_touches_the_protected_pair(self):
+        # M2 (reviewer's case): all V5 spawns raise.
+        def boom(m):
+            if m["arm"] == "v5":
+                raise OSError("spawn")
+        h = Harness(launch_raise=boom)
+        closure = h.run()
+        self.assertTrue(closure["ok"], closure)
+        native = [r for r in h.sched.results.values()
+                  if r["arm"] in ("mini-swe-agent", "hh_native")]
+        self.assertEqual(len(native), 100)
+        self.assertFalse([r for r in native if "end" in r], "pair rolled back")
+        self.assertEqual([x["arm"] for x in h.sched.holds], ["v5"])
+        failed_v5 = [r for r in h.sched.results.values() if r.get("launch")]
+        self.assertLessEqual(len(failed_v5), 3)
+        self.assertIn(failed_v5[0]["slot_id"], h.sched.first3["v5"])
+        held = withheld_of(h.sched, "v5", "withheld{admission:native_lane_hold}")
+        self.assertEqual(len(held) + len(failed_v5), 50)
+
+    def test_hh_native_launch_failure_holds_hh_native_only(self):
+        def boom(m):
+            if m["slot_id"] == h_first[0]:
+                raise OSError("spawn")
+        rounds = drv.plan_schedule(TASKS, 5, drv.ARMS, "seed")
+        h_first = [next(m["slot_id"] for m in rounds[0][0]["members"]
+                        if m["arm"] == "hh_native")]
+        h = Harness(launch_raise=boom)
+        closure = h.run()
+        self.assertTrue(closure["ok"], closure)
+        self.assertEqual([x["arm"] for x in h.sched.holds], ["hh_native"])
+        self.assertIn("launch_failed:OSError", h.sched.holds[0]["cause"])
+        self.assertEqual(h.sched.first3["hh_native"][0], h_first[0])
+        self.assertEqual(len([s for s in h.launches if "-v5-" in s]), 50)
+        rolled = [r for r in h.sched.results.values()
+                  if "pair_launch_rollback" in r.get("end", "")]
+        self.assertEqual([r["arm"] for r in rolled], ["mini-swe-agent"])
+
+    def test_closure_detects_missing_duplicate_and_foreign_ids(self):
+        h = Harness(tasks=["t0"], replicates=1)
+        self.assertTrue(h.run()["ok"])
+        s = h.sched
+        sid = next(iter(s.results))
+        row = s.results.pop(sid)
+        self.assertEqual(s.closure()["missing"], [sid])
+        self.assertFalse(s.closure()["ok"])
+        s.results[sid] = row
+        s.withheld[sid] = {"slot_id": sid}
+        self.assertEqual(s.closure()["attempted_and_withheld"], [sid])
+        self.assertFalse(s.closure()["ok"])
+        del s.withheld[sid]
+        s.results["w4-foreign"] = {}
+        self.assertEqual(s.closure()["foreign"], ["w4-foreign"])
+        self.assertFalse(s.closure()["ok"])
+
+    def test_incoherent_checkpoint_reply_stops_admission(self):
+        # A reply that neither withholds nor continues a pending later slot.
+        h = Harness()
+        dropped = []
+
+        def lying(req):
+            rep = drv.call_adapter(BIN, req)
+            if req["op"] == "checkpoint" and not dropped:
+                cont = rep["outcome"]["continuing"]
+                arm = next(a for a in cont if cont[a])
+                dropped.append(cont[arm].pop())
+            return rep
+        h.sched.adapter = lying
+        closure = h.run()
+        self.assertTrue(closure["ok"], closure)
+        row = h.sched.withheld[dropped[0]]
+        self.assertEqual(row["disposition"], "withheld{infra}")
+        self.assertTrue(row["cause"].startswith("continuation_incoherent:"))
+        self.assertFalse([s for s in h.launches if s.endswith(("-r3", "-r4", "-r5"))])
 
 
 class AdmissionCutoffTests(unittest.TestCase):
@@ -370,57 +463,126 @@ class AdmissionCutoffTests(unittest.TestCase):
         self.assertEqual(len(withheld), 2)
 
 
-class ProbeReceiptTests(unittest.TestCase):
+# A receipt + downstream body whose refs were produced by the canonical
+# content-addressing primitive (hharness-identity idp::address) — literal
+# fixture constants, never recomputed here (no second hash scheme).
+FIX_BODY = '{"model":"glm-5.3-flash","reasoning_effort":"high"}'
+FIX_BREF = "sha256:95ab51d2c42735caa4dd33ff4796875964f4778e8137c88d5ddc390fe9ddcee7"
+FIX_REC = ('{"proxy":{"downstream":{"body_ref":"' + FIX_BREF + '","path":'
+           '"/v1/chat/completions"},"phase_run_id":"run-1","slot_id":"w4-lane-probe"}}')
+FIX_RREF = "sha256:5bb058884aa0282dd42972973e9369ef34a22c5b6f15d10b3c907db8dda9b37c"
+
+
+def pricing(input_per_1m=150_000):
+    return {"schema": "hh-w4-probe-pricing/1",
+            "model_ref": {"profile_ref": "glm-5.3-flash",
+                          "provider_model_id": "glm-5.3-flash",
+                          "serving_route": "ollama"},
+            "table": {"table_id": "ollama", "version": "2026-10-22",
+                      "currency": "USD", "rate_unit": "micro_per_1k_tokens",
+                      "input_micro_per_1m": input_per_1m,
+                      "cache_read_micro_per_1m": 30_000,
+                      "output_micro_per_1m": 500_000,
+                      "valid_from": "2026-10-22", "source": "fixture"}}
+
+
+def adapter(req):
+    return drv.call_adapter(BIN, req)
+
+
+class ProbeTests(unittest.TestCase):
+    """The probe goes through holds.rs via the adapter (R6.52 review M3)."""
+
     def setUp(self):
         self.d = tempfile.mkdtemp()
         os.makedirs(os.path.join(self.d, "blobs"))
-        self.a = types.SimpleNamespace(model="m1", effort="high", listen="x",
-                                       store_root=self.d, run_id="run-1")
+        self.a = types.SimpleNamespace(model="glm-5.3-flash", effort="high",
+                                       listen="x", store_root=self.d,
+                                       run_id="run-1")
         self.sess = {"grants": {"w4-lane-probe": {"slot_token": "fixture"}},
                      "store_root": self.d}
+        self.plan = drv.lane_probe_plan(adapter, pricing(), "high")
 
-    def blob(self, name, obj):
-        with open(os.path.join(self.d, "blobs", name), "w") as f:
-            json.dump(obj, f)
-        return f"sha256:{name}"
+    def blob(self, ref, text):
+        with open(os.path.join(self.d, "blobs", ref.split(":", 1)[1]), "w") as f:
+            f.write(text)
 
-    def call(self, *, slot="w4-lane-probe", run="run-1", effort="high",
-             disposition="forwarded", cls="model.call.completed", cost=1_000):
-        body = self.blob("body", {"model": "m1", "reasoning_effort": effort})
-        rec = self.blob("rcpt", {"proxy": {"slot_id": slot, "phase_run_id": run,
-                                           "downstream": {"path": "/v1/chat/completions",
-                                                          "body_ref": body}}})
-        return [{"class": cls, "payload": {"model_call_id": "mc1",
-                                            "response_ref": rec,
-                                            "disposition": disposition}},
-                {"class": "measurement.cost.attributed",
-                 "payload": {"subject": slot, "money": {"micro_units": cost}}}]
+    def evs(self, rref=FIX_RREF, disposition="forwarded", cost=1_000):
+        out = [{"seq": 7, "class": "model.call.completed",
+                "payload": {"model_call_id": "mc1", "response_ref": rref,
+                            "disposition": disposition}}]
+        if cost is not None:
+            out.append({"seq": 8, "class": "measurement.cost.attributed",
+                        "payload": {"subject": "w4-lane-probe",
+                                    "money": {"micro_units": cost}}})
+        return out
 
     def probe(self, evs, status=200):
-        return drv.run_lane_probe(self.a, self.sess, self.d,
-                                  http=lambda *_a: status, events=lambda _s: evs)
+        return drv.run_lane_probe(self.a, self.sess, self.d, adapter,
+                                  pricing(), self.plan,
+                                  http=lambda *_a: status,
+                                  events=lambda _s: evs)
+
+    def test_whole_plan_is_priced_and_refused_before_any_call(self):
+        self.assertLessEqual(self.plan["worst_case_micros"], 50_000)
+        self.assertEqual(len(self.plan["calls"]), 1)
+        with self.assertRaises(drv.AdapterRefused) as e:
+            drv.lane_probe_plan(adapter, pricing(150_000_000_000), "high")
+        self.assertIn("plan_bound", str(e.exception))
+
+    def test_verified_bound_receipt_passes_through_the_canonical_record(self):
+        self.blob(FIX_RREF, FIX_REC)
+        self.blob(FIX_BREF, FIX_BODY)
+        rec, ok = self.probe(self.evs())
+        self.assertTrue(ok, rec)
+        self.assertEqual(rec["schema"], "hh-lane-probe/1")
+        self.assertEqual(rec["evidence_label"], "recorded_execution")
+        self.assertEqual(rec["calls"][0]["cost_micros"], 1_000)
+        self.assertEqual(rec["probe_end_seq"], 7)
 
     def test_http_200_without_receipt_fails(self):
         rec, ok = self.probe([])
         self.assertFalse(ok)
-        self.assertEqual(rec["calls"][0]["disposition"], "unreceipted{no_bound_receipt}")
+        self.assertEqual(rec["calls"][0]["disposition"], "unreceipted")
 
-    def test_bound_matching_receipt_passes_with_metered_cost(self):
-        rec, ok = self.probe(self.call())
+    def test_receipt_bytes_not_matching_their_ref_fail(self):
+        # The receipt sits under the ref's name but its bytes differ.
+        self.blob(FIX_RREF, FIX_REC.replace("run-1", "run-1 "))
+        self.blob(FIX_BREF, FIX_BODY)
+        rec, ok = self.probe(self.evs())
+        self.assertFalse(ok)
+
+    def test_non_forwarded_or_non_2xx_fail(self):
+        self.blob(FIX_RREF, FIX_REC)
+        self.blob(FIX_BREF, FIX_BODY)
+        self.assertFalse(self.probe(self.evs(disposition="upstream_error"))[1])
+        self.assertFalse(self.probe(self.evs(), status=500)[1])
+        self.assertFalse(self.probe(self.evs(cost=50_001))[1])
+
+    def test_missing_attribution_is_unknown_cost_not_zero(self):
+        self.blob(FIX_RREF, FIX_REC)
+        self.blob(FIX_BREF, FIX_BODY)
+        rec, ok = self.probe(self.evs(cost=None))
         self.assertTrue(ok, rec)
-        self.assertEqual(rec["calls"][0]["cost_micros"], 1_000)
-        self.assertEqual(rec["plan"]["cap_micros"], 50_000)
+        self.assertIsNone(rec["calls"][0]["cost_micros"])
+        self.assertEqual(rec["calls"][0]["cost"], "unknown{no_attribution_row}")
 
-    def test_wrong_slot_run_effort_or_disposition_fail(self):
-        for kw in ({"slot": "w4-mini-swe-agent-t0-r1"}, {"run": "run-2"},
-                   {"effort": "low"}, {"disposition": "upstream_error",
-                                       "cls": "model.call.failed"}):
-            rec, ok = self.probe(self.call(**kw))
-            self.assertFalse(ok, kw)
-
-    def test_non_2xx_or_over_cap_fails(self):
-        self.assertFalse(self.probe(self.call(), status=500)[1])
-        self.assertFalse(self.probe(self.call(cost=50_001))[1])
+    def test_probe_precedes_native_uses_the_wal_order(self):
+        # native slot's first call requested at seq 9; probe receipt at seq 7
+        rref = FIX_RREF
+        self.blob(rref, FIX_REC.replace('"w4-lane-probe"', '"w4-hh_native-t0-r1"'))
+        evs = [{"seq": 9, "class": "model.call.requested",
+                "payload": {"model_call_id": "mcN"}},
+               {"seq": 11, "class": "model.call.completed",
+                "payload": {"model_call_id": "mcN", "response_ref": rref}}]
+        got = drv.probe_precedes_native_record(adapter, evs, self.d, "run-1", 7,
+                                               ["w4-hh_native-t0-r1"])
+        self.assertIs(got["precedes"], True)
+        got = drv.probe_precedes_native_record(adapter, evs, self.d, "run-1", 10,
+                                               ["w4-hh_native-t0-r1"])
+        self.assertIs(got["precedes"], False)
+        self.assertIs(drv.probe_precedes_native_record(
+            adapter, [], self.d, "run-1", None, [])["precedes"], False)
 
 
 class ConfigAndTeardownTests(unittest.TestCase):
@@ -444,6 +606,34 @@ class ConfigAndTeardownTests(unittest.TestCase):
         bad = cfg(); bad["root_cap_micros"] = True
         self.assertRaises(drv.ContinuationConfigError,
                           drv.load_continuation_config, self.write(bad))
+
+    def test_config_refuses_duplicate_keys(self):
+        good = json.dumps(cfg())
+        dup = good.replace('"c": 4', '"c": 4, "c": 8', 1)
+        self.assertNotEqual(dup, good)
+        fd, p = tempfile.mkstemp(suffix=".json")
+        with os.fdopen(fd, "w") as f:
+            f.write(dup)
+        with self.assertRaises(drv.ContinuationConfigError) as e:
+            drv.load_continuation_config(p)
+        self.assertIn("duplicate", str(e.exception))
+
+    def test_run_end_probe_failure_is_an_evidence_deficit_not_a_leak(self):
+        d = tempfile.mkdtemp()
+        s = os.path.join(d, "proxy-session.json")
+        with open(s + ".end", "w") as f:
+            json.dump({"revoked": ["a"], "stop": "failed{run_end_probe:drift}"}, f)
+        # shim exit 4 = only the run-end probe evidence is missing
+        got = drv.verify_session_end(s, ["a"], 4)
+        self.assertEqual(got["status"], "incomplete{run_end_evidence}")
+        self.assertEqual(got["unrevoked"], [])
+        # any other failure code is a session-end failure
+        self.assertEqual(drv.verify_session_end(s, ["a"], 3)["status"],
+                         "incomplete{session_end}")
+        with open(s + ".end", "w") as f:
+            json.dump({"revoked": [], "stop": "failed{run_end_probe:drift}"}, f)
+        self.assertEqual(drv.verify_session_end(s, ["a"], 4)["status"],
+                         "incomplete{session_end}")
 
     def test_session_end_is_clean_only_when_acknowledged(self):
         d = tempfile.mkdtemp()
