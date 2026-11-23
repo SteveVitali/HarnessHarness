@@ -130,6 +130,24 @@ impl LeaseStatus {
     }
 }
 
+/// `lease_expiry_ms(now, ttl_ms)` — the writer-lease expiry, refused
+/// typed unless it is representable in the record's signed JSON
+/// millisecond fields (`acquired_at_ms`/`expires_at_ms` serialize as
+/// `i64`). Checked arithmetic only — never a clamp or a wrap into a
+/// different recorded value. The TTL policy itself (which values a
+/// caller may declare) is not decided here.
+pub(crate) fn lease_expiry_ms(now: u64, ttl_ms: u64) -> Result<u64, LedgerError> {
+    let max = i64::MAX as u64;
+    match now.checked_add(ttl_ms) {
+        Some(expiry) if now <= max && expiry <= max => Ok(expiry),
+        _ => Err(LedgerError::ManifestInvalid {
+            detail: format!(
+                "writer lease expiry not representable: now {now} ms + ttl {ttl_ms} ms exceeds {max} ms"
+            ),
+        }),
+    }
+}
+
 fn lease_record_json(r: &LeaseRecord) -> Json {
     Json::Obj(BTreeMap::from([
         ("lease_id".to_string(), Json::str(&r.lease_id)),
@@ -954,6 +972,10 @@ impl Store {
         }
         let run_id = run_id.to_string();
         manifest.validate()?;
+        // The writer lease's expiry must be representable before any
+        // durable act (run dir, `lifecycle.run.created`): a refusal here
+        // leaves no half-created run behind.
+        lease_expiry_ms(self.clock.now_ms(), manifest.lease_ttl.writer_ms)?;
         // Lineage anchors: `forked_from`/`continued_from` must resolve and bind the
         // source head hash at `at_seq` (ADR-0027 §6; ADR-0131 §5).
         for link in [&manifest.forked_from, &manifest.continued_from]
@@ -1081,7 +1103,7 @@ impl Store {
             holder: holder.to_string(),
             generation: 1,
             acquired_at_ms: self.clock.now_ms(),
-            expires_at_ms: self.clock.now_ms() + manifest.lease_ttl.writer_ms,
+            expires_at_ms: lease_expiry_ms(self.clock.now_ms(), manifest.lease_ttl.writer_ms)?,
             status: LeaseStatus::Active,
         };
         write_lease_file(&state.dir, &rec)?;
@@ -1177,7 +1199,7 @@ impl Store {
                 holder: holder.to_string(),
                 generation,
                 acquired_at_ms: now,
-                expires_at_ms: now + ttl_ms,
+                expires_at_ms: lease_expiry_ms(now, ttl_ms)?,
                 status: LeaseStatus::Active,
             };
             write_lease_file(&self.run_dir(run_id), &new_rec)?;
@@ -1232,7 +1254,7 @@ impl Store {
             holder: holder.to_string(),
             generation: 1,
             acquired_at_ms: now,
-            expires_at_ms: now + ttl_ms,
+            expires_at_ms: lease_expiry_ms(now, ttl_ms)?,
             status: LeaseStatus::Active,
         };
         write_lease_file(&self.run_dir(run_id), &rec)?;
@@ -1283,7 +1305,18 @@ impl Store {
             });
         }
         let new_rec = LeaseRecord {
-            expires_at_ms: now + (rec.expires_at_ms - rec.acquired_at_ms).max(1),
+            // Checked: the retained interval and the renewed expiry must
+            // both stay representable (the interval semantics are
+            // unchanged — only overflow/wrap is refused typed).
+            expires_at_ms: lease_expiry_ms(
+                now,
+                rec.expires_at_ms
+                    .checked_sub(rec.acquired_at_ms)
+                    .ok_or_else(|| LedgerError::ManifestInvalid {
+                        detail: "writer lease record expires before it was acquired".into(),
+                    })?
+                    .max(1),
+            )?,
             ..rec
         };
         write_lease_file(&self.run_dir(&lease.run_id), &new_rec)?;
