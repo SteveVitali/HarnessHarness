@@ -131,11 +131,15 @@ def main():
                     rep = ctl(proc, {"op": "seal_recording", "slot_id": sid})
                 except SystemExit as e:
                     rep = {"error": str(e)}
-                sealed[sid] = (rep.get("ok") or rep) \
-                    if "error" not in rep else {"error": rep["error"]}
-                if "error" in rep:
-                    seal_failed[sid] = rep["error"]
+                # Symmetric with revoke: only an explicit `ok` is sealed;
+                # an `error` or a reply with neither is a recorded failure.
+                if "error" in rep or "ok" not in rep:
+                    err = rep.get("error") or "unacknowledged"
+                    sealed[sid] = {"error": err}
+                    seal_failed[sid] = err
                     eprint(f"seal_recording {sid}:", rep)
+                else:
+                    sealed[sid] = rep.get("ok") or {}
         revoked, revoke_failed = [], {}
         for sid in grants:
             try:
@@ -149,8 +153,15 @@ def main():
                 revoked.append(sid)
         try:
             rep = ctl(proc, {"op": "stop"})
-            stop = "ok" if "ok" in rep and "error" not in rep \
-                else f"failed{{{rep.get('error') or 'unacknowledged'}}}"
+            # The proxy's `stop` reply carries an `error` only when its §4.6
+            # run-end catalog probe failed (it stops either way): a missing
+            # run-end evidence record, labelled as such — not a leak.
+            if "error" in rep:
+                stop = f"failed{{run_end_probe:{rep['error']}}}"
+            elif "ok" in rep:
+                stop = "ok"
+            else:
+                stop = "failed{unacknowledged}"
         except SystemExit:
             stop = "failed{control_channel_closed}"
         time.sleep(1.0)
@@ -172,7 +183,11 @@ def main():
                           "waited_seconds": waited,
                           "sealed": sorted(sealed)}), flush=True)
         if not clean:
-            sys.exit(3)
+            # 3: a grant/seal/stop acknowledgement is missing; 4: only the
+            # run-end catalog probe evidence is missing (all grants revoked).
+            only_run_end = (not (revoke_failed or seal_failed)
+                            and stop.startswith("failed{run_end_probe:"))
+            sys.exit(4 if only_run_end else 3)
     finally:
         try:
             proc.terminate()

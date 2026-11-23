@@ -20,6 +20,7 @@ SHIM = Path(__file__).resolve().parents[1] / "ws1-proxy-session.py"
 FAKE = r'''#!/usr/bin/env python3
 import json, os, sys
 fail = set(filter(None, os.environ.get("FAKE_FAIL", "").split(",")))
+silent = set(filter(None, os.environ.get("FAKE_SILENT_SEAL", "").split(",")))
 for line in sys.stdin:
     op = json.loads(line)
     name = op["op"]
@@ -30,6 +31,8 @@ for line in sys.stdin:
         rep = {"ok": {"listen": "127.0.0.1:1"}}
     elif name == "register_slot":
         rep = {"ok": {"token": "tok-" + op["slot_id"]}}
+    elif name == "seal_recording" and op["slot_id"] in silent:
+        rep = {"neither": True}
     elif name == "seal_recording":
         rep = {"ok": {"recording_ref": "r", "recording": {}}}
     else:
@@ -41,7 +44,7 @@ for line in sys.stdin:
 
 
 class SessionEndTests(unittest.TestCase):
-    def run_shim(self, fail="", seal=False):
+    def run_shim(self, fail="", seal=False, silent=""):
         d = tempfile.mkdtemp()
         fake = os.path.join(d, "fake-proxy")
         with open(fake, "w") as f:
@@ -53,7 +56,8 @@ class SessionEndTests(unittest.TestCase):
         sentinel = os.path.join(d, "done")
         open(sentinel, "w").close()   # close immediately
         sess = os.path.join(d, "s", "session.json")
-        env = dict(os.environ, FAKE_FAIL=fail, OLLAMA_API_KEY="fixture-not-a-key")
+        env = dict(os.environ, FAKE_FAIL=fail, FAKE_SILENT_SEAL=silent,
+                   OLLAMA_API_KEY="fixture-not-a-key")
         cmd = [sys.executable, str(SHIM), "--proxy-bin", fake,
                "--store-root", d, "--run-id", "run-1", "--listen", "127.0.0.1:0",
                "--lane-file", os.path.join(d, "lane.json"),
@@ -81,9 +85,21 @@ class SessionEndTests(unittest.TestCase):
 
     def test_failed_seal_and_stop_are_recorded(self):
         rc, end = self.run_shim(fail="seal_recording:a,stop", seal=True)
-        self.assertNotEqual(rc, 0)
+        self.assertEqual(rc, 3)
         self.assertIn("a", end["seal_failed"])
-        self.assertTrue(end["stop"].startswith("failed{"))
+        self.assertTrue(end["stop"].startswith("failed{run_end_probe:"))
+
+    def test_seal_reply_with_neither_ok_nor_error_is_a_failure(self):
+        rc, end = self.run_shim(seal=True, silent="b")
+        self.assertEqual(rc, 3)
+        self.assertEqual(end["seal_failed"], {"b": "unacknowledged"})
+        self.assertEqual(end["revoked"], ["a", "b"])
+
+    def test_run_end_probe_failure_alone_exits_4_with_all_revoked(self):
+        rc, end = self.run_shim(fail="stop")
+        self.assertEqual(rc, 4)
+        self.assertEqual(end["revoked"], ["a", "b"])
+        self.assertTrue(end["stop"].startswith("failed{run_end_probe:"))
 
 
 if __name__ == "__main__":
