@@ -679,7 +679,7 @@ pattern; REQ-XD-221's recorded-verbatim authorizations). Partition + decisions:
 | 329 | `329_R7.3__x0x1-window.md` | Round 7 | ticket | X0+X1 exploration window body — declared envelope upfront; fleshes only after GATE-G35 PASSED | — |
 | 330 | `330_R7.4__x1-fold-confirm-prereg.md` | Round 7 | ticket | X1 fold (offline): exploration packet, selection packet minted (hash predates the confirmation pre-registration), confirmation pre-registration frozen (REQ-XD-217), confirmation quote (REQ-XD-218) | — |
 | 331 | `331_GATE-G36__p4-c.md` | Round 7 | gate | G-P4-C: authorize the held-out confirmation envelope — frozen member list, T=37 census, hash-before-subjects (REQ-XD-221 leg 2) | STOP |
-| 332 | `332_R7.5__confirm-window.md` | Round 7 | skeleton | Held-out confirmation window body — declared envelope upfront; fleshes only after GATE-G36 PASSED | — |
+| 332 | `332_R7.5__confirm-window.md` | Round 7 | ticket | Held-out confirmation window body — declared envelope upfront; fleshes only after GATE-G36 PASSED | — |
 | 333 | `333_R7.6__confirm-fold-claims.md` | Round 7 | ticket | Confirmation fold + claims packet (offline): Holm estimation (REQ-XD-216), null/inconclusive dispositions (REQ-XD-219), §8.8 two-statement claims | — |
 | 334 | `334_HUMAN-H21__r7-billing.md` | Round 7 | human | Round-7 billing/settlement reconciliation — one dated entry per executed window ≥ 24 h post-teardown (H18 pattern) | — |
 | 335 | `335_CAP7.1__gap-analysis.md` | Round 7 | capstone | Pass terminal-state gap analysis: per-id verdicts over the 18 routed §8.x ids; honest terminal-state determination; DF-R6.45l-1 discharge verification | — |
