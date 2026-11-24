@@ -4,7 +4,7 @@
   Signature block and never edits or deletes anything above it.
 -->
 # GATE-G36 readout — G-P4-C: authorize the held-out confirmation window (baseline re-run + selected members)
-Status: PENDING   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
+Status: PASSED   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
 
 > An operator or authorized human record supplies the decision; an agent must not sign or assume silence is
 > approval.
