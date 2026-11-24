@@ -1,0 +1,12 @@
+{
+ "ceiling_micros": 12229780,
+ "gate": "GATE-G36",
+ "model_line": "authorized",
+ "note": "GATE-G36 PASSED \u2014 run (operator verbatim \"run\", 2026-11-24T21:10Z): the held-out confirmation window \u2014 baseline re-run + V1, T=37 \u00d7 k=5 = 370 slots, seeded p4-c-schedule-r7.4-2026-11-24",
+ "quote_id": "pq-3a4187759b2d8411",
+ "readout_path": "docs/build/readouts/GATE-G36.md",
+ "recorded_at": "2026-11-24T20:18:42Z",
+ "schema": "hh-fp-authorization/1",
+ "verbatim_sha256": "acba25512100f80b56fc3ccd14c65be55d94800cda77585c5f41a887e398f9be",
+ "window": "p4c"
+}

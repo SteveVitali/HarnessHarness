@@ -648,6 +648,22 @@ tarfile.open(sys.argv[1]).extractall(sys.argv[2], filter="fully_trusted")
 PY
 }
 
+# `harvest_manifest_nonempty` — DF-R7.3-4's fail-closed leg. An empty
+# manifest means the remote run root was absent or empty (the
+# `mkdir -p` above mints it silently): the tar "verifies" trivially
+# and the window body is lost on delete. Fail unless the operator
+# records the escape (`HH_HARVEST_ALLOW_EMPTY=1` — a genuinely
+# empty window's teardown cites it verbatim).
+harvest_manifest_nonempty() {
+  [ -s "$HARV_DIR/MANIFEST.sha256" ] && return 0
+  if [ "${HH_HARVEST_ALLOW_EMPTY:-}" = "1" ]; then
+    printf 'gce-backend: harvest manifest EMPTY — admitted by HH_HARVEST_ALLOW_EMPTY=1\n' >&2
+    return 0
+  fi
+  printf 'gce-backend: FAIL — harvest manifest is empty (run root absent or empty; refusing to verify trivially — DF-R7.3-4)\n' >&2
+  return 1
+}
+
 harvest_impl() { # returns rc; fills $HARV_DIR; records gdo/vm calls
   HARV_DIR="$REPORTS/harvest/${PHASE}-${WINDOW}"
   mkdir -p "$HARV_DIR"
@@ -666,6 +682,7 @@ harvest_impl() { # returns rc; fills $HARV_DIR; records gdo/vm calls
      && [ -f "$HARV_DIR/serial.log" ]; then
     mkdir -p "$TMPD/verify"
     harvest_extract "$HARV_DIR/run-root.tar.gz" "$TMPD/verify" || return 1
+    harvest_manifest_nonempty || return 1
     if [ -s "$HARV_DIR/MANIFEST.sha256" ]; then
       if command -v sha256sum >/dev/null 2>&1; then
         (cd "$TMPD/verify" && sha256sum -c "$HARV_DIR/MANIFEST.sha256" >/dev/null) \
@@ -690,10 +707,13 @@ harvest_impl() { # returns rc; fills $HARV_DIR; records gdo/vm calls
   gdo compute scp --tunnel-through-iap --project "$PROJECT" --zone "$ZONE" \
     "$INSTANCE:/tmp/hh-manifest.sha256" "$HARV_DIR/MANIFEST.sha256" \
     >/dev/null || return 1
-  # 2c: verify locally — extract and check every hashed member (an empty
-  #     manifest means an empty run root — verified trivially)
+  # 2c: verify locally — extract and check every hashed member. An
+  #     empty manifest fails closed (DF-R7.3-4): it means the remote
+  #     run root was absent/empty and "verification" would pass
+  #     trivially while the window body is destroyed on delete.
   mkdir -p "$TMPD/verify"
   harvest_extract "$HARV_DIR/run-root.tar.gz" "$TMPD/verify" || return 1
+  harvest_manifest_nonempty || return 1
   if [ -s "$HARV_DIR/MANIFEST.sha256" ]; then
     if command -v sha256sum >/dev/null 2>&1; then
       (cd "$TMPD/verify" && sha256sum -c "$HARV_DIR/MANIFEST.sha256" >/dev/null) \
