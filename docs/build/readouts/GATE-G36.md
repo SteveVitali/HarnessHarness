@@ -185,3 +185,30 @@ on its own authority. The appended lines' shape is the _TEMPLATE.md set (decisio
 GATE DECISIONS row, agent-draft confirmation covering the block sha256, signed-by) — the
 literal placeholder lines stay out of this file so the supplement guard's signature-reuse
 leg never reads the template as a verbatim. -->
+
+Operator decision (verbatim, received 2026-11-24 via Devin CLI session): "run" —
+**disposition `run`**, authorizing the declared envelope verbatim: the held-out T = 37
+census, members `baseline` (re-run — no phase-2 reuse, REQ-XD-215) + `V1` (selected), k = 5,
+370 slots, seeded `p4-c-schedule-r7.4-2026-11-24`, Holm α = .05 over the member-vs-baseline
+family.
+
+Authorizations recorded verbatim (REQ-XH-004 — model and compute separately):
+- **Model:** exploration-confirmation authorized under `cap_h = n_trials_h × max(mean, p90)_h
+  × 1.2` — baseline `185 × 163,525 × 1.2` = 36,302,550 µ$; V1 `185 × 45,275 × 1.2` =
+  10,051,050 µ$; **Σ ceiling 46,353,600 µ$ ($46.35)** — every rate X1-measured from the
+  session WAL (expected ≈ 11,858,315 µ$ ≈ $11.86).
+- **Compute:** `hh-compute-quote/1` **`pq-3a4187759b2d8411`**, ceiling **12,229,780 µ$
+  ($12.23)** — e2-standard-8, debian-12, 300 GiB, D = 36 h dead-man + 1 h restart, C = 4
+  (declaration `scripts/gce-backend/declarations/fp-p4c.json`; measured wall ≈ 23.2 h).
+- **Exclusivity (REQ-XH-013):** the established window posture verbatim — no two paid
+  collections run concurrently on the model account; the operator's own use counts as
+  overlap; teardown across gate waits.
+- **Stop rules:** the §8.4 declared set verbatim (budget, infrastructure, integrity,
+  catalog identity — no outcome-based stopping or level dropping, REQ-XD-210).
+- **Scope:** this authorizes R7.5's confirmation body only — 370 slots on the frozen
+  member list; no X0/X1 re-run, no member substitution, no further envelope implied.
+
+verbatim_sha256 `acba25512100f80b56fc3ccd14c65be55d94800cda77585c5f41a887e398f9be` —
+stamped into `declarations/fp-p4c.json` at signature.
+GATE DECISIONS row: 2026-11-24T21:10Z | GATE-G36
+Signed by: the operator. Recorded by devin-cli/swe-2-high, which does not sign.

@@ -2,10 +2,10 @@
   "authorization": {
     "ceiling_micros": 12229780,
     "gate": "GATE-G36",
-    "model_line": "none",
+    "model_line": "authorized",
     "quote_id": "pq-3a4187759b2d8411",
     "readout_path": "docs/build/readouts/GATE-G36.md",
-    "verbatim_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    "verbatim_sha256": "acba25512100f80b56fc3ccd14c65be55d94800cda77585c5f41a887e398f9be"
   },
   "boot_disk": {
     "size_gib": 300,
@@ -39,7 +39,7 @@
   "last_model_call_utc": null,
   "machine_type": "e2-standard-8",
   "mode": "full",
-  "model_line": "none",
+  "model_line": "authorized",
   "network": {
     "external_ipv4": "ephemeral",
     "ingress": [
