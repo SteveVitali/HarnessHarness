@@ -360,6 +360,25 @@
     "message_pattern": "exceeds 5 MB",
     "max_emitted": 4
    }
+  },
+  {
+   "id": "fp-p4x-evidence-size-4",
+   "date": "2026-11-24",
+   "recorded_by": "R7.4 (manifest 330) — append-only amendment; the standing `legacy` classes and their required-emission rule are unchanged",
+   "kind": "bounded-family-classification",
+   "emission": "required within bound — the four committed P4X evidence artifacts exceed the stock validator's 5 MB size diagnostic; every additional >5 MB warning outside this family still fails unexplained-diagnostic",
+   "provenance": {
+    "finding": "the R7.3 terminal landing's p4-p4x-3 run-root tarball (the salvaged X1 window evidence — committed, not bloat) and p4-p4x1 journald capture, plus R7.4's committed X1 fold inputs (the sealed session WAL tarball and its measurement/cost extract — the WAL is authoritative evidence, never truncated to fit a size budget)",
+    "committed_by": "the R7.3 landing chain (p4-p4x-3 run-root, p4-p4x1 journald) and R7.4 (the session-wal tar + wal-model-events extract under docs/build/reports/2026-11-24-fp-p4x1-*)",
+    "gate": "docs/build/readouts/GATE-G35.md — the window these record layers belong to; GATE-G36's readout cites the fold outputs",
+    "precedent": "fp-w4x-harvest-size-4 / fp-harvest-size-6 — the same bounded-family disposition for committed harvest/evidence artifacts"
+   },
+   "family": {
+    "check": "size",
+    "file_pattern": "^docs/build/reports/(compute/harvest/p4-p4x-3/run-root\\.tar\\.gz|compute/harvest/p4-p4x1/journald\\.log|2026-11-24-fp-p4x1-(session-wal\\.tar\\.gz|wal-model-events\\.jsonl))$",
+    "message_pattern": "exceeds 5 MB",
+    "max_emitted": 4
+   }
   }
  ]
 }

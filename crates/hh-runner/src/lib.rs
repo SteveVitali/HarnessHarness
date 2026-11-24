@@ -38,6 +38,7 @@ pub mod disposition;
 pub mod facts;
 pub mod fp_e;
 pub mod fp_measure;
+pub mod fp_p4x_fold;
 pub mod fp_partition;
 pub mod fp_prereg;
 pub mod fp_results;

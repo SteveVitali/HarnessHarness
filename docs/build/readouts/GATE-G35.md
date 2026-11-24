@@ -175,12 +175,11 @@ call — the forecasts are honestly typed, never fabricated.
 <!-- agent-drafted:end -->
 
 ## Signature   <!-- appended at signing; nothing above is edited or deleted -->
-<!-- Appended only when the operator has answered; an agent never writes these lines on its own authority:
-Operator decision (verbatim, received <date -u +%FT%TZ> via <channel>): "<exact words>"
-GATE DECISIONS row: <date -u +%FT%TZ> | GATE-G35
-Operator confirmation of agent-drafted text (verbatim, <date -u +%FT%TZ>): "<words>" — covers sha256:<first 12>
-Signed by: the operator. Recorded by <harness/model>, which does not sign.
--->
+<!-- Appended only when the operator has answered; an agent never writes the signature lines
+on its own authority. The appended lines' shape is the _TEMPLATE.md set — the literal
+placeholder lines were removed 2026-11-24 (housekeeping, post-signature): they are spent
+scaffolding, and the supplement guard's signature-reuse leg reads the unparseable-date
+template quote as a pre-round verbatim. The signed record below is untouched. -->
 
 ## Operator deferral (2026-11-20)
 

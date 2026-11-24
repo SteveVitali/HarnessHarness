@@ -1,0 +1,28 @@
+# fp-p4x-fold-inputs.txt — the inputs manifest for the `p4_fold`
+# emitter (manifest 330/R7.4). The reader rule keeps every docs/
+# relpath at script level, never in crates/**. Format: name=relpath.
+# Inputs: the committed X1 evidence (captured slot matrix, the
+# detail_lost id list, the WAL slot-cost map, the model-events extract,
+# the sealed session WAL, the window-record fragment), the gen-3 x2
+# records (registry + levels + the operative `hh-p4-x-prereg/1` whose
+# byte-pinned `selection_rule` member the selection decodes), and the
+# frozen task-selection record the T = 37 held-out census comes from.
+slot_matrix=docs/build/reports/2026-11-24-fp-p4x1-slot-matrix.jsonl
+slots_lost=docs/build/reports/2026-11-24-fp-p4x1-slots-lost.json
+wal_slot_costs=docs/build/reports/2026-11-24-fp-p4x1-wal-slot-costs.json
+wal_model_events=docs/build/reports/2026-11-24-fp-p4x1-wal-model-events.jsonl
+session_wal=docs/build/reports/2026-11-24-fp-p4x1-session-wal.tar.gz
+window_fragment=docs/build/reports/2026-11-24-fp-p4x1-window-fragment.txt
+sweep_registry=docs/build/reports/2026-11-21-fp-p4-sweep-registry-gen3.json
+levels=docs/build/reports/2026-11-21-fp-p4-levels-gen3.json
+prereg=docs/build/reports/2026-11-21-fp-p4x-prereg-gen3.json
+task_selection=docs/build/reports/2026-11-08-fp-selection.json
+# Outputs: the exploration packet, the deterministic selection packet
+# (hash committed first — REQ-XD-212), the frozen confirmation
+# pre-registration (all with sha256 sidecars).
+exploration=docs/build/reports/2026-11-24-fp-p4x-exploration.json
+exploration_sha256=docs/build/reports/2026-11-24-fp-p4x-exploration.sha256
+selection=docs/build/reports/2026-11-24-fp-p4x-selection.json
+selection_sha256=docs/build/reports/2026-11-24-fp-p4x-selection.sha256
+c_prereg=docs/build/reports/2026-11-24-fp-p4c-prereg.json
+c_prereg_sha256=docs/build/reports/2026-11-24-fp-p4c-prereg.sha256

@@ -1,0 +1,18 @@
+# hh-fp-window/1 — captured fragment (head -40 read on-VM 2026-11-24T19:21Z,
+# verbatim fields; the full record was lost in the harvest-target miss — see
+# R7.3.md attempt-4 addendum and DF-R7.3-4).
+{"arms": ["baseline","V1","V2","V3","V4","V5","V6","V7"],
+ "checkpoint": {"batch_fits": true, "consumed_micros": 8264760,
+  "drops": [], "label": "p4x-round-2",
+  "projection": {"remaining_cost_micros": 38677341,
+   "remaining_wall_ms": 128013256, "room_ms": 141505162},
+  "recorded_at": "2026-11-24T02:34:13Z", "schema": "hh-fp-checkpoint/1",
+  "stop": null},
+ "concurrency": 4, "dead_man_epoch": 1795650759.0,
+ "ended_at": "2026-11-24T18:50:03Z", "gate": "G-P4-X",
+ "lane_probe": {"calls": [{"cost_micros": 0, "disposition": "pass",
+   "probe_id": "lane-probe-high",
+   "receipt_ref": "sha256:de001e8c3984fb86abda8012e4b25d963b696585976bca2dbef35bc396c57345",
+   "route": "/v1/chat/completions", "surface": "openai.chat"}]}
+# driver stdout final line (verbatim):
+# {"slots": 440, "recorded": 440, "withheld": 0, "native_lane_hold": false, "stop": null, "window": "/var/lib/hh/runs/run-root-p4x/p4x-window.json"}

@@ -12,6 +12,14 @@
 # §3.10 path, and the `comparative-quote/1` + `hh-p4-x-quote-inputs/1`
 # records recompute byte-identical through `fp_p4x_quote` (C-11 — the
 # single quote artifact; the packet authorizes nothing).
+# The R7.4 legs (manifest 330): the offline, $0 fold — `p4_fold`
+# recomputes the `hh-p4-x-exploration/1` packet, the `hh-p4-selection/1`
+# packet and the frozen `hh-p4-c-prereg/1` byte-identical from the
+# committed X1 evidence + gen-3 x2 records; the GATE-G36 leg validates
+# the p4c `hh-compute-decl/1`, recomputes its `hh-compute-quote/1`
+# + `pq-` id through receipt_lib's §3.10 path, and recomputes the
+# X1-measured `comparative-quote/1` + `hh-p4-c-quote-inputs/1`
+# byte-identical through `fp_p4c_quote`.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -458,9 +466,183 @@ print('gen-3 prereg OK:', sha('docs/build/reports/2026-11-21-fp-p4x-prereg-gen3.
       '— envelope verbatim, baseline moved')
 PY
 
-echo "== leg 11: lab acceptance batteries =="
+echo "== leg 11: R7.4 — fold emit recomputes byte-identical =="
+# The fold inputs: the committed X1 evidence + the gen-3 x2 records +
+# the frozen task-selection record.
+cp scripts/fp-p4x-fold-inputs.txt scripts/fp-p4c-inputs.txt "$REPO/scripts/"
+for f in \
+  2026-11-24-fp-p4x1-slot-matrix.jsonl \
+  2026-11-24-fp-p4x1-slots-lost.json \
+  2026-11-24-fp-p4x1-wal-slot-costs.json \
+  2026-11-24-fp-p4x1-wal-model-events.jsonl \
+  2026-11-24-fp-p4x1-session-wal.tar.gz \
+  2026-11-24-fp-p4x1-window-fragment.txt \
+  2026-11-21-fp-p4-sweep-registry-gen3.json \
+  2026-11-21-fp-p4-levels-gen3.json \
+  2026-11-21-fp-p4x-prereg-gen3.json \
+  2026-11-08-fp-selection.json; do
+  cp "docs/build/reports/$f" "$REPO/docs/build/reports/"
+done
+FBIN=./target/debug/p4_fold
+[ -x "$FBIN" ] || cargo build -q -p hharness-runner --bins
+"$FBIN" emit "$REPO" >/dev/null
+for f in \
+  2026-11-24-fp-p4x-exploration.json \
+  2026-11-24-fp-p4x-selection.json \
+  2026-11-24-fp-p4c-prereg.json; do
+  cmp -s "docs/build/reports/$f" "$REPO/docs/build/reports/$f" || {
+    echo "FAIL: $f does not recompute byte-identical"; exit 1; }
+done
+echo "fold emit-identical OK"
+
+echo "== leg 12: R7.4 sha256 sidecars =="
+for f in \
+  2026-11-24-fp-p4x-exploration.sha256 \
+  2026-11-24-fp-p4x-selection.sha256 \
+  2026-11-24-fp-p4c-prereg.sha256 \
+  2026-11-24-fp-p4c-quote.sha256 \
+  2026-11-24-fp-p4c-quote-inputs.sha256; do
+  shasum -a 256 -c "docs/build/reports/$f"
+done
+
+echo "== leg 13: R7.4 fold + selection + c-prereg shape =="
+python3 - <<'PY'
+import json, hashlib
+
+e = json.loads(open('docs/build/reports/2026-11-24-fp-p4x-exploration.json').read())
+s = json.loads(open('docs/build/reports/2026-11-24-fp-p4x-selection.json').read())
+c = json.loads(open('docs/build/reports/2026-11-24-fp-p4c-prereg.json').read())
+
+assert e['schema'] == 'hh-p4-x-exploration/1' and e['ticket'] == '330_R7.4'
+# WAL authoritative + the verbatim residual; detail_lost recorded,
+# never imputed; the fidelity census covers every served call.
+assert e['total_cost_micros'] == 19_250_389
+assert e['non_slot_attribution_micros'] == 8
+assert e['detail_lost']['count'] == 46
+assert 'never imputed' in e['detail_lost']['disposition']
+assert e['served_model_census'] == ['glm-5.3-flash×10602']
+assert e['completed_calls_census'] == 10_602
+b = e['baseline']
+assert b['completion_envelope'] == {'planned': 55, 'recorded': 55,
+                                    'resolved': 50, 'success': 25,
+                                    'unresolved': 5}
+assert b['cost']['per_executed_slot_micros'] == 46_165
+lv = {l['level_id']: l for l in e['levels']}
+assert len(lv) == 7
+assert lv['V1']['delta_ppm'] == 45_455
+assert lv['V1']['activation']['ppm'] == 1_000_000
+assert 'unmeasured{evidence_absent}' in lv['V5']['activation']['detail']
+
+# The selection packet: content-hash self-consistency + the outcome.
+assert s['schema'] == 'hh-p4-selection/1'
+# The content-hash member recomputes inside the r7_4 battery (its
+# canonical-minus-member convention); here the committed value is
+# pinned — the value the c-prereg cites.
+assert s['packet_sha256'] == \
+    'sha256:9c3c314c2e1db2872dae24c350f93a508c7e08de90c99658957d541ea3ccfe23'
+out = s['outcome']
+assert out['disposition'] == 'selected{m=1}'
+assert [m['member'] for m in out['members']] == ['V1']
+gt = {r['level_id']: r for r in out['gate_table']}
+assert gt['V1']['qualified'] is True
+assert all(gt['V1']['gates'][g]['pass'] for g in 'abcdef')
+for i in ('V2', 'V5', 'V6'):
+    assert gt[i]['gates']['d']['pass'] is False and not gt[i]['qualified']
+for i in ('V3', 'V4', 'V7'):
+    assert not gt[i]['gates']['c']['pass'] and not gt[i]['gates']['d']['pass']
+
+# The frozen c-prereg: members verbatim, T=37 × k=5, hash-ordered.
+assert c['schema'] == 'hh-p4-c-prereg/1'
+assert c['disposition'] == 'selected{m=1}'
+assert [m['member'] for m in c['members']] == ['baseline', 'V1']
+assert c['members'][0]['rank'] == 0 and 'control re-run' in c['members'][0]['role']
+assert c['members'][1]['rank'] == 1
+assert len(c['held_out']) == 37
+assert c['design']['k'] == 5 and c['design']['slots_per_member'] == 185
+assert c['design']['total_slots'] == 370
+assert 'Holm' in c['design']['multiplicity']
+assert c['selection_packet_sha256'] == s['packet_sha256']
+assert 'predates' in c['hash_order'] and '$0' in c['spend']
+assert 'never run in X0/X1' in c['cohort']
+print('fold shape OK: selected{m=1} → baseline + V1 over T=37 × k=5')
+PY
+
+echo "== leg 14: GATE-G36 quote — compute + comparative recompute =="
+cp scripts/gce-backend/declarations/fp-p4c.json \
+   "$REPO/scripts/gce-backend/declarations/"
+python3 -I scripts/gce-backend/validate_decl.py \
+  scripts/gce-backend/declarations/fp-p4c.json
+python3 -I scripts/gce-backend/receipt_lib.py quote \
+  "$REPO/scripts/gce-backend/declarations/fp-p4c.json" "$REPO" \
+  > "$REPO/recomputed-p4c-compute-quote.json"
+cmp -s docs/build/reports/2026-11-24-fp-p4c-compute-quote.json \
+  "$REPO/recomputed-p4c-compute-quote.json" || {
+  echo "FAIL: p4c compute quote does not recompute byte-identical"; exit 1; }
+PQ="$(python3 -I scripts/gce-backend/receipt_lib.py quoteid \
+  "$REPO/scripts/gce-backend/declarations/fp-p4c.json" "$REPO")"
+[ "$PQ" = "pq-3a4187759b2d8411" ] || {
+  echo "FAIL: p4c quoteid recompute $PQ"; exit 1; }
+# The committed quote inputs the emitter cites.
+for f in \
+  2026-11-24-fp-p4x-exploration.json \
+  2026-11-24-fp-p4c-prereg.json \
+  2026-11-24-fp-p4c-compute-quote.json; do
+  cp "docs/build/reports/$f" "$REPO/docs/build/reports/"
+done
+CBIN=./target/debug/fp_p4c_quote
+[ -x "$CBIN" ] || cargo build -q -p hharness-runner --bins
+"$CBIN" emit "$REPO" >/dev/null
+for f in \
+  2026-11-24-fp-p4c-quote.json \
+  2026-11-24-fp-p4c-quote-inputs.json; do
+  cmp -s "docs/build/reports/$f" "$REPO/docs/build/reports/$f" || {
+    echo "FAIL: $f does not recompute byte-identical"; exit 1; }
+done
+python3 - <<'PY'
+import json
+
+q = json.loads(open('docs/build/reports/2026-11-24-fp-p4c-quote.json').read())
+i = json.loads(open('docs/build/reports/2026-11-24-fp-p4c-quote-inputs.json').read())
+
+assert q['schema'] == 'comparative-quote/1'
+assert q['envelope_label'] == 'pre-quote'
+assert q['t'] == 1 and q['k'] == 1 and q['concurrency_c'] == 4
+rows = {r['row_id']: r for r in q['rows']}
+assert set(rows) == {'p4c-baseline', 'p4c-V1'}
+# One row per c-prereg member; 185 priced slots; every figure
+# X1-MEASURED — never the §10.4 declared priors.
+for rid, r in rows.items():
+    assert r['n_trials'] == 185 and r['h'] == 185, rid
+    assert 'X1-measured' in r['measure_refs'][0], rid
+    assert 'never a declared planning prior' in r['measure_refs'][0]
+    assert r['verdict'] == 'unresolved{sim_absent}'
+assert rows['p4c-baseline']['model'] == {'ceiling_micros': 36_302_550,
+                                         'expected_micros': 8_540_525}
+assert rows['p4c-V1']['model'] == {'ceiling_micros': 10_051_050,
+                                   'expected_micros': 3_317_790}
+assert all(a.startswith('baseline:') for a in rows['p4c-baseline']['arms'])
+assert all(a.startswith('V1:') for a in rows['p4c-V1']['arms'])
+assert q['compute'] == [{'ceiling_micros': 12_229_780,
+                        'quote_id': 'pq-3a4187759b2d8411',
+                        'window': 'p4c'}]
+assert q['compute_ceiling_micros'] == 12_229_780
+
+assert i['schema'] == 'hh-p4-c-quote-inputs/1'
+assert i['records']['compute_quote']['quote_id'] == 'pq-3a4187759b2d8411'
+assert 'X1-measured' in i['model_line_basis']['basis']
+assert i['scenarios']['disposition'] == 'selected{m=1}'
+assert i['scenarios']['selection_conditioned'] is True
+assert i['envelope']['held_out_tasks'] == 37
+assert i['envelope']['slots_per_member'] == 185
+assert i['honesty']['authorizes_nothing'] is True
+print('quote OK: comparative-quote/1', q['quote_id'][:16],
+      '— baseline + V1, 370 slots at X1-measured rates; compute cited')
+PY
+
+echo "== leg 15: lab acceptance batteries =="
 cargo test -q -p hharness-lab --test r7_2 -- --test-threads=1
 cargo test -q -p hharness-lab --test r7_3 -- --test-threads=1
+cargo test -q -p hharness-lab --test r7_4 -- --test-threads=1
 cargo test -q -p hharness-lab --test r7_1 -- --test-threads=1
 cargo test -q -p hharness-lab --test r6_43
 cargo test -q -p hharness-embed --test r7_3
