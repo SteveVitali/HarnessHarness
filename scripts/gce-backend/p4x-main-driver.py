@@ -73,6 +73,35 @@ DEFAULT_PACK = "provider_specific_fields"
 P_HAT_PRIOR = {a: 340_000 for a in ARMS}     # §10.4 declared top point
 T_HAT_PRIOR = {a: 477_792 for a in ARMS}
 PROBE_SLICE_MICROS = 250_000
+# DF-R7.3-3 — SIGTERM → SIGKILL escalation grace for a
+# deadline-fenced member (the recorded interventions showed SIGTERM
+# landing an exit within seconds).
+FENCE_GRACE_S = 60.0
+
+def fence_overdue(p, sid, started, deadline_s, fenced, now=None):
+    """DF-R7.3-3 — the running-member deadline fence `reap()` lacked.
+    A member drive that outlives `slot_deadline_s` is SIGTERM'd at the
+    declared bound, escalating to SIGKILL after FENCE_GRACE_S — the
+    same honest `rc:-15` + verifier-scored-workspace path the
+    coordinator previously ran by hand (X1 ×4, P4-C ×7). Returns the
+    action verbatim."""
+    now = time.time() if now is None else now
+    if now - started <= deadline_s:
+        return None
+    if sid not in fenced:
+        fenced[sid] = now
+        try:
+            p.terminate()
+        except Exception:
+            pass
+        return "terminate"
+    if now - fenced[sid] >= FENCE_GRACE_S:
+        try:
+            p.kill()
+        except Exception:
+            pass
+        return "kill"
+    return "terminating"
 
 def eprint(*a): print(*a, file=sys.stderr)
 
@@ -591,6 +620,7 @@ def main():
                  for a_ in arms} if native_held else {}
 
     running = {}      # slot_id -> (proc, logf, member, slot_dir, started)
+    fenced = {}       # slot_id -> SIGTERM epoch (DF-R7.3-3 fence)
     infra_native = [] # first-3 native-slot infra outcomes
     stopped = None    # a frozen stop-class disposition, when the
                       # budget checkpoint fails the batch
@@ -614,6 +644,12 @@ def main():
         for sid, (p, lf, m, sd, st) in list(running.items()):
             rc = p.poll()
             if rc is None:
+                act = fence_overdue(p, sid, st, a.slot_deadline_s,
+                                    fenced)
+                if act:
+                    eprint(f"{sid}: deadline fence {act} (elapsed "
+                           f"{int(time.time()-st)}s > "
+                           f"{a.slot_deadline_s}s — DF-R7.3-3)")
                 continue
             lf.close()
             row = {"slot_id": sid, "arm": m["arm"], "task": m["task"],

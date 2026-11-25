@@ -78,6 +78,52 @@ DEFAULT_PACK = "provider_specific_fields"
 P_HAT_PRIOR = {"baseline": 163_525, "V1": 45_275}
 T_HAT_PRIOR = {"baseline": 1_370_108, "V1": 431_893}
 PROBE_SLICE_MICROS = 250_000
+# DF-R7.3-3 — SIGTERM → SIGKILL escalation grace for a
+# deadline-fenced member (the window's own recorded interventions
+# showed SIGTERM landing an exit within seconds).
+FENCE_GRACE_S = 60.0
+
+def fence_overdue(p, sid, started, deadline_s, fenced, now=None):
+    """DF-R7.3-3 — the running-member deadline fence `reap()` lacked.
+    A member drive that outlives `slot_deadline_s` is SIGTERM'd at the
+    declared bound, escalating to SIGKILL after FENCE_GRACE_S — the
+    same honest `rc:-15` + verifier-scored-workspace path the
+    coordinator previously had to run by hand (three recorded
+    interventions: X1 ×4, P4-C ×7). Returns the action verbatim."""
+    now = time.time() if now is None else now
+    if now - started <= deadline_s:
+        return None
+    if sid not in fenced:
+        fenced[sid] = now
+        try:
+            p.terminate()
+        except Exception:
+            pass
+        return "terminate"
+    if now - fenced[sid] >= FENCE_GRACE_S:
+        try:
+            p.kill()
+        except Exception:
+            pass
+        return "kill"
+    return "terminating"
+
+def seed_settled_results(slots_dir):
+    """Resume leg — every `slot-result.json` already on disk is a
+    settled result verbatim: loaded into `results`, never relaunched,
+    never re-emitted as a withheld row. Prior terminal records stay
+    append-only."""
+    out = {}
+    if not os.path.isdir(slots_dir):
+        return out
+    for sid in sorted(os.listdir(slots_dir)):
+        rj = os.path.join(slots_dir, sid, "slot-result.json")
+        if os.path.isfile(rj):
+            try:
+                out[sid] = read_json(rj)
+            except Exception:
+                pass
+    return out
 
 def eprint(*a): print(*a, file=sys.stderr)
 
@@ -487,7 +533,24 @@ def main():
     ap.add_argument("--window", default="P4C",
                     help="window label on emitted records (P4C)")
     ap.add_argument("--plan-only", action="store_true")
+    ap.add_argument("--resume", action="store_true",
+                    help="seed `results` from slot-result.json files "
+                         "already under --out/slots and skip settled "
+                         "members — a window resumption (GATE-G36 "
+                         "amendment): prior results are never "
+                         "relaunched or re-emitted")
+    ap.add_argument("--window-name", default=None,
+                    help="window record filename under --out "
+                         "(default {slot_prefix}-window.json) — a "
+                         "resumed run MUST pass a distinct name; the "
+                         "prior terminal record stays append-only")
+    ap.add_argument("--checkpoint-name", default=None,
+                    help="checkpoint record filename under --out "
+                         "(default checkpoint-r{checkpoint_round}.json)")
     a = ap.parse_args()
+    a.window_name = a.window_name or f"{a.slot_prefix}-window.json"
+    a.checkpoint_name = (a.checkpoint_name
+                         or f"checkpoint-r{a.checkpoint_round}.json")
 
     tasks = a.tasks.split(",")
     cfg = read_json(a.cfg)
@@ -595,11 +658,35 @@ def main():
                  for a_ in arms} if native_held else {}
 
     running = {}      # slot_id -> (proc, logf, member, slot_dir, started)
+    fenced = {}       # slot_id -> SIGTERM epoch (DF-R7.3-3 fence)
     infra_native = [] # first-3 native-slot infra outcomes
     stopped = None    # a frozen stop-class disposition, when the
                       # budget checkpoint fails the batch
     measured_costs = {a_: [] for a_ in arms}
     measured_walls = {a_: [] for a_ in arms}
+
+    if a.resume:
+        # GATE-G36 amendment resume leg — settled slot-results seed
+        # the matrix; the launch loop's `live_members` filter never
+        # revisits them. Seeded walls clamp to the fence bound: the
+        # DF-R7.3-3 repair now enforces the declared deadline the
+        # recorded hung walls predate, so priors for the projection
+        # reflect the bound the fence enforces.
+        prior = seed_settled_results(slots_dir)
+        results.update(prior)
+        window["resumed"] = {"recorded_at_start": len(prior),
+                             "prior_window":
+                             f"{a.slot_prefix}-window.json"}
+        for units in rounds:
+            for u in units:
+                for m in u["members"]:
+                    r = prior.get(m["slot_id"])
+                    if isinstance(r, dict) and "rc" in r:
+                        measured_costs[m["arm"]].append(
+                            r.get("cost_micros") or 0)
+                        measured_walls[m["arm"]].append(
+                            min(r.get("wall_ms") or 0,
+                                a.slot_deadline_s * 1000))
 
     def slot_deadline_fits():
         return (time.time() + a.slot_deadline_s + a.harvest_reserve_s
@@ -618,6 +705,12 @@ def main():
         for sid, (p, lf, m, sd, st) in list(running.items()):
             rc = p.poll()
             if rc is None:
+                act = fence_overdue(p, sid, st, a.slot_deadline_s,
+                                    fenced)
+                if act:
+                    eprint(f"{sid}: deadline fence {act} (elapsed "
+                           f"{int(time.time()-st)}s > "
+                           f"{a.slot_deadline_s}s — DF-R7.3-3)")
                 continue
             lf.close()
             row = {"slot_id": sid, "arm": m["arm"], "task": m["task"],
@@ -632,8 +725,11 @@ def main():
             measured_costs[m["arm"]].append(row["cost_micros"])
             measured_walls[m["arm"]].append(row["wall_ms"])
             # every member is the native lane — the first-3 infra probe
-            # reads any settled slot (REQ-XH-124 names the lane).
-            if len(infra_native) < 3:
+            # reads any settled slot (REQ-XH-124 names the lane). On a
+            # resume the probe discharged in the prior window — a
+            # subject rc=1 among the first new settles must not
+            # masquerade as an infra failure.
+            if not a.resume and len(infra_native) < 3:
                 infra_native.append(rc != 0 or row["cost_micros"] == 0)
             done.append(sid)
         for sid in done:
@@ -685,7 +781,7 @@ def main():
                 "stop": None if fits else "stop{budget}",
                 "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%SZ",
                                              time.gmtime())}
-        with open(os.path.join(a.out, "checkpoint-r2.json"), "w") as f:
+        with open(os.path.join(a.out, a.checkpoint_name), "w") as f:
             json.dump(ckpt, f, indent=1, sort_keys=True)
         window["checkpoint"] = ckpt
         return fits
@@ -696,7 +792,10 @@ def main():
             if not checkpoint(a.checkpoint_round):
                 stopped = "withheld{stop:budget}"
         for u in units:
-            live_members = list(u["members"])
+            # settled members never revisit admit/withhold paths —
+            # a no-op on a fresh run, the resume leg's skip.
+            live_members = [m for m in u["members"]
+                            if m["slot_id"] not in results]
             if stopped is not None:
                 for m in live_members:
                     if m["slot_id"] not in results:
@@ -769,8 +868,7 @@ def main():
     window["native_lane_hold"] = native_held
     if stopped is not None:
         window["stop_disposition"] = stopped
-    with open(os.path.join(a.out, f"{a.slot_prefix}-window.json"),
-              "w") as f:
+    with open(os.path.join(a.out, a.window_name), "w") as f:
         json.dump(window, f, indent=1, sort_keys=True)
     # close the session honestly — the sentinel tells the shim to seal
     # recordings, revoke the grants, and stop the proxy.
@@ -791,7 +889,7 @@ def main():
                       "native_lane_hold": native_held,
                       "stop": stopped,
                       "window": os.path.join(
-                          a.out, f"{a.slot_prefix}-window.json")}))
+                          a.out, a.window_name)}))
     return 0
 
 if __name__ == "__main__":
