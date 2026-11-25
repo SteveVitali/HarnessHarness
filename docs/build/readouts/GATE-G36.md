@@ -212,3 +212,58 @@ verbatim_sha256 `acba25512100f80b56fc3ccd14c65be55d94800cda77585c5f41a887e398f9b
 stamped into `declarations/fp-p4c.json` at signature.
 GATE DECISIONS row: 2026-11-24T21:10Z | GATE-G36
 Signed by: the operator. Recorded by devin-cli/swe-2-high, which does not sign.
+
+## Amendment — resume-with-repair (2026-11-25)
+
+Context: the P4-C window self-terminated at the round-2 checkpoint (recorded
+2026-11-25T06:48:42Z) on the declared stop class — `batch_fits: false`,
+`withheld{stop:budget}`: consumed 6,202,514 µ$ + projected remaining
+33,856,110 µ$ vs the driver's 40,000,000 µ$ model bound, and projected
+remaining wall 125,110,830 ms vs 70,352,931 ms room (dead-man minus harvest
+reserve). 148/370 slots recorded (134 rc=0 · 7 rc=1 · 7 rc=-15 from three
+recorded coordinator interventions on the DF-R7.3-3 hung-drive class);
+222 slots withheld `stop:budget`, never launched. The driver exited cleanly
+and the in-guest watcher parked the VM at 07:16:56Z — the anti-orphan
+posture worked as designed. Evidence harvested in full (148/148 WALs,
+journald, serial); VM parked disk-retained pending this ruling.
+
+Operator decision (verbatim, received 2026-11-25 via Devin CLI session): "ah,
+ok. Let's resume with repair" — **disposition `run` for the resume leg**:
+the DF-R7.3-3 repair lands first (running-member deadline fence in
+`reap()` — SIGTERM at the declared `slot_deadline_s` bound, SIGKILL after a
+60 s grace, the honest `rc:-15` verifier-scored path the recorded
+interventions established), then the window resumes for the 222 withheld
+members under the frozen schedule verbatim.
+
+Authorizations recorded verbatim (REQ-XH-004 — model and compute separately):
+- **Model:** the original GATE-G36 ceiling stands — `cap_h` Σ 46,353,600 µ$
+  ($46.35); 6,202,514 µ$ consumed. The resumed leg's driver flag is set to
+  the full authorized ceiling (consumed + projected ≈ 40,060,000 µ$ at the
+  checkpoint's own conservative projection — inside the envelope).
+- **Compute:** `hh-compute-quote/1` **`pq-4e650fe71f863d22`**, ceiling
+  **15,999,460 µ$ ($16.00)** — e2-standard-8, debian-12, 300 GiB, D = 48 h
+  dead-man + 1 h restart, C = 4, 222 trials + 24 retries (planning
+  ~6,370,966 µ$ ≈ $6.37 expected); declaration
+  `scripts/gce-backend/declarations/fp-p4c2.json`, runner `06b5847c`.
+- **Machinery (the repair leg):** commit `06b5847c` — `fence_overdue` in
+  `reap()` in both p4c/p4x drivers (DF-R7.3-3 class), resume semantics
+  (settled-result seeding; settled members never revisit admit/withhold;
+  the resumed run writes `p4c-window-r2.json` / `checkpoint-r2-resume.json`
+  so the prior terminal record stays append-only; the first-3 infra probe
+  is not re-armed on resume), regression test 7/7. The repair bounds
+  *enforcement*, not measurement — a fenced member records the same
+  `rc:-15` + verifier-scored-workspace class the recorded interventions
+  produced.
+- **Exclusivity/teardown:** the established window posture verbatim;
+  anti-orphan watcher re-armed before launch; teardown across gate waits.
+- **Stop rules:** the §8.4 declared set verbatim, unchanged — the resume
+  leg's own round-3 checkpoint still projects and still stops honestly.
+- **Scope:** this amendment authorizes the resume of the 222
+  `withheld{stop:budget}` members only — the 148 recorded results stand
+  byte-untouched (never re-executed, never re-emitted), the frozen
+  member list/schedule/seed unchanged, no further envelope implied.
+
+verbatim_sha256 `718cad8576e1f7122f6f4c7161106364cc15b8966838ef08654722fb37939b30`
+— stamped into `declarations/fp-p4c2.json`.
+GATE DECISIONS row: 2026-11-25 | GATE-G36 (amendment)
+Signed by: the operator. Recorded by devin-cli/swe-2-high, which does not sign.
