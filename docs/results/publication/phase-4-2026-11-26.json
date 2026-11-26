@@ -1,0 +1,72 @@
+{
+    "dataset": {
+        "contamination_scan_ref": "docs/build/reports/2026-11-19-fp-contamination-scan.json",
+        "revision": "a11591e931442908c34a5bc7a65e8e664f4752d7",
+        "secret_scan_ref": "docs/build/reports/2026-11-19-fp-answer-scan.json",
+        "visibility": "public"
+    },
+    "dataset_card_ref": {
+        "path": "docs/build/reports/2026-11-19-fp-dataset-card.md",
+        "sha256": "50c417b3c252bafffdae7f460e6d83572ef197fec6d313f0b7cd8d3e7212737a"
+    },
+    "dataset_flip": "done{human_h17:2026-11-19T04:23Z}",
+    "gate_row": "339 GATE-G38 (339_GATE-G38__pub-p4c.md)",
+    "inputs": [
+        {
+            "path": "docs/build/reports/2026-11-20-fp-w4x-results-p4-fp-frozen.json",
+            "sha256": "ef6d1be98faf50bea3a2120327dd1a77e19eb779f4a31ea0f17f903a2316785c"
+        },
+        {
+            "path": "docs/build/reports/2026-11-26-fp-p4c-confirmation.json",
+            "sha256": "ebaf0b17f7c3ae22b1be39f2c646a17c58b4c4e23b7b233c3ede9c754752f44c"
+        }
+    ],
+    "inputs_digest": "sha256:966bf3c4ab5a357554b0747549c5e5b15ed7d1800ee25d479ab2fc06cc6fe61e",
+    "labels": {
+        "evidence_class": "recorded execution",
+        "outside_verified": false
+    },
+    "pages": [
+        "/phase-4/"
+    ],
+    "phase": "phase-4",
+    "readout": "docs/build/readouts/GATE-G38.md",
+    "recorded_at": "2026-11-26",
+    "scan_refs": [
+        {
+            "path": "docs/build/reports/2026-11-19-fp-answer-scan.json",
+            "sha256": "f836343a99c056a0567fb2027fb4c9f9db0f90f6728765bc2cb75bddf0b13853"
+        },
+        {
+            "path": "docs/build/reports/2026-11-19-fp-contamination-scan.json",
+            "sha256": "421399fd7025375b288ce7cc01ecd8cde39bb75ee0942a8996e90647f8284cdd"
+        },
+        {
+            "path": "docs/build/reports/2026-11-19-fp-w4-answer-scan.json",
+            "sha256": "907f38d350dd0034b77fbdb6b6ed6cbad071b136209fba11c49bfd2215a42d88"
+        },
+        {
+            "path": "docs/build/reports/2026-11-19-fp-w4-flagged-review.json",
+            "sha256": "d56c0d91c16cca6a98c307246598ff457e3f00ce9e06cbbe748de632e50d312e"
+        },
+        {
+            "path": "docs/build/reports/2026-11-20-fp-w4x-answer-scan.json",
+            "sha256": "b132c026033718bac6a8282775482a300ffed438e2b343dbffe7f259de5cc1c3"
+        },
+        {
+            "path": "docs/build/reports/2026-11-20-fp-w4x-flag-analysis.json",
+            "sha256": "d8d98441e0ee73b5b18bc55374ffeda9fa6746dc89341d09c2391830de1325ce"
+        },
+        {
+            "path": "docs/build/reports/2026-11-20-fp-w4x-flagged-review.json",
+            "sha256": "27100660dcb66f5858959e96c548c75eb3c03de9b8e2be11cbcce65b91c7e2017d670caae51ca595f89a53d6bc055dc50e5e5e1ad2eb9c26f585f8cd"
+        }
+    ],
+    "schema": "hh-site-publication/1",
+    "supersedes": "phase-4-2026-11-20-flip.json",
+    "supersession": {
+        "gate": "docs/build/readouts/GATE-G38.md",
+        "reason": "GATE-G38 PASSED 'publish' (operator verbatims sha256 e2773490… + aa273de7…): the phase-4 page's input set grows to {p4-fp, p4c-confirm} — the hh-p4-c-confirmation/1 fold ebaf0b17… rendered as the §8.8 two-statement claims verbatim; packet-only transcript surface (the sanitized p4c archive upload + fresh scans + a dataset revision re-pin are deferred verbatim — the a11591e9 dataset pin is carried untouched)",
+        "ticket": "R7.7"
+    }
+}

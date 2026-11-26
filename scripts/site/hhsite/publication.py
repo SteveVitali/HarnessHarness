@@ -32,20 +32,23 @@ PUB_DIR_REL = "docs/results/publication"
 CHECKLIST_REL = "docs/results/publication/CHECKLIST.md"
 MANIFEST_REL = "docs/tickets/00_MANIFEST.md"
 
-# Each publishing phase and the manifest gate row that authorizes it
-# (AC-9.6-6: a phase without a manifest gate cannot publish). GATE-G31's
-# signed readout decided the first pass for the phase-3/4 pages only —
-# its verbatim scope was "phase-3/4 first-pass pages", so the same
-# manifest row authorizes those two records and nothing else (R6.50);
-# phase-2 stays gated until its own operator decision.
+# Each publishing phase and the manifest gate rows that authorize its
+# records (AC-9.6-6: a phase without a manifest gate cannot publish).
+# GATE-G31's signed readout decided the first pass for the phase-3/4
+# pages only — its verbatim scope was "phase-3/4 first-pass pages", so
+# the same manifest row authorizes those two records and nothing else
+# (R6.50). GATE-G38's signed readout (2026-11-26) authorizes the
+# phase-4 *second-pass* record — the {p4-fp, p4c-confirm} input set —
+# so phase-4 records may name either gate; the readout a record cites
+# must name the gate the record cites.
 PHASE_GATES = {
-    "phase-1": "GATE-G22",
+    "phase-1": ("GATE-G22",),
     # phase-2's publication gate is GATE-G31 (README: "phase-2 first-pass"),
     # extended to the publish decision by ADR-0453's verbatim operator ruling
     # "Publish — same terms as G31" (2026-11-19).
-    "phase-2": "GATE-G31",
-    "phase-3": "GATE-G31",
-    "phase-4": "GATE-G31",
+    "phase-2": ("GATE-G31",),
+    "phase-3": ("GATE-G31",),
+    "phase-4": ("GATE-G31", "GATE-G38"),
 }
 PHASES = tuple(sorted(set(PHASE_GATES) | {"phase-2"}))
 
@@ -120,13 +123,15 @@ def validate(doc, path, repo_root):
                  "recorded_at %r != filename date %r"
                  % (doc.get("recorded_at"), m.group(2)))
 
-    gate = PHASE_GATES.get(phase)
-    need(gate is not None,
+    gates = PHASE_GATES.get(phase)
+    need(gates is not None,
          "phase %r has no publication gate in the manifest" % phase)
     gate_row = doc.get("gate_row")
-    need(isinstance(gate_row, str) and gate is not None
-         and gate in gate_row,
-         "gate_row %r does not name %s" % (gate_row, gate))
+    named = [g for g in (gates or ())
+             if isinstance(gate_row, str) and g in gate_row]
+    need(bool(named),
+         "gate_row %r does not name a %s gate %s"
+         % (gate_row, phase, gates))
 
     readout = doc.get("readout")
     need(isinstance(readout, str) and readout.startswith("docs/build/"),
@@ -134,10 +139,11 @@ def validate(doc, path, repo_root):
     if isinstance(readout, str):
         rf = repo_root / readout
         need(rf.is_file(), "gate readout %s absent" % readout)
-        if rf.is_file() and isinstance(gate_row, str):
+        if rf.is_file():
             text = rf.read_text(encoding="utf-8", errors="replace")
-            need(gate in text,
-                 "readout %s does not name %s" % (readout, gate))
+            for g in named:
+                need(g in text,
+                     "readout %s does not name %s" % (readout, g))
 
     pages = doc.get("pages")
     need(isinstance(pages, list) and pages
@@ -292,9 +298,11 @@ def manifest_row_errors(repo_root):
     for row in MANIFEST_HUMAN_ROWS:
         if row not in text:
             errors.append("manifest lacks the %s row" % row)
-    for gate in PHASE_GATES.values():
-        if not re.search(r"\d+_%s__" % gate, text):
-            errors.append("manifest carries no ticket row for %s" % gate)
+    for gates in PHASE_GATES.values():
+        for gate in gates:
+            if not re.search(r"\d+_%s__" % gate, text):
+                errors.append("manifest carries no ticket row for %s"
+                              % gate)
     if not (Path(repo_root) / CHECKLIST_REL).is_file():
         errors.append("publication-gate checklist %s absent"
                       % CHECKLIST_REL)

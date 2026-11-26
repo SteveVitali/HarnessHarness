@@ -316,11 +316,18 @@ except OSError:
 hits = []
 # The spec-fixed REQ-XF-111 band label is allowed verbatim — its second
 # "leader" is defined text, exempt like the record's bounds block.
+# R7.7: the same class of exemption covers the §6.11 ratified
+# exploratory-label wording carried verbatim by the
+# hh-p4-c-confirmation/1 family block (GATE-G38's authorized packet) —
+# the exact packet string only; bare "leader" stays banned elsewhere.
 BAND_LABEL_FIXED = (
     "observed-leader group · descriptive · 95% interval of difference "
     "covers 0 · leader selected from the same data")
+P4C_FAMILY_LABEL = (
+    "exploratory; leader selected from the same data — the 95% "
+    "interval of difference covers 0 is not equivalence evidence")
 for where, t in hay.items():
-    t = t.replace(BAND_LABEL_FIXED, " ")
+    t = t.replace(BAND_LABEL_FIXED, " ").replace(P4C_FAMILY_LABEL, " ")
     for entry in BANNED + RECORD_BANNED + SITE_BANNED:
         for phrase, ex in banned_hits(entry, t):
             hits.append("%s: banned phrase %r (%s…)" % (where, phrase, ex))
@@ -474,7 +481,7 @@ try:
     _input_sets = {"phase-2": {"p2-fp", "p2-pilot", "p2-quote",
                              "p2-index"},
                    "phase-3": {"p3-l1", "p3-l2", "p3-l3"},
-                   "phase-4": {"p4-fp", "p3-l2"}}
+                   "phase-4": {"p4-fp", "p3-l2", "p4c-confirm"}}
     if profile == "internal":
         published_here |= {ph for ph, ids in _input_sets.items()
                            if ids <= _have}

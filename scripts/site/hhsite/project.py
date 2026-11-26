@@ -1342,15 +1342,148 @@ def _fp_arm_rows(pkt):
     return rows
 
 
+def _p4c_bound(inp, ptr):
+    """A bound block ``{lo_ppm, hi_ppm, kind[, level_ppm, …]}`` → the
+    site estimate triple (the intervals leg's shape); every other member
+    the packet carries is copied alongside verbatim; a typed marker
+    stays typed. No point member — the bound is an interval claim."""
+    raw, _s = field(inp, ptr)
+    if _is_marker(raw):
+        return _tree(inp, ptr)
+    lvl = raw.get("level_ppm")
+    out = _iv3(inp, "ppm", raw["kind"],
+               lvl if isinstance(lvl, int) and not isinstance(lvl, bool)
+               else None, None, "%s/lo_ppm" % ptr, "%s/hi_ppm" % ptr)
+    for k in sorted(raw):
+        if k in ("lo_ppm", "hi_ppm", "kind", "level_ppm"):
+            continue
+        out[k] = _tree(inp, "%s/%s" % (ptr, _esc(k)))
+    return out
+
+
+def _p4c_cost(pkt):
+    """The confirmation packet's descriptive cost rows — per-slot and
+    total micro-USD verbatim, carrying the packet's own descriptive-only
+    label (REQ-XD-213/REQ-XD-224; never a confirmatory cost claim)."""
+    rows = []
+    for n in range(len(pkt.resolve("/claims/cost/rows"))):
+        b = "/claims/cost/rows/%d" % n
+        rows.append({
+            "arm": _t(pkt, "%s/arm" % b),
+            "per_executed_slot_micros": _v(
+                pkt, "%s/per_executed_slot_micros" % b, "micros_usd"),
+            "per_resolved_slot_micros": _v(
+                pkt, "%s/per_resolved_slot_micros" % b, "micros_usd"),
+            "resolved_slots": _v(pkt, "%s/resolved_slots" % b, "count"),
+            "slots": _v(pkt, "%s/slots" % b, "count"),
+            "total_cost_micros": _v(pkt, "%s/total_cost_micros" % b,
+                                    "micros_usd"),
+        })
+    return {"basis": _t(pkt, "/claims/cost/basis"),
+            "label": _t(pkt, "/claims/cost/label"),
+            "rows": rows}
+
+
+def _p4c_contrast_member(pkt, n):
+    """One estimand.contrast member of hh-p4-c-confirmation/1 — the
+    all-planned bound and the conditional task-bootstrap interval as
+    estimate triples, every refused member a typed marker, a dropped or
+    null member a typed absent (never imputed)."""
+    b = "/estimand/contrast/members/%d" % n
+    return {
+        "adjusted_p_ppm": _tree_or_absent(pkt, "%s/adjusted_p_ppm" % b),
+        "bound_ppm": _p4c_bound(pkt, "%s/bound_ppm" % b),
+        "delta_ppm": _tree_or_absent(pkt, "%s/delta_ppm" % b),
+        "disposition": _t(pkt, "%s/disposition" % b),
+        "factor": _t(pkt, "%s/factor" % b),
+        "fm_interval": _tree_or_absent(pkt, "%s/fm_interval" % b),
+        "holm_rejected_at_alpha": _tree_or_absent(
+            pkt, "%s/holm_rejected_at_alpha" % b),
+        "member": _t(pkt, "%s/member" % b),
+        "raw_p_ppm": _tree_or_absent(pkt, "%s/raw_p_ppm" % b),
+        "signflip_mode": _tree_or_absent(pkt, "%s/signflip_mode" % b),
+        "status": _t(pkt, "%s/status" % b),
+        "task_bootstrap_interval": _p4c_bound(
+            pkt, "%s/task_bootstrap_interval" % b),
+        "unavailable": _tree_or_absent(pkt, "%s/unavailable" % b),
+    }
+
+
+def _p4c(pkt):
+    """The hh-p4-c-confirmation/1 fold → the phase-4 second-pass block:
+    the §8.8 two-statement claims verbatim, the typed dispositions, the
+    resolved/unresolved accounting and the descriptive cost fields.
+    Every unavailable leg stays the packet's own typed marker — never
+    imputed, never a fabricated renderer fallback (R7.7, GATE-G38)."""
+    arms = []
+    for n in range(len(pkt.resolve("/estimand/arms"))):
+        b = "/estimand/arms/%d" % n
+        arms.append({
+            "arm": _t(pkt, "%s/arm" % b),
+            "bound_ppm": _p4c_bound(pkt, "%s/bound_ppm" % b),
+            "completion_envelope": _tree_or_absent(
+                pkt, "%s/completion_envelope" % b),
+            "conditional_secondary": _tree_or_absent(
+                pkt, "%s/conditional_secondary" % b),
+            "theta_ppm": _tree_or_absent(pkt, "%s/theta_ppm" % b),
+            "unresolved_tasks": _tree_or_absent(
+                pkt, "%s/unresolved_tasks" % b),
+        })
+    return {
+        "claims": {
+            "cost": _p4c_cost(pkt),
+            "exploratory_estimates": _tree(
+                pkt, "/claims/exploratory_estimates"),
+            "form": _t(pkt, "/claims/form"),
+            "labels": _tree(pkt, "/claims/labels"),
+            "statement_confirmatory": _t(
+                pkt, "/claims/statement_confirmatory"),
+            "statement_exploratory": _t(
+                pkt, "/claims/statement_exploratory"),
+        },
+        "counting_rule": _t(pkt, "/counting_rule"),
+        "determinism": _t(pkt, "/determinism"),
+        "dispositions": _tree(pkt, "/dispositions"),
+        "estimand": {
+            "arms": arms,
+            "contrast": {
+                "control_arm": _t(pkt, "/estimand/contrast/control_arm"),
+                "direction": _t(pkt, "/estimand/contrast/direction"),
+                "members": [
+                    _p4c_contrast_member(pkt, n)
+                    for n in range(len(pkt.resolve(
+                        "/estimand/contrast/members")))],
+            },
+            "use_as": _t(pkt, "/estimand/use_as"),
+        },
+        "exchangeability": _tree(pkt, "/exchangeability"),
+        "exploratory_family": _tree(pkt, "/exploratory_family"),
+        "family": _tree(pkt, "/family"),
+        "input_manifest": _tree(pkt, "/input_manifest"),
+        "packet_disposition": _t(pkt, "/packet_disposition"),
+        "population": _tree(pkt, "/population"),
+        "prereg": _tree(pkt, "/prereg"),
+        "recorded_at": _t(pkt, "/recorded_at"),
+        "schema": _t(pkt, "/schema"),
+        "selection_labelled_estimates": _tree(
+            pkt, "/selection_labelled_estimates"),
+        "terminal_state": _tree(pkt, "/terminal_state"),
+        "ticket": _t(pkt, "/ticket"),
+    }
+
+
 def phase4(inputs):
     """phase4.json — the configuration-experiments page: the Holm family,
     the exploratory family and the per-arm result rows verbatim; the
     baseline label folds the phase-3 L2 packet's verdict (REQ-XD-222
-    carries REQ-XD-126's label into the phase-4 surface)."""
+    carries REQ-XD-126's label into the phase-4 surface). R7.7 adds the
+    second-pass block: the GATE-G38-authorized hh-p4-c-confirmation/1
+    fold verbatim."""
     i = _by_id(inputs)
     pkt, l2 = i["p4-fp"], i["p3-l2"]
 
     return {
+        "p4c": _p4c(i["p4c-confirm"]),
         "baseline_label": _baseline_label(l2),
         "claim": _t(pkt, "/claim"),
         "executed_evidence": _t(pkt, "/executed_evidence"),
@@ -1475,7 +1608,7 @@ FILES = {
     "claims.json": (claims, ("estimators", "record")),
     "tfp.json": (tfp, ("p2-fp",)),
     "phase3.json": (phase3, ("p3-l1", "p3-l2", "p3-l3")),
-    "phase4.json": (phase4, ("p4-fp", "p3-l2")),
+    "phase4.json": (phase4, ("p4-fp", "p3-l2", "p4c-confirm")),
     "pilot.json": (pilot, ("p2-pilot",)),
     "quote.json": (quote, ("p2-quote",)),
     "trials-fp.json": (trials_fp, ("p2-fp", "p2-index")),

@@ -25,7 +25,7 @@ from . import components, derive, pages, raster, tokparse
 from .components import (ESC, absent_block, cost_axis_svg, figure,
                          interval_svg, prov_attrs, receipt_rail,
                          stamp)
-from .values import (GENERATOR, GENERATOR_VERSION, Refusal,
+from .values import (GENERATOR, GENERATOR_VERSION, Refusal, absent,
                      hygiene_scan)
 
 SITE_VERSION = "s1"
@@ -254,9 +254,16 @@ def home_page(sd, pkts, commit, published=None):
             # a published first-pass phase: the page renders — the
             # executed-W4 fold's landed values and typed verdicts
             # verbatim under GATE-G31's decided scope (the R6.50
-            # withheld pins are superseded, never rewritten)
-            state = stamp("inconclusive", "first pass — landed W4")
-            detail = "published — GATE-G31"
+            # withheld pins are superseded, never rewritten). Phase 4's
+            # head record is GATE-G38's second-pass publication
+            # ({p4-fp, p4c-confirm}; R7.7).
+            if ph == "phase-4":
+                state = stamp("inconclusive",
+                              "first pass + P4-C confirm")
+                detail = "published — GATE-G38"
+            else:
+                state = stamp("inconclusive", "first pass — landed W4")
+                detail = "published — GATE-G31"
         body.append('<section class="card span-3 tile"><h3>%s</h3>'
                     '<p>%s</p><p class="micro">%s</p>'
                     '<p class="small"><a href="%s">open →</a></p></section>'
@@ -2087,6 +2094,214 @@ def phase3_page(sd, pkts, commit):
                                     commit))
 
 
+def _p4c_bound_cell(b):
+    """A projected bound block {low, high, …extras} → an interval cell;
+    a typed marker stays the packet's own token."""
+    if not isinstance(b, dict):
+        return _tree_cell(b)
+    if "absent_state" in b or isinstance(b.get("state"), str):
+        return _tree_cell(b)
+    if "low" in b and "high" in b:
+        extra = "".join(
+            ' <span class="micro"><span>%s</span> %s</span>'
+            % (ESC(k), _tree_cell(v)) for k, v in sorted(b.items())
+            if k not in ("low", "high", "point"))
+        kind = ""
+        iv = b["low"].get("interval") if isinstance(b["low"], dict) \
+            else None
+        if isinstance(iv, dict) and isinstance(iv.get("kind"), str):
+            kind = " <code>%s</code>" % ESC(iv["kind"])
+            if isinstance(iv.get("level_ppm"), dict):
+                kind += " %s" % _tree_cell(iv["level_ppm"])
+        return ('<span class="micro">[%s, %s]</span>%s%s'
+                % (_span(b["low"]), _span(b["high"]), kind, extra))
+    return _tree_cell(b)
+
+
+def _p4c_section(p, pkts):
+    """The phase-4 second pass — the GATE-G38-authorized
+    hh-p4-c-confirmation/1 fold rendered verbatim (R7.7): the §8.8
+    two-statement claims, the typed dispositions, resolved/unresolved
+    accounting, the conditional-secondary bound labelled
+    not-the-target, and the descriptive cost fields. Packet-only
+    transcript surface — the archive upload leg is deferred by the
+    operator's verbatim; every unavailable leg stays the packet's own
+    typed marker, never imputed."""
+    c = p["p4c"]
+    cl = c["claims"]
+
+    # dispositions — one stamp per member, verdict text verbatim
+    disp = "".join(
+        '<div class="verdict-row"><span class="micro">%s</span> %s</div>'
+        % (ESC(d["member"]["text"]),
+           _verdict_stamp(d["disposition"]["text"]))
+        for d in c["dispositions"])
+
+    # resolved/unresolved accounting
+    pop = c["population"]
+    unres_rows = "".join(
+        '<tr><td><code>%s</code></td><td>%s</td><td>%s</td>'
+        '<td>%s</td><td>%s</td><td>%s</td></tr>'
+        % (ESC(m["slot_id"]["text"]), _span(m["task"]), _span(m["arm"]),
+           _span(m["replicate"]), _span(m["rc"]),
+           _tree_cell(m["unresolved_class"]))
+        for m in pop["unresolved_members"])
+    pop_tbl = ('<table class="data"><thead><tr><th>slot</th><th>task</th>'
+               '<th>arm</th><th>replicate</th><th>rc</th>'
+               '<th>unresolved class</th></tr></thead><tbody>%s</tbody>'
+               '</table>' % unres_rows)
+
+    fam = c["family"]
+    fam_rows = "".join(
+        '<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td>'
+        '<td>%s</td></tr>'
+        % (_tree_cell(m.get("member")),
+           _tree_cell(m.get("status") or m.get("disposition")),
+           _tree_cell(m.get("raw_p_ppm", m.get("raw_ppm"))),
+           _tree_cell(m.get("adjusted_p_ppm", m.get("adjusted_ppm"))),
+           _tree_cell(m.get("unavailable")))
+        for m in fam.get("members", []))
+    fam_tbl = ('<table class="data"><thead><tr><th>member</th>'
+               '<th>status</th><th>raw p</th><th>adjusted p</th>'
+               '<th>unavailable</th></tr></thead><tbody>%s</tbody>'
+               '</table>' % fam_rows)
+    fam_labels = "".join('<p class="meta">%s</p>' % _span(l)
+                         for l in fam.get("labels", []))
+
+    arm_rows = "".join(
+        '<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>'
+        '<td>%s</td></tr>'
+        % (_span(a["arm"]), _p4c_bound_cell(a["bound_ppm"]),
+           _tree_cell(a["completion_envelope"]),
+           _tree_cell(a["conditional_secondary"]),
+           _tree_cell(a["theta_ppm"]),
+           _tree_cell(a["unresolved_tasks"]))
+        for a in c["estimand"]["arms"])
+    arm_tbl = ('<table class="data"><thead><tr><th>arm</th>'
+               '<th>θ bound (all-planned)</th><th>completion</th>'
+               '<th>conditional secondary</th><th>θ equal-task</th>'
+               '<th>unresolved tasks</th></tr></thead><tbody>%s</tbody>'
+               '</table>' % arm_rows)
+
+    member_cards = []
+    for m in c["estimand"]["contrast"]["members"]:
+        member_cards.append("".join([
+            '<div class="arm-card"><h3>%s — %s</h3><div>%s</div>'
+            % (ESC(m["member"]["text"]), ESC(m["factor"]["text"]),
+               _verdict_stamp(m["disposition"]["text"])),
+            '<div class="kv"><span>Δ̂ vs control (%s)</span>%s</div>'
+            % (ESC(c["estimand"]["contrast"]["direction"]["text"]),
+               _tree_cell(m["delta_ppm"])),
+            '<div class="kv"><span>all-planned bound</span>%s</div>'
+            % _p4c_bound_cell(m["bound_ppm"]),
+            '<div class="kv"><span>task-bootstrap interval '
+            '(conditional secondary)</span>%s</div>'
+            % _p4c_bound_cell(m["task_bootstrap_interval"]),
+            '<div class="kv"><span>FM interval</span>%s</div>'
+            % _tree_cell(m["fm_interval"]),
+            '<div class="kv"><span>raw p</span>%s</div>'
+            % _tree_cell(m["raw_p_ppm"]),
+            '<div class="kv"><span>Holm-adjusted p</span>%s</div>'
+            % _tree_cell(m["adjusted_p_ppm"]),
+            '<div class="kv"><span>Holm rejected at α</span>%s</div>'
+            % _tree_cell(m["holm_rejected_at_alpha"]),
+            '<div class="kv"><span>status</span>%s</div>'
+            % _tree_cell(m["status"]),
+            '<div class="kv"><span>unavailable</span>%s</div>'
+            % _tree_cell(m["unavailable"]),
+            '<div class="kv"><span>sign-flip mode</span>%s</div>'
+            % _tree_cell(m["signflip_mode"]),
+            "</div>"]))
+
+    cost = cl["cost"]
+    cost_rows = "".join(
+        '<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td><td>%s</td>'
+        '<td>%s</td></tr>'
+        % (_span(r["arm"]), _span(r["slots"]), _span(r["resolved_slots"]),
+           _span(r["per_executed_slot_micros"]),
+           _span(r["per_resolved_slot_micros"]),
+           _span(r["total_cost_micros"]))
+        for r in cost["rows"])
+    cost_tbl = ('<table class="data"><thead><tr><th>arm</th>'
+                '<th>slots</th><th>resolved</th>'
+                '<th class="num">µ$ / executed slot</th>'
+                '<th class="num">µ$ / resolved slot</th>'
+                '<th class="num">total µ$</th></tr></thead>'
+                '<tbody>%s</tbody></table>' % cost_rows)
+
+    est_members = "".join(
+        '<div class="kv"><span>%s</span>Δ̂ %s · %s · %s</div>'
+        % (_tree_cell(m["member"]), _tree_cell(m["delta_ppm"]),
+           _tree_cell(m["factor"]), _tree_cell(m["label"]))
+        for m in cl["exploratory_estimates"]["members"])
+
+    return "".join([
+        "<h2>Second pass — P4-C held-out confirmation</h2>",
+        '<p class="meta">%s · schema %s · recorded %s · ticket %s</p>'
+        % (_span(c["packet_disposition"]), _span(c["schema"]),
+           _span(c["recorded_at"]), _span(c["ticket"])),
+        _pkt_cite(pkts, ("p4c-confirm",)),
+        '<p class="meta">%s</p>' % _span(c["determinism"]),
+        disp,
+        "<h3>Claims — §8.8 two-statement form verbatim</h3>",
+        '<p class="meta">claims form %s · estimand use %s</p>'
+        % (_span(cl["form"]), _span(c["estimand"]["use_as"])),
+        '<p class="prose">%s</p>' % _span(cl["statement_confirmatory"]),
+        '<p class="prose">%s</p>' % _span(cl["statement_exploratory"]),
+        _tree_table(cl["labels"], "mandatory labels (verbatim)"),
+        "<h3>Family</h3>",
+        '<p class="meta">family %s · method %s · α %s · note %s</p>'
+        % (_tree_cell(fam.get("id")), _tree_cell(fam.get("method")),
+           _tree_cell(fam.get("alpha_ppm")),
+           _tree_cell(fam.get("note"))),
+        fam_labels, fam_tbl,
+        '<p class="meta">exploratory family %s · method %s</p>'
+        % (_tree_cell(c["exploratory_family"].get("id")),
+           _tree_cell(c["exploratory_family"].get("method"))),
+        "<h3>Estimand arms</h3>", arm_tbl,
+        "<h3>Contrast members</h3>", "".join(member_cards),
+        "<h3>Population — resolved / unresolved accounting</h3>",
+        '<p class="meta">%s slots · %s resolved · %s unresolved · %s '
+        'tasks · complete %s</p>'
+        % (_span(pop["slots"]), _span(pop["resolved"]),
+           _span(pop["unresolved"]), _span(pop["tasks"]),
+           _tree_cell(pop["complete"])),
+        '<p class="meta">%s</p>' % _span(c["counting_rule"]),
+        pop_tbl,
+        _tree_table(pop["unresolved_tasks"], "unresolved tasks"),
+        _tree_table(pop["rc_census"], "reward-class census"),
+        _tree_cell(absent(
+            "not_computed",
+            reason="the hh-p4-c-confirmation/1 packet carries no "
+                   "per-task cell grid — the unresolved (task, arm) "
+                   "cells are named under Population; the §6.11 "
+                   "per-task grid leg is not projected rather than "
+                   "imputed"))
+        if not isinstance(pop.get("per_task"), (dict, list)) else "",
+        "<h3>Descriptive cost — never a confirmatory claim</h3>",
+        '<p class="meta">%s</p>' % _span(cost["label"]),
+        '<p class="meta">%s</p>' % _span(cost["basis"]),
+        cost_tbl,
+        "<h3>Selection-labelled estimates</h3>",
+        '<p class="meta">%s</p>'
+        % _span(c["selection_labelled_estimates"]["label"]),
+        est_members,
+        '<p class="meta">%s</p>'
+        % _span(cl["exploratory_estimates"]["label"]),
+        "<h3>Exchangeability</h3>",
+        _tree_table(c["exchangeability"]),
+        "<h3>Preregistration</h3>",
+        _tree_table(c["prereg"]),
+        "<h3>Terminal state</h3>",
+        _tree_table(c["terminal_state"]),
+        "<h3>Input manifest</h3>",
+        _tree_table(c["input_manifest"]),
+        '<p class="meta">transcripts — packet-only; the sanitized '
+        'archive upload leg is deferred by the operator\'s GATE-G38 '
+        'verbatim (no transcript links on this page)</p>',
+    ])
+
+
 def phase4_page(sd, pkts, commit):
     claims = json.loads(sd["claims.json"])["body"]
     p = json.loads(sd["phase4.json"])["body"]
@@ -2146,7 +2361,7 @@ def phase4_page(sd, pkts, commit):
            _span(p["metric"])),
         '<p class="meta">%s</p>' % ESC(p["expected_precision"]["text"]),
         '<p class="meta">%s</p>' % ESC(p["executed_evidence"]["text"]),
-        _pkt_cite(pkts, ("p4-fp", "p3-l2")),
+        _pkt_cite(pkts, ("p4-fp", "p3-l2", "p4c-confirm")),
         _baseline_block(p),
         "<h2>Family</h2>", fam_head, fam_tbl,
         '<h2>Exploratory family</h2>',
@@ -2162,6 +2377,7 @@ def phase4_page(sd, pkts, commit):
                 for s in p["sources"]),
         '<div class="kv"><span>seal/open</span>%s</div>'
         % _tree_cell(p["seal_open_ref"]),
+        _p4c_section(p, pkts),
     ]
     return pages.shell("Phase 4 — configuration experiments", "phase-4/",
                        "".join(body), labels, "phase-4",
@@ -2252,7 +2468,7 @@ def build(out_dir, inputs, digest, bodies, profile="internal",
     p3_live = (not public or "phase-3" in published) \
         and {"p3-l1", "p3-l2", "p3-l3"} <= {i.id for i in inputs}
     p4_live = (not public or "phase-4" in published) \
-        and {"p4-fp", "p3-l2"} <= {i.id for i in inputs}
+        and {"p4-fp", "p3-l2", "p4c-confirm"} <= {i.id for i in inputs}
     p1_tasks_live = (not public) or (published
                                    and "phase-1" in published)
 
