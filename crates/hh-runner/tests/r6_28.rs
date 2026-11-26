@@ -405,8 +405,8 @@ fn ac3_census_generator_emits_one_entry_per_task() {
 use hharness_eval::parity_admission as pa;
 use hharness_runner::l1_drive::L1Drive;
 use hharness_runner::l1_gate::{
-    check_l1_conformance, check_l1_diff, compare_drives, conformance_record, refuse_parity_input,
-    run_sequence, L1Sequence, L1_CONFORMANCE_SCHEMA, L1_DIFF_SCHEMA, L1_LABEL,
+    check_l1_conformance, check_l1_diff, compare_drives, conformance_record, leg_result,
+    refuse_parity_input, run_sequence, L1Sequence, L1_CONFORMANCE_SCHEMA, L1_DIFF_SCHEMA, L1_LABEL,
 };
 
 fn bm01_seq(obs_b: Option<Vec<RawObservation>>) -> L1Sequence {
@@ -476,7 +476,15 @@ fn ac4_legs_stable_prefix_and_first_divergence() {
         &h_id(),
         &o_id(),
     );
-    assert_eq!(out.l1_1.result, "fail");
+    // ADR-0455: a refusal-bearing drive mints the typed outcome —
+    // the strict endpoint's `replay_diverged` abort is a drive-level
+    // refusal, spelled verbatim (never `fail`, never a vacuous pass).
+    assert_eq!(out.l1_1.result, "l1_drive_refused{h.replay_diverged}");
+    assert!(out
+        .l1_1
+        .divergences
+        .iter()
+        .any(|d| d.level == "drive_refusal" && d.gated && d.turn.is_none()));
     let d = out
         .l1_1
         .divergences
@@ -628,6 +636,48 @@ fn ac5_each_equality_level_fails_alone() {
     // clean baseline → zero divergences.
     let v = compare_drives(canon.as_ref(), "", &o, &base_drive(), usize::MAX, 2);
     assert!(v.is_empty());
+}
+
+// ── ADR-0455 — a refusal-bearing drive gates the leg; a vacuous
+// pass on 0 evaluated turns is impossible ──
+
+#[test]
+fn adr0455_drive_refusal_gates_the_leg() {
+    let canon = canon();
+    let o = base_drive();
+    // The p4x G-L1 defect: the H drive never armed (machinery rc≠0)
+    // and folded empty — zero evaluated turns previously minted a
+    // vacuous pass; now the leg-scope refusal gates.
+    let mut h = L1Drive::default();
+    h.refusal = Some(hharness_runner::l1_obs::L1Error {
+        rule: "machinery",
+        detail: "the drive exited rc 1 before arming".into(),
+    });
+    let v = compare_drives(canon.as_ref(), "", &o, &h, 1, 2);
+    let d = v
+        .iter()
+        .find(|d| d.level == "drive_refusal")
+        .expect("a refusal-bearing drive emits the leg-scope divergence");
+    assert!(d.gated && d.turn.is_none());
+    assert_eq!(d.path, "h.machinery");
+    assert_eq!(leg_result(&v), "l1_drive_refused{h.machinery}");
+    // An O-side refusal carries the o. prefix verbatim.
+    let mut o2 = base_drive();
+    o2.refusal = Some(hharness_runner::l1_obs::L1Error {
+        rule: "transport",
+        detail: "o run aborted".into(),
+    });
+    let v = compare_drives(canon.as_ref(), "", &o2, &base_drive(), usize::MAX, 2);
+    assert_eq!(leg_result(&v), "l1_drive_refused{o.transport}");
+    // An armed drive (no refusal member) is byte-identical under the
+    // amendment — pass/fail semantics unchanged.
+    let v = compare_drives(canon.as_ref(), "", &o, &base_drive(), usize::MAX, 2);
+    assert_eq!(leg_result(&v), "pass");
+    assert!(!v.iter().any(|d| d.level == "drive_refusal"));
+    let mut bad = base_drive();
+    bad.submission = Some("other".into());
+    let v = compare_drives(canon.as_ref(), "", &o, &bad, usize::MAX, 2);
+    assert_eq!(leg_result(&v), "fail");
 }
 
 // ── AC-6 (E; AC-7.4-8) — records, diff-per-fail, coverage refusal ───

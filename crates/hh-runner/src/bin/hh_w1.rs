@@ -2627,11 +2627,7 @@ fn cmd_l1_fold(args: &[String]) -> Result<String, String> {
             }
         }
         let l1_1 = hharness_runner::l1_gate::LegOutcome {
-            result: if div1.iter().any(|d| d.gated) {
-                "fail"
-            } else {
-                "pass"
-            },
+            result: hharness_runner::l1_gate::leg_result(&div1),
             divergences: div1,
             endpoint_first: ep1,
             h_drive: Some(h1.clone()),
@@ -2650,11 +2646,7 @@ fn cmd_l1_fold(args: &[String]) -> Result<String, String> {
                 ))
             });
         let l1_2 = hharness_runner::l1_gate::LegOutcome {
-            result: if div2.iter().any(|d| d.gated) {
-                "fail"
-            } else {
-                "pass"
-            },
+            result: hharness_runner::l1_gate::leg_result(&div2),
             divergences: div2,
             endpoint_first: ep2,
             h_drive: Some(h2.clone()),
@@ -2663,7 +2655,11 @@ fn cmd_l1_fold(args: &[String]) -> Result<String, String> {
         // diff records — one durable `hh-l1-diff/1` per gated divergence.
         let cmp = canon()?;
         for (leg, outcome, od, hd) in [("l1_1", &l1_1, ref1, &h1), ("l1_2", &l1_2, &drive_a, &h2)] {
-            for d in outcome.divergences.iter().filter(|d| d.gated) {
+            for d in outcome
+                .divergences
+                .iter()
+                .filter(|d| d.gated && d.level != "drive_refusal")
+            {
                 let cv = |dr: &hharness_runner::l1_drive::L1Drive| -> String {
                     d.turn
                         .and_then(|t| dr.requests.get(t - 1))

@@ -63,7 +63,10 @@ fn identity_json(i: &L1Identity) -> Json {
 pub struct L1Divergence {
     /// The level (`request` | `action` | `request_count` |
     /// `termination` | `submission` | `extra_request` |
-    /// `downstream` — downstream is a diagnostic, never a fail).
+    /// `drive_refusal` | `downstream` — downstream is a diagnostic,
+    /// never a fail; `drive_refusal` is leg-scope (`turn: None`) —
+    /// ADR-0455: a drive-level refusal gates the leg, never a
+    /// vacuous pass on 0 evaluated turns).
     pub level: &'static str,
     /// The 1-based request ordinal for per-request levels.
     pub turn: Option<usize>,
@@ -139,6 +142,24 @@ pub fn compare_drives(
     total: usize,
 ) -> Vec<L1Divergence> {
     let mut out = Vec::new();
+    // ADR-0455: a drive-level `refusal` on either folded doc gates
+    // the leg — inspected before turn evaluation so a drive that
+    // never armed (an empty fold) cannot mint a vacuous pass on 0
+    // evaluated turns. The outcome sits at leg scope (`turn: None`,
+    // `gated: true`) beside the request/trajectory classes; the
+    // s(S) request-prefix and stable==total machinery underneath
+    // is byte-identical.
+    for (side, d) in [("o", o), ("h", h)] {
+        if let Some(r) = &d.refusal {
+            out.push(div(
+                "drive_refusal",
+                None,
+                format!("{side}.{}", r.rule),
+                format!("refusal{{{}:{}}}", r.rule, r.detail),
+                true,
+            ));
+        }
+    }
     let n = o.requests.len().min(h.requests.len());
     for k in 0..n {
         let turn = k + 1;
@@ -265,8 +286,9 @@ pub struct L1Sequence {
 /// One leg's outcome.
 #[derive(Debug, Clone)]
 pub struct LegOutcome {
-    /// `pass` | `fail`.
-    pub result: &'static str,
+    /// `pass` | `fail` | `l1_drive_refused{<side>.<rule>[,…]}`
+    /// (ADR-0455's typed refusal outcome).
+    pub result: String,
     /// All divergences observed (gated + reported + excluded).
     pub divergences: Vec<L1Divergence>,
     /// The strict-endpoint first divergence `(turn, path)`, when the
@@ -295,11 +317,24 @@ pub struct SeqOutcome {
     pub diffs: Vec<Json>,
 }
 
-fn leg_result(divergences: &[L1Divergence]) -> &'static str {
+/// `leg_result(divergences)` — ADR-0455: a gated `drive_refusal`
+/// mints the typed `l1_drive_refused{<side>.<rule>}` outcome
+/// verbatim (the path carries `o.<rule>`/`h.<rule>`), never a
+/// vacuous pass; absent a refusal the REQ-XD-104 pass/fail rule on
+/// gated divergences is unchanged.
+pub fn leg_result(divergences: &[L1Divergence]) -> String {
+    let refused: Vec<&str> = divergences
+        .iter()
+        .filter(|d| d.level == "drive_refusal" && d.gated)
+        .map(|d| d.path.as_str())
+        .collect();
+    if !refused.is_empty() {
+        return format!("l1_drive_refused{{{}}}", refused.join(","));
+    }
     if divergences.iter().any(|d| d.gated) {
-        "fail"
+        "fail".to_string()
     } else {
-        "pass"
+        "pass".to_string()
     }
 }
 
@@ -386,7 +421,11 @@ pub fn run_sequence(
     let mut diffs = Vec::new();
     for (leg, outcome) in [("l1_1", &l1_1), ("l1_2", &l1_2)] {
         let (o_ref, h_ref) = (&drive_a, outcome.h_drive.as_ref().unwrap_or(&drive_a));
-        for d in outcome.divergences.iter().filter(|d| d.gated) {
+        for d in outcome
+            .divergences
+            .iter()
+            .filter(|d| d.gated && d.level != "drive_refusal")
+        {
             let (oc, hc) = canon_pair(cmp.as_ref(), surface, o_ref, h_ref, d.turn);
             diffs.push(diff_record(
                 &seq_id,
@@ -522,7 +561,7 @@ pub fn conformance_record(
             (
                 "l1_1",
                 Json::obj([
-                    ("result", Json::str(s.l1_1.result)),
+                    ("result", Json::str(&s.l1_1.result)),
                     (
                         "divergences",
                         Json::Int(s.l1_1.divergences.iter().filter(|d| d.gated).count() as i64),
@@ -536,7 +575,7 @@ pub fn conformance_record(
             (
                 "l1_2",
                 Json::obj([
-                    ("result", Json::str(s.l1_2.result)),
+                    ("result", Json::str(&s.l1_2.result)),
                     (
                         "divergences",
                         Json::Int(s.l1_2.divergences.iter().filter(|d| d.gated).count() as i64),
