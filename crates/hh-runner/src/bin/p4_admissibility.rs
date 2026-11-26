@@ -344,7 +344,7 @@ fn emit(repo: &Path, inputs: &BTreeMap<String, String>) {
 /// gen-2 G-L1 battery's trajectory divergence diagnosed) — writing the
 /// four records at the manifest's relpaths, each carrying a
 /// `supersedes` lineage cite (`prior` path + recomputed `prior_sha256`
-/// + the manifest's `supersedes_reason` + `byte_untouched: true`). The
+/// \+ the manifest's `supersedes_reason` + `byte_untouched: true`). The
 /// superseded generations' records stay byte-untouched; `emit` keeps
 /// reproducing gen-1 and `supersede` with the gen-2 manifest keeps
 /// reproducing gen-2 (a superseded generation's reproducer is never
