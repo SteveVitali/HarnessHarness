@@ -39,6 +39,7 @@ pub mod disposition;
 pub mod facts;
 pub mod fp_e;
 pub mod fp_measure;
+pub mod fp_p4_refold;
 pub mod fp_p4c_fold;
 pub mod fp_p4x_fold;
 pub mod fp_partition;

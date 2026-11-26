@@ -1,0 +1,2 @@
+730f04d81bbbb9b24f8965b5f1936ceb76027c8feacdf5e2ae42b37f0b136308  docs/build/reports/2026-11-26-fp-p4-activation-refold.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-26-fp-p4-activation-refold.json.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)

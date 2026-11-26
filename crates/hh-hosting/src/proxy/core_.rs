@@ -394,13 +394,70 @@ struct UsageCost {
     micros: Option<i64>,
 }
 
+/// `exchange_usage(surface, ex)` — the provider usage vector of one
+/// captured exchange. A JSON body carries its `usage` member verbatim;
+/// an SSE stream carries usage inside `data:` frames the buffered body
+/// holds byte-for-byte (the W4x pi/claude arms' `usage.source: absent`
+/// records were exactly this case — `parse_provider` on SSE bytes yields
+/// no document). The stream legs, per surface:
+///
+/// - `openai.chat` — every chunk frame's `usage` member, last-writer-wins
+///   per member (Ollama emits the terminal empty-`choices` usage chunk
+///   when the caller asks `stream_options.include_usage`; a provider
+///   that emits none yields `absent`, never a zero-fill).
+/// - `anthropic.messages` — `message_start.message.usage` merged with
+///   the trailing `message_delta.usage` members (Anthropic reports
+///   input/cache on start and cumulative output on the deltas; the last
+///   observed value of each member is the final count).
+///
+/// `Json::Null` when no usage member appears anywhere — the honest
+/// `absent`, never an implied zero.
+fn exchange_usage(surface: &Surface, ex: &RawExchange) -> Json {
+    let text = String::from_utf8_lossy(&ex.body);
+    if let Ok(body) = parse_provider(&text) {
+        return body.get("usage").cloned().unwrap_or(Json::Null);
+    }
+    let mut merged: BTreeMap<String, Json> = BTreeMap::new();
+    let mut seen = false;
+    for line in text.lines() {
+        let Some(payload) = line.strip_prefix("data:") else {
+            continue;
+        };
+        let payload = payload.trim();
+        if payload.is_empty() || payload == "[DONE]" {
+            continue;
+        }
+        let Ok(frame) = parse_provider(payload) else {
+            continue;
+        };
+        let usage_member = match surface {
+            Surface::OpenAiChat => frame.get("usage"),
+            Surface::AnthropicMessages => match frame.get("type").and_then(Json::as_str) {
+                Some("message_start") => frame.get("message").and_then(|m| m.get("usage")),
+                Some("message_delta") => frame.get("usage"),
+                _ => None,
+            },
+        };
+        if let Some(Json::Obj(m)) = usage_member {
+            seen = true;
+            for (k, v) in m {
+                merged.insert(k.clone(), v.clone());
+            }
+        }
+    }
+    if seen {
+        Json::Obj(merged)
+    } else {
+        Json::Null
+    }
+}
+
 /// Extract the provider usage vector per surface and derive the cost
 /// fact: a provider cached count ⇒ `estimated_from_pricing` with the
 /// actual split; none ⇒ an upper-bound `estimate` whose `cache_read`
 /// is `available: false`, never `0` (REQ-XC-007).
 fn usage_cost(surface: &Surface, ex: &RawExchange, lane: &ProxyLane) -> UsageCost {
-    let body = parse_provider(&String::from_utf8_lossy(&ex.body)).unwrap_or(Json::Null);
-    let u = body.get("usage").cloned().unwrap_or(Json::Null);
+    let u = exchange_usage(surface, ex);
     let get_i = |k: &str| u.get(k).and_then(Json::as_int).unwrap_or(0);
     let mut d = TokenDecomposition::default();
     let mut cache_avail = false;
@@ -2042,6 +2099,7 @@ fn finish(
                 ("available", Json::Bool(true)),
                 ("derivation", Json::str(&u.derivation)),
                 ("micros", u.micros.map(Json::Int).unwrap_or(Json::Null)),
+                ("tokens.input.uncached", Json::Int(u.decomp.input_uncached)),
                 (
                     "cache_read",
                     if u.cache_read_available {
@@ -2843,6 +2901,10 @@ fn receipt_doc(
             v.insert(
                 "tokens.input.total".into(),
                 Json::Int(u.decomp.input_total()),
+            );
+            v.insert(
+                "tokens.input.uncached".into(),
+                Json::Int(u.decomp.input_uncached),
             );
             v.insert(
                 "tokens.output.total".into(),

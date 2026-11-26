@@ -1,0 +1,7 @@
+# fp-p4-refold inputs manifest (R7.9 / manifest 342 — the DF-R7.1-2
+# refold). HH_FP_P4_REFOLD_INPUTS overrides this path.
+corpus=docs/build/reports/2026-11-26-fp-p4-activation-corpus.json
+cite_1=docs/build/reports/2026-11-21-fp-p4-sweep-registry-gen3.json
+cite_2=docs/build/reports/2026-11-26-r7.9-usage-probe.json
+recorded_at=2026-11-26
+out=docs/build/reports/2026-11-26-fp-p4-activation-refold.json

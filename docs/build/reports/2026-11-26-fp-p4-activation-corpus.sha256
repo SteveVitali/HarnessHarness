@@ -1,0 +1,2 @@
+b270cd96f7846cbd688ce0784ca4fbcb5d2b2bd82fc2db60bc2da13e593ea571  docs/build/reports/2026-11-26-fp-p4-activation-corpus.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-26-fp-p4-activation-corpus.sha256 (run from the repo root — the record is canonical JSON)
