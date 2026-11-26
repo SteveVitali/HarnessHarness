@@ -815,7 +815,11 @@ impl EmbedService {
         // `SessionDetached{fenced}` on submit. `HH_WRITER_TTL_MS` lets the
         // live driver declare a TTL that covers its slot bound; absent or
         // unparsable keeps the Stage default. The declared value is
-        // recorded verbatim in `run.created.lease_ttl.writer`.
+        // recorded verbatim in `run.created.lease_ttl.writer`. A zero or
+        // unrepresentable value (expiry beyond the lease record's signed
+        // millisecond range) is refused typed by the ledger's `open_run`
+        // before any durable row (R6.52 repair; hh-ledger
+        // tests/r6_52_writer_ttl.rs) — never clamped or wrapped here.
         if let Ok(v) = std::env::var("HH_WRITER_TTL_MS") {
             if let Ok(ms) = v.parse::<u64>() {
                 manifest.lease_ttl.writer_ms = ms;

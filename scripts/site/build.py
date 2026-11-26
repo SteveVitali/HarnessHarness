@@ -127,7 +127,7 @@ def load_publications(inputs, repo_root=ROOT):
     for rel, doc in records:
         if rel in superseded:
             continue
-        mism = publication.pin_errors(doc, inputs)
+        mism = publication.checked_pin_errors(rel, doc, inputs, repo_root)
         for e in mism:
             raise values.Refusal(
                 "publication record %s does not pin the current input "

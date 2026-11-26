@@ -563,6 +563,17 @@ impl RunManifest {
         if self.activation_no == 0 {
             return Err(bad("activation_no must be ≥ 1".into()));
         }
+        // A zero writer TTL expires the lease at creation; a TTL beyond
+        // `i64::MAX` serializes as a negative JSON integer (`lease_ttl.
+        // writer` and the lease record are signed). Both refuse typed —
+        // representability only, no maximum-TTL policy is chosen here.
+        if self.lease_ttl.writer_ms == 0 || self.lease_ttl.writer_ms > i64::MAX as u64 {
+            return Err(bad(format!(
+                "lease_ttl.writer must be in 1..={} ms, got {}",
+                i64::MAX,
+                self.lease_ttl.writer_ms
+            )));
+        }
         if self.run_kind.carries_configuration() {
             for (field, value) in [
                 ("configuration_id", &self.configuration_id),

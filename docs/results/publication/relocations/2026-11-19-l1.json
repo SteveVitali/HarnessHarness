@@ -1,0 +1,28 @@
+{
+  "schema": "hh-site-publication-relocations/1",
+  "reason": "Resolve only the byte-identical L1 relocation recorded in GATE-G29 while preserving original publication records, signed references and archived pins. No gate, dataset, measurement or input hash changes.",
+  "records": [
+    {
+      "record": "docs/results/publication/phase-3-2026-11-19.json",
+      "sha256": "a363530cc7d6a8563f6f6a8db2c4b0a487ac7bc9debbc872596600a1abbbf98e",
+      "relocations": [
+        {
+          "from": "docs/build/reports/compute/2026-11-18-fp-ws1-l1-conformance.json",
+          "to": "docs/build/reports/l1/2026-11-18-fp-ws1-l1-conformance.json",
+          "sha256": "bdbb0bc93a66988947e7f1712f9c9c397ba6ebbb9642d568fcf29c594e763218"
+        }
+      ]
+    },
+    {
+      "record": "docs/results/publication/phase-3-2026-11-19-flip.json",
+      "sha256": "b1e813032c16249401994d53ad7ebb3c05751d87876350aeaee5b6c750a2241c",
+      "relocations": [
+        {
+          "from": "docs/build/reports/compute/2026-11-18-fp-ws1-l1-conformance.json",
+          "to": "docs/build/reports/l1/2026-11-18-fp-ws1-l1-conformance.json",
+          "sha256": "bdbb0bc93a66988947e7f1712f9c9c397ba6ebbb9642d568fcf29c594e763218"
+        }
+      ]
+    }
+  ]
+}

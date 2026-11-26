@@ -120,33 +120,74 @@ def main():
                 eprint("session: sentinel timeout — closing honestly")
                 break
             time.sleep(a.poll_seconds); waited += a.poll_seconds
-        sealed = {}
+        # Close honestly (R6.52 repair): only acknowledged revocations
+        # enter `revoked`; every seal/revoke/stop failure is recorded
+        # per id and the shim exits nonzero — a caller can never read a
+        # closed session as clean without the proxy's own `ok`.
+        sealed, seal_failed = {}, {}
         if a.seal_recordings:
             for sid in grants:
-                rep = ctl(proc, {"op": "seal_recording", "slot_id": sid})
-                sealed[sid] = (rep.get("ok") or rep) \
-                    if "error" not in rep else {"error": rep["error"]}
-                if "error" in rep:
+                try:
+                    rep = ctl(proc, {"op": "seal_recording", "slot_id": sid})
+                except SystemExit as e:
+                    rep = {"error": str(e)}
+                # Symmetric with revoke: only an explicit `ok` is sealed;
+                # an `error` or a reply with neither is a recorded failure.
+                if "error" in rep or "ok" not in rep:
+                    err = rep.get("error") or "unacknowledged"
+                    sealed[sid] = {"error": err}
+                    seal_failed[sid] = err
                     eprint(f"seal_recording {sid}:", rep)
+                else:
+                    sealed[sid] = rep.get("ok") or {}
+        revoked, revoke_failed = [], {}
         for sid in grants:
-            rep = ctl(proc, {"op": "revoke_slot", "slot_id": sid})
-            if "error" in rep:
+            try:
+                rep = ctl(proc, {"op": "revoke_slot", "slot_id": sid})
+            except SystemExit as e:
+                rep = {"error": str(e)}
+            if "error" in rep or "ok" not in rep:
+                revoke_failed[sid] = rep.get("error") or "unacknowledged"
                 eprint(f"revoke_slot {sid}:", rep)
+            else:
+                revoked.append(sid)
         try:
-            ctl(proc, {"op": "stop"})
+            rep = ctl(proc, {"op": "stop"})
+            # The proxy's `stop` reply carries an `error` only when its §4.6
+            # run-end catalog probe failed (it stops either way): a missing
+            # run-end evidence record, labelled as such — not a leak.
+            if "error" in rep:
+                stop = f"failed{{run_end_probe:{rep['error']}}}"
+            elif "ok" in rep:
+                stop = "ok"
+            else:
+                stop = "failed{unacknowledged}"
         except SystemExit:
-            pass
+            stop = "failed{control_channel_closed}"
         time.sleep(1.0)
         end = {"schema": "hh-w2-proxy-session-end/1",
                "run_id": a.run_id,
-               "revoked": sorted(grants),
+               "revoked": sorted(revoked),
                "sealed": sealed,
                "ended_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-               "waited_seconds": waited}
+               "waited_seconds": waited,
+               "stop": stop}
+        if revoke_failed:
+            end["revoke_failed"] = revoke_failed
+        if seal_failed:
+            end["seal_failed"] = seal_failed
         with open(a.session_out + ".end", "w") as f:
             json.dump(end, f, indent=1, sort_keys=True)
-        print(json.dumps({"session": "closed", "waited_seconds": waited,
+        clean = not (revoke_failed or seal_failed) and stop == "ok"
+        print(json.dumps({"session": "closed" if clean else "closed_incomplete",
+                          "waited_seconds": waited,
                           "sealed": sorted(sealed)}), flush=True)
+        if not clean:
+            # 3: a grant/seal/stop acknowledgement is missing; 4: only the
+            # run-end catalog probe evidence is missing (all grants revoked).
+            only_run_end = (not (revoke_failed or seal_failed)
+                            and stop.startswith("failed{run_end_probe:"))
+            sys.exit(4 if only_run_end else 3)
     finally:
         try:
             proc.terminate()

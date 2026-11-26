@@ -67,7 +67,7 @@ case "$*" in
     for a in "$@"; do
       [ "$prev" = "--command" ] && rcmd="$a"; prev="$a"
     done
-    nk="$(norm "$rcmd")"
+    nk="$(norm "$rcmd" | python3 -c 'import hashlib, sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())')"
     [ -f "$S/ssh_rc/$nk" ] && exit "$(cat "$S/ssh_rc/$nk")"
     [ -f "$S/ssh/$nk" ] && cat "$S/ssh/$nk"
     exit 0 ;;
@@ -250,7 +250,7 @@ printf '[{"name":"hh-iap-ssh","allowed":[{"IPProtocol":"tcp","ports":["22"]}],"s
 cp "$STATE/new_instance_describe.json" "$LIVE/instance_describe.json"
 printf '[{"name":"hh-p1-w1x","status":"RUNNING"}]\n' > "$LIVE/instances_list.json"
 
-snorm() { printf '%s' "$1" | tr -cs 'A-Za-z0-9' '_' | sed 's/_$//'; }
+snorm() { printf '%s' "$1" | tr -cs 'A-Za-z0-9' '_' | sed 's/_$//' | python3 -c 'import hashlib, sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())'; }
 sshf() { printf '%s' "$2" > "$STATE/ssh/$(snorm "$1")"; }
 sshf 'curl -fs --unix-socket /run/podman/podman.sock http://d/_ping' 'OK'
 sshf 'podman version --format json' '{"Client":{"Version":"4.3.1+ds1-8+deb12u1"}}'
@@ -265,7 +265,7 @@ sshf 'df -B1 --output=avail /var | tail -1' '240000000000'
 sshf 'stat -c %a:%U:%G /run/podman/podman.sock' '660:root:hh'
 sshf 'sh -c "ss -tln 2>/dev/null | grep -c podman || true"' '0'
 sshf "hh-runner drain --window 'w1x' --inconclusive teardown" ''
-sshf 'journalctl --no-pager -o short-iso' 'journal-line'
+sshf 'sudo journalctl --no-pager -o short-iso' 'journal-line'
 sshf 'cat /proc/uptime; df -BG --output=avail / | tail -1' 'uptime'
 DIG="sha256:$(printf '1%.0s' $(seq 64))"
 sshf "podman pull 'reg.invalid/hh/cell@$DIG'" 'pulled'
@@ -276,7 +276,7 @@ printf 'slot-1 receipt\n' > "$T/runroot/slot-1.txt"
 printf 'runner log\n'      > "$T/runroot/runner.log"
 ( cd "$T/runroot" && { sha256sum slot-1.txt runner.log 2>/dev/null || shasum -a 256 slot-1.txt runner.log; } > "$STATE/scp_src/hh-manifest.sha256" )
 ( cd "$T/runroot" && tar czf "$STATE/scp_src/hh-harvest.tar.gz" . )
-HREMOTE="mkdir -p '/var/lib/hh/runs/run-root-w1x' && cd '/var/lib/hh/runs/run-root-w1x' && find . -type f -print0 | sort -z | xargs -0 --no-run-if-empty sha256sum > /tmp/hh-manifest.sha256 && tar czf /tmp/hh-harvest.tar.gz . && sha256sum /tmp/hh-manifest.sha256 /tmp/hh-harvest.tar.gz"
+HREMOTE="sudo sh -c 'rm -f /tmp/hh-manifest.sha256; mkdir -p \"/var/lib/hh/runs/run-root-w1x\" && cd \"/var/lib/hh/runs/run-root-w1x\" && find . -type f -print0 | sort -z | xargs -0 --no-run-if-empty sha256sum > /tmp/hh-manifest.sha256 && tar czf /tmp/hh-harvest.tar.gz . && sha256sum /tmp/hh-manifest.sha256 /tmp/hh-harvest.tar.gz'"
 sshf "$HREMOTE" "$(cd "$STATE/scp_src" && { sha256sum hh-manifest.sha256 hh-harvest.tar.gz 2>/dev/null || shasum -a 256 hh-manifest.sha256 hh-harvest.tar.gz; })"
 
 SCAN="$REPO/target/debug/hh-secret-scan"
@@ -806,12 +806,28 @@ expect_rc 2 "overrun Wc cannot absorb refuses" \
   python3 -I "$SLIB" fpcheck "$REPO" "$DECLS/w1.json" "$DECLS/wc.json" \
   --export-measured-gib 300
 
+# ── R6.52: the W4 driver + session-shim offline batteries ───────────────
+# test_w4_driver.py drives the driver's Scheduler/probe through the real
+# `fp_continuation` adapter binary (built by the workspace Build step; an
+# absent binary FAILS here, never skips). Neither battery calls a provider,
+# cloud API, container or the driver's main.
+for t in scripts/gce-backend/tests/test_w4_driver.py \
+         scripts/gce-backend/tests/test_ws1_proxy_session_end.py; do
+  if PYTHONDONTWRITEBYTECODE=1 python3 "$t" >"$T/$(basename "$t").log" 2>&1; then
+    ok "$(basename "$t") ($(grep -Eo '^Ran [0-9]+ tests' "$T/$(basename "$t").log"))"
+  else
+    tail -n 40 "$T/$(basename "$t").log" >&2
+    bad "$(basename "$t")"
+  fi
+done
+
 # ── the native-lane verifier leg (R6.56 continuation a5) ─────────────
 # run_verifier's commit-clone shape + typed dispositions against a
 # stubbed podman — the w4x/W4 verifier-absent regression battery.
 python3 scripts/gce-backend/test_w4_main_driver.py >/dev/null 2>&1 \
   && ok "run_verifier commit-clone fixture battery" \
   || bad "run_verifier commit-clone fixture battery"
+
 
 printf 'check-gce-backend: %d passed, %d failed\n' "$PASS" "$FAILED"
 [ "$FAILED" -eq 0 ] || exit 1
