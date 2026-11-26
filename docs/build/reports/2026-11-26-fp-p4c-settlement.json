@@ -1,0 +1,44 @@
+{
+ "attribution": {
+  "conclusion": "WAL-authoritative model figure recomputed pre-teardown from the retained disk: sum(measurement.cost.attributed micro_units over runs p4c-c-r1/r2/r3/r4 events.wal) = 16,896,165 \u00b5$ = $16.90 (10,259 attributed events; r1 6,207,273 vs checkpoint-consumed 6,202,514 +4,759 \u2014 the WAL carries lane-probe calls; per-slot slot-result sum 16,638,034 stands with the known undercount class). Provider billed window-span: Nov-24 boundary share of $15.99 + Nov-25 $11.77 + Nov-26 $2.46 \u2248 $16\u201318 \u2014 consistent within of $16.90 at daily granularity. 24 h trailing read $10.80082 (6,391 reqs) covers Nov-25 07:00\u219226 07:14 (the r2\u2013r4 legs)",
+  "provider_trailing_24h_usd": 10.80082,
+  "provider_window_days_usd": "~16\u201318 (Nov-24 share boundary-mixed with X1 tail)",
+  "wal_attributed_micros": 16896165,
+  "window_span": "2026-11-24T20:40Z \u2192 2026-11-26T03:33Z (legs r1/r2/r3/r4); teardown gcloud instances delete 2026-11-26 ~07:26Z \u2014 instance + 300 GB boot disk removed, zero billable resources verified (instances/disks/addresses all empty)"
+ },
+ "balance_observed": "purchased 3.42965 USD remaining; included allowance 0",
+ "boundary_flags": [
+  "concurrent_day_unattributed",
+  "nov24_boundary_mixed_with_x1_tail"
+ ],
+ "kind": "confirming_read",
+ "phase": "fp",
+ "provided": {
+  "OLLAMA_API_KEY": "yes"
+ },
+ "reads": [
+  {
+   "file": "~/hh-retained/p4c/settle/h21-usage.json",
+   "kind": "usage-24h",
+   "read_at": "2026-11-26T07:14:01Z",
+   "status": 200
+  },
+  {
+   "file": "~/hh-retained/p4c/settle/h21-balance.json",
+   "kind": "balance",
+   "read_at": "2026-11-26T07:12:55Z",
+   "status": 200
+  },
+  {
+   "file": "~/hh-retained/p4c/settle/h21-usage-7d.json",
+   "kind": "usage-7d",
+   "read_at": "2026-11-26T07:15:5xZ",
+   "status": 200
+  }
+ ],
+ "recorded_at": "2026-11-26T07:30:00Z",
+ "schema": "hh-fp-settlement/1",
+ "status": "settled \u2014 model `within` (WAL-authoritative $16.90 vs provider window-span ~$16\u201318 boundary-mixed); compute `unavailable` (GCP billed figure unreachable \u2014 recorded estimates $3.86 + $6.47 stand); \u226524 h post-teardown confirming read `pending{clock}` \u2014 due \u2265 2026-11-27 ~07:26Z, demoted to a confirming check (teardown complete, no post-teardown usage possible; if it reads differently the entry is amended, never rewritten)",
+ "ticket": "HUMAN-H21",
+ "window": "p4c"
+}
