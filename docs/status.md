@@ -165,6 +165,49 @@ under `mergePolicy: OPERATOR` only; the recorded #414–#418 stack-CI
 red span awaits its operator-ruled "Fix with allowlist" repair
 (GATE-G32 item I-3) before Phase-B merges.
 
+## Round-7 experiments program
+
+*Update 2026-11-26 (GATE-G37):* the round-7 phase-4 second pass —
+the §8.x exploration/confirmation machinery of the frozen
+experiments supplement — closed and was accepted as recorded:
+[GATE-G37](build/readouts/GATE-G37.md) PASSED `accept`
+(operator verbatim "Accept and continue", verbatim_sha256
+`ea9ac3e0…`), taking CAP7.1's terminal determination `complete` —
+16 satisfied + 2 spec-sanctioned typed terminals (REQ-XD-205
+`withheld{inert_at_admissible_window}`, REQ-XD-214
+`not_admitted{m_eq_1}`), 0 unsatisfied/pending/absent over the 18
+routed §8.x ids. Phase cumulative spend **$68.828421** under
+[HUMAN-H21](build/readouts/HUMAN-H21.md)'s signed entries (model
+`within` on both windows — WAL-authoritative $21.08 and $16.90 vs
+provider reads; compute `unavailable` — recorded estimates stand).
+
+The held-out confirmation outcome stands verbatim in the committed
+[P4-C confirmation packet](build/reports/2026-11-26-fp-p4c-confirmation.json)
+(`hh-p4-c-confirmation/1`): `inconclusive{unresolved_cell}` —
+367/370 slots resolved (3 unresolved, never imputed), the selected
+member V1's primary estimate `refused{UnresolvedCell}` (the pairing
+refuses rather than pairs absence), Holm α = .05 not rejected.
+The §8.8 two-statement claims live packet-side: "Not confirmed on
+37 held-out tasks: no selected member was confirmed different from
+the baseline at Holm α = .05 (family P4-C1). V1 —
+inconclusive{unresolved_cell}". **The packet is not on the results
+site** — adding it as a phase-4 input trips the publication pin
+(a `hh-site-publication/1` mint is a publication act outside this
+chain's authorization, R7.6 verbatim); its site surface is a typed
+absence — see [results](results/README.md).
+
+Owed work stays verbatim: 8 open deferral rows (fold-semantics ADR,
+V3/V4/V5 activation evidence `unmeasured`, attempt-3 settlement
+residuals, harvest run-root derivation, resume-unsafe artifacts,
+per-container memory bound, cost-snapshot undercount class, podman
+name collision); the [O-3 scope-out record](build/reports/round7/O3-scope-out.md)
+dispositions 16 non-§8.x routed ids permanently later/not-v1 under
+the GATE-G34 signature; BL-50 closed. The P4-C ≥24 h provider
+confirming read stays `pending{clock}` — a confirming check, not a
+routed-id dependency. Nothing here promotes an inconclusive or
+withheld outcome; the stacked PR chain merges under
+`mergePolicy: OPERATOR` only.
+
 ## How to read the evidence
 
 Per-surface gate states — what is available with scoped evidence, not
