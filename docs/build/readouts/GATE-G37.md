@@ -4,7 +4,7 @@
   signing APPENDS the Signature block and never edits or deletes anything above it.
 -->
 # GATE-G37 readout — Round-7 acceptance: terminal state, the O-3 record, BL-50 and the reconciliation
-Status: PENDING   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
+Status: PASSED   <!-- the ONLY line that may change: → SIGNED | PASSED | SKIPPED-BY-OPERATOR | NOT-PASSABLE -->
 
 > Round-7 acceptance gate. CAP7.1's terminal-state determination is what it recorded; the
 > O-3 mint is cited, never re-signed. Agents never sign, tick or infer approval; a pending
@@ -187,3 +187,18 @@ on its own authority. The appended lines' shape is the _TEMPLATE.md set (decisio
 GATE DECISIONS row, agent-draft confirmation covering the block sha256, signed-by) — the
 literal placeholder lines stay out of this file so the supplement guard's signature-reuse
 leg never reads the template as a verbatim. -->
+
+Operator decision (verbatim, received 2026-11-26 via Devin CLI session): "Accept and
+continue" — **disposition `accept`**, accepting Round 7's honest terminal state as
+recorded: CAP7.1's `complete` determination (16 satisfied / 2 typed_terminal / 0
+unsatisfied over the 18 routed §8.x ids), the minted O-3 scope-out record (16 non-§8.x
+routed ids dispositioned permanently later/not-v1 under the GATE-G34 signature), BL-50's
+40 rows dispositioned as recorded, and the lead-token reconciliation against the
+machine-readable sets. The P4-C scientific outcome stands as landed —
+`inconclusive{unresolved_cell}` verbatim (REQ-XD-219): no selected member was confirmed
+different from the baseline at Holm α = .05 on 37 held-out tasks; nothing is
+re-presented.
+
+verbatim_sha256 `ea9ac3e0bdc3638608618880844edc750dfc51de5fa8b57b742b5ad56d1f391a`.
+GATE DECISIONS row: 2026-11-26 | GATE-G37
+Signed by: the operator. Recorded by devin-cli/swe-2-high, which does not sign.
