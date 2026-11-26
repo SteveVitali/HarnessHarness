@@ -439,7 +439,13 @@ fn ac5_quote_inputs_and_compute_record() {
         i.get("schema").and_then(Json::as_str),
         Some("hh-p4-c-quote-inputs/1")
     );
-    // Every cited record's sha256 binds the committed file's bytes.
+    // Every cited record's sha256 binds the committed file's bytes —
+    // except compute_decl: its declaration legitimately moved post-mint
+    // (R7.5 repointed `runner.commit` → 1d89a5a3 under 65931ba4 so the
+    // declaration named the pushed tip carrying the p4c machinery). The
+    // record is append-only — the as-minted pin stands verbatim; the
+    // repointed bytes are pinned below so a further unexplained move
+    // trips.
     let recs = as_obj(i.get("records").unwrap());
     for (name, want_schema) in [
         ("c_prereg", "hh-p4-c-prereg/1"),
@@ -448,18 +454,31 @@ fn ac5_quote_inputs_and_compute_record() {
         ("compute_quote", "hh-compute-quote/1"),
     ] {
         let r = as_obj(recs.get(name).unwrap());
-        let path = r.get("path").and_then(Json::as_str).unwrap();
-        assert_eq!(
-            r.get("sha256").and_then(Json::as_str).unwrap(),
-            sha_file(path).trim_start_matches("sha256:"),
-            "{name} sha binding"
-        );
         assert_eq!(
             r.get("schema").and_then(Json::as_str),
             Some(want_schema),
             "{name}"
         );
+        if name != "compute_decl" {
+            let path = r.get("path").and_then(Json::as_str).unwrap();
+            assert_eq!(
+                r.get("sha256").and_then(Json::as_str).unwrap(),
+                sha_file(path).trim_start_matches("sha256:"),
+                "{name} sha binding"
+            );
+        }
     }
+    let decl = as_obj(recs.get("compute_decl").unwrap());
+    assert_eq!(
+        decl.get("sha256").and_then(Json::as_str).unwrap(),
+        "ae429ee5d94cb808bb48729a0b344bb23a2f60cb42fc4840f04cdd48dac9301c",
+        "the as-minted compute_decl pin stands verbatim"
+    );
+    assert_eq!(
+        sha_file("scripts/gce-backend/declarations/fp-p4c.json").trim_start_matches("sha256:"),
+        "cc88d1dd2b4765411c1f892d2f0c763c1dbd0a5ccc065647c46ccc6fc29aa8aa",
+        "the R7.5-repointed declaration bytes (65931ba4)"
+    );
     assert_eq!(
         as_obj(recs.get("compute_quote").unwrap())
             .get("quote_id")
@@ -505,15 +524,17 @@ fn ac5_quote_inputs_and_compute_record() {
     assert_eq!(int(pricing.get("bound_micros").unwrap()), 34_343_404);
 }
 
-// ── AC6 · the GATE-G36 readout — PENDING, complete, unsigned ────────
+// ── AC6 · the GATE-G36 readout — presented PENDING, since signed
+//     PASSED (the readout legitimately transitioned at operator
+//     signature 8793885e; these pins hold the signed record) ────────
 
 #[test]
 fn ac6_gate_readout_pending() {
     let text = std::fs::read_to_string(root().join(READOUT)).unwrap();
     assert!(text.contains("# GATE-G36 readout — G-P4-C"));
     assert!(
-        text.contains("\nStatus: PENDING"),
-        "the gate is presented, never pre-answered"
+        text.contains("\nStatus: PASSED"),
+        "the operator signed PASSED (8793885e); the presented PENDING state was observed at mint"
     );
     // REQ-XH-004's required fields: the quote id, the verbatim
     // authorizations (blank until the operator writes them), the
@@ -529,16 +550,24 @@ fn ac6_gate_readout_pending() {
     assert!(text.contains("1d55d48a803c00848c9306c8d2bec4552f98031e52ec80eafa3d8c47ae7e722d"));
     assert!(text.contains("sha256:9c3c314c"));
     assert!(text.contains("`baseline`") && text.contains("`V1`"));
-    // No signature lines — the agent signs nothing.
+    // The operator signed — verbatim decisions + shas pinned; only
+    // the operator may appear on a `Signed by:` line.
     assert!(
-        !text.contains("Signed by:")
-            || !text
-                .lines()
-                .any(|l| { l.starts_with("Signed by:") && !l.contains("the operator.") }),
-        "no signature block may be written"
+        text
+            .lines()
+            .all(|l| !l.starts_with("Signed by:") || l.contains("the operator.")),
+        "only the operator signs"
     );
-    assert!(!text.contains("Operator decision (verbatim, received 2026"));
-    // Hash-before-subjects: no confirmation subject record exists.
+    assert!(text.contains(
+        "Operator decision (verbatim, received 2026-11-24 via Devin CLI session): \"run\""
+    ));
+    assert!(text.contains("acba25512100f80b56fc3ccd14c65be55d94800cda77585c5f41a887e398f9be"));
+    // The post-signature amendment decision is also pinned verbatim.
+    assert!(text.contains("Operator decision (verbatim, received 2026-11-25 via Devin CLI session)"));
+    assert!(text.contains("718cad8576e1f7122f6f4c7161106364cc15b8966838ef08654722fb37939b30"));
+    // Hash-before-subjects stood at presentation: no `p4c1-`/`p4-c-subject`
+    // record may exist under that naming (the executed window's
+    // records ride the fp-p4c-window naming, a distinct surface).
     for e in std::fs::read_dir(root().join("docs/build/reports")).unwrap() {
         let n = e.unwrap().file_name().to_string_lossy().to_string();
         assert!(
