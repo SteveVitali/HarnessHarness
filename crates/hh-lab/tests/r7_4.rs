@@ -553,8 +553,7 @@ fn ac6_gate_readout_pending() {
     // The operator signed — verbatim decisions + shas pinned; only
     // the operator may appear on a `Signed by:` line.
     assert!(
-        text
-            .lines()
+        text.lines()
             .all(|l| !l.starts_with("Signed by:") || l.contains("the operator.")),
         "only the operator signs"
     );
@@ -563,7 +562,9 @@ fn ac6_gate_readout_pending() {
     ));
     assert!(text.contains("acba25512100f80b56fc3ccd14c65be55d94800cda77585c5f41a887e398f9be"));
     // The post-signature amendment decision is also pinned verbatim.
-    assert!(text.contains("Operator decision (verbatim, received 2026-11-25 via Devin CLI session)"));
+    assert!(
+        text.contains("Operator decision (verbatim, received 2026-11-25 via Devin CLI session)")
+    );
     assert!(text.contains("718cad8576e1f7122f6f4c7161106364cc15b8966838ef08654722fb37939b30"));
     // Hash-before-subjects stood at presentation: no `p4c1-`/`p4-c-subject`
     // record may exist under that naming (the executed window's
