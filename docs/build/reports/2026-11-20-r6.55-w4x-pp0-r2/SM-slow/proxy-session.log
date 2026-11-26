@@ -1,0 +1,2 @@
+{"listen": "127.0.0.1:49401", "mode": "replay", "slots": ["sm-slow-claude-code", "sm-slow-pi"]}
+{"session": "closed", "waited_seconds": 20, "sealed": []}

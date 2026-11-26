@@ -648,10 +648,38 @@ tarfile.open(sys.argv[1]).extractall(sys.argv[2], filter="fully_trusted")
 PY
 }
 
+# `harvest_manifest_nonempty` — DF-R7.3-4's fail-closed leg. An empty
+# manifest means the remote run root was absent or empty (the
+# `mkdir -p` above mints it silently): the tar "verifies" trivially
+# and the window body is lost on delete. Fail unless the operator
+# records the escape (`HH_HARVEST_ALLOW_EMPTY=1` — a genuinely
+# empty window's teardown cites it verbatim).
+harvest_manifest_nonempty() {
+  [ -s "$HARV_DIR/MANIFEST.sha256" ] && return 0
+  if [ "${HH_HARVEST_ALLOW_EMPTY:-}" = "1" ]; then
+    printf 'gce-backend: harvest manifest EMPTY — admitted by HH_HARVEST_ALLOW_EMPTY=1\n' >&2
+    return 0
+  fi
+  printf 'gce-backend: FAIL — harvest manifest is empty (run root absent or empty; refusing to verify trivially — DF-R7.3-4)\n' >&2
+  return 1
+}
+
 harvest_impl() { # returns rc; fills $HARV_DIR; records gdo/vm calls
   HARV_DIR="$REPORTS/harvest/${PHASE}-${WINDOW}"
   mkdir -p "$HARV_DIR"
-  local rroot="/var/lib/hh/runs/run-root-$WINDOW"
+  # DF-R7.3-4(a) — the run-root dir is the driver's recorded --out,
+  # which can diverge from `run-root-$WINDOW` (X1: window p4x1 drove
+  # --out run-root-p4x; the derived path harvested an empty dir and
+  # delete destroyed the real root). The driver stamps its --out into
+  # a window-keyed marker beside the roots at launch; resolve it
+  # first, falling back to the window-derived name when absent.
+  local rroot
+  rroot="$(vm "cat /var/lib/hh/runs/last-run-root-$WINDOW 2>/dev/null" \
+    2>/dev/null | head -1 | tr -d '[:space:]')"
+  case "$rroot" in
+    /var/lib/hh/runs/*) ;;
+    *) rroot="/var/lib/hh/runs/run-root-$WINDOW" ;;
+  esac
   # Re-entry after a partial teardown: when no instance remains and a
   # prior verified harvest already stands for this phase+window, the
   # remote legs have no target — re-verify the standing manifest
@@ -666,6 +694,7 @@ harvest_impl() { # returns rc; fills $HARV_DIR; records gdo/vm calls
      && [ -f "$HARV_DIR/serial.log" ]; then
     mkdir -p "$TMPD/verify"
     harvest_extract "$HARV_DIR/run-root.tar.gz" "$TMPD/verify" || return 1
+    harvest_manifest_nonempty || return 1
     if [ -s "$HARV_DIR/MANIFEST.sha256" ]; then
       if command -v sha256sum >/dev/null 2>&1; then
         (cd "$TMPD/verify" && sha256sum -c "$HARV_DIR/MANIFEST.sha256" >/dev/null) \
@@ -680,8 +709,10 @@ harvest_impl() { # returns rc; fills $HARV_DIR; records gdo/vm calls
   # 2a: remote sha256 manifest + tar over the run root
   # run-roots carry root-owned evidence (0600 slot tokens, container-
   # bind native-log dirs) — the manifest+tar step must read as root or
-  # the manifest silently skips members (REQ-XB-220 completeness)
-  vm "sudo sh -c 'rm -f /tmp/hh-manifest.sha256; mkdir -p \"$rroot\" && cd \"$rroot\" && find . -type f -print0 | sort -z | xargs -0 --no-run-if-empty sha256sum > /tmp/hh-manifest.sha256 && tar czf /tmp/hh-harvest.tar.gz . && sha256sum /tmp/hh-manifest.sha256 /tmp/hh-harvest.tar.gz'" \
+  # the manifest silently skips members (REQ-XB-220 completeness).
+  # DF-R7.3-4: no `mkdir -p` — a missing run root fails closed at `cd`
+  # instead of minting a trivially-"verified" empty dir (the X1 loss).
+  vm "sudo sh -c 'rm -f /tmp/hh-manifest.sha256; cd \"$rroot\" && find . -type f -print0 | sort -z | xargs -0 --no-run-if-empty sha256sum > /tmp/hh-manifest.sha256 && tar czf /tmp/hh-harvest.tar.gz . && sha256sum /tmp/hh-manifest.sha256 /tmp/hh-harvest.tar.gz'" \
     > "$TMPD/remote.sha" || return 1
   # 2b: copy back over IAP-scp
   gdo compute scp --tunnel-through-iap --project "$PROJECT" --zone "$ZONE" \
@@ -690,10 +721,13 @@ harvest_impl() { # returns rc; fills $HARV_DIR; records gdo/vm calls
   gdo compute scp --tunnel-through-iap --project "$PROJECT" --zone "$ZONE" \
     "$INSTANCE:/tmp/hh-manifest.sha256" "$HARV_DIR/MANIFEST.sha256" \
     >/dev/null || return 1
-  # 2c: verify locally — extract and check every hashed member (an empty
-  #     manifest means an empty run root — verified trivially)
+  # 2c: verify locally — extract and check every hashed member. An
+  #     empty manifest fails closed (DF-R7.3-4): it means the remote
+  #     run root was absent/empty and "verification" would pass
+  #     trivially while the window body is destroyed on delete.
   mkdir -p "$TMPD/verify"
   harvest_extract "$HARV_DIR/run-root.tar.gz" "$TMPD/verify" || return 1
+  harvest_manifest_nonempty || return 1
   if [ -s "$HARV_DIR/MANIFEST.sha256" ]; then
     if command -v sha256sum >/dev/null 2>&1; then
       (cd "$TMPD/verify" && sha256sum -c "$HARV_DIR/MANIFEST.sha256" >/dev/null) \

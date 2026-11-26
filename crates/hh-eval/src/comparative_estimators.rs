@@ -469,6 +469,70 @@ fn arm_cells(
     Ok((cells, membership.into_iter().collect()))
 }
 
+/// One member's per-task paired deltas — `Err(reason)` keeps the typed
+/// refusal verbatim: an unpaired task, an unresolved cell or a
+/// sub-floor cell refuses. This is the one member-delta rule —
+/// `confirmatory_family`'s members and `paired_deltas` share it,
+/// never a second implementation.
+fn cell_deltas(
+    tc: &ArmCellMap,
+    cc: &ArmCellMap,
+    test: &str,
+    control: &str,
+) -> Result<Vec<i64>, String> {
+    for t in tc.keys().chain(cc.keys()) {
+        if !tc.contains_key(t) {
+            return Err(format!("UnpairedTask: {t} has no cell for {test}"));
+        }
+        if !cc.contains_key(t) {
+            return Err(format!("UnpairedTask: {t} has no cell for {control}"));
+        }
+    }
+    let mut ds = Vec::with_capacity(tc.len());
+    for (t, &(tm_, ts_, tu)) in tc {
+        let &(cm, cs, cu) = &cc[t];
+        if tu > 0 {
+            return Err(format!("UnresolvedCell: ({t}, {test}) u={tu}"));
+        }
+        if cu > 0 {
+            return Err(format!("UnresolvedCell: ({t}, {control}) u={cu}"));
+        }
+        if tm_ < 5 || cm < 5 {
+            return Err(format!("insufficient_replicates: ({t}, {test}|{control})"));
+        }
+        ds.push(round_div(
+            (i128::from(ts_) * i128::from(cm) - i128::from(cs) * i128::from(tm_)) * i128::from(PPM),
+            i128::from(tm_) * i128::from(cm),
+        ));
+    }
+    if ds.len() < 2 {
+        return Err("one task — the family member needs T >= 2".into());
+    }
+    Ok(ds)
+}
+
+/// `paired_deltas(pop, kind, test_arm, control_arm, stratum)` — the
+/// per-task paired-delta vector a sign-flip p reads: the same
+/// `(m, s, u)` cells `comparative_estimand`/`confirmatory_family`
+/// count under `contrib` (the one counting rule, CC1). `Err(reason)`
+/// is the typed refusal a member keeps when the vector cannot pair —
+/// never a synthesized zero.
+pub fn paired_deltas(
+    pop: &PlannedPopulation,
+    kind: PopulationKind,
+    test_arm: &str,
+    control_arm: &str,
+    stratum: Option<&str>,
+) -> Result<Vec<i64>, String> {
+    let tc = arm_cells(pop, kind, test_arm, stratum)
+        .map_err(|e| format!("{e:?}"))?
+        .0;
+    let cc = arm_cells(pop, kind, control_arm, stratum)
+        .map_err(|e| format!("{e:?}"))?
+        .0;
+    cell_deltas(&tc, &cc, test_arm, control_arm)
+}
+
 /// The `(c, n)` cell list a fully-resolved arm carries — `UnresolvedCell`
 /// on any `u > 0`, `ShortCell` below the R ≥ 5 floor.
 fn resolved_cells(
@@ -1908,38 +1972,7 @@ pub fn confirmatory_family(
     }
     // One member's deltas — `Err(reason)` keeps the member unavailable.
     let member_deltas = |test: &str, control: &str| -> Result<Vec<i64>, String> {
-        let tc = &per_arm[test];
-        let cc = &per_arm[control];
-        for t in tc.keys().chain(cc.keys()) {
-            if !tc.contains_key(t) {
-                return Err(format!("UnpairedTask: {t} has no cell for {test}"));
-            }
-            if !cc.contains_key(t) {
-                return Err(format!("UnpairedTask: {t} has no cell for {control}"));
-            }
-        }
-        let mut ds = Vec::with_capacity(tc.len());
-        for (t, &(tm_, ts_, tu)) in tc {
-            let &(cm, cs, cu) = &cc[t];
-            if tu > 0 {
-                return Err(format!("UnresolvedCell: ({t}, {test}) u={tu}"));
-            }
-            if cu > 0 {
-                return Err(format!("UnresolvedCell: ({t}, {control}) u={cu}"));
-            }
-            if tm_ < 5 || cm < 5 {
-                return Err(format!("insufficient_replicates: ({t}, {test}|{control})"));
-            }
-            ds.push(round_div(
-                (i128::from(ts_) * i128::from(cm) - i128::from(cs) * i128::from(tm_))
-                    * i128::from(PPM),
-                i128::from(tm_) * i128::from(cm),
-            ));
-        }
-        if ds.len() < 2 {
-            return Err("one task — the family member needs T >= 2".into());
-        }
-        Ok(ds)
+        cell_deltas(&per_arm[test], &per_arm[control], test, control)
     };
     let member_row = |id: &str, test: &str, control: &str| -> (FamilyRowC, i64) {
         match member_deltas(test, control) {

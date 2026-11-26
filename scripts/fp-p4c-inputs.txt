@@ -1,0 +1,24 @@
+# fp-p4c-inputs.txt — the inputs manifest for the `fp_p4c_quote`
+# emitter (manifest 330/R7.4, GATE-G36 prep). The reader rule keeps
+# every docs/ relpath at script level, never in crates/**. Format:
+# name=relpath.
+# Inputs: the frozen `hh-p4-c-prereg/1` confirmation pre-registration
+# (its member list is the selection packet's output verbatim), the
+# minted `hh-p4-x-exploration/1` packet, and the X1-measured per-slot
+# cost/wall surfaces the model lines are priced from (the first
+# measured figures — never the §10.4 declared planning priors).
+c_prereg=docs/build/reports/2026-11-24-fp-p4c-prereg.json
+exploration=docs/build/reports/2026-11-24-fp-p4x-exploration.json
+wal_slot_costs=docs/build/reports/2026-11-24-fp-p4x1-wal-slot-costs.json
+slot_matrix=docs/build/reports/2026-11-24-fp-p4x1-slot-matrix.jsonl
+slots_lost=docs/build/reports/2026-11-24-fp-p4x1-slots-lost.json
+# The p4c compute declaration + its minted hh-compute-quote/1 record
+# (receipt_lib's one §3.10 path).
+compute_decl=scripts/gce-backend/declarations/fp-p4c.json
+compute_quote=docs/build/reports/2026-11-24-fp-p4c-compute-quote.json
+# Outputs: the comparative-quote/1 packet + its declared-inputs record
+# (both with sha256 sidecars). The packet authorizes nothing.
+quote=docs/build/reports/2026-11-24-fp-p4c-quote.json
+quote_sha256=docs/build/reports/2026-11-24-fp-p4c-quote.sha256
+quote_inputs=docs/build/reports/2026-11-24-fp-p4c-quote-inputs.json
+quote_inputs_sha256=docs/build/reports/2026-11-24-fp-p4c-quote-inputs.sha256

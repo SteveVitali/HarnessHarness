@@ -1,0 +1,81 @@
+{
+    "dataset": {
+        "contamination_scan_ref": "docs/build/reports/2026-11-19-fp-contamination-scan.json",
+        "revision": "a11591e931442908c34a5bc7a65e8e664f4752d7",
+        "secret_scan_ref": "docs/build/reports/2026-11-19-fp-answer-scan.json",
+        "visibility": "public"
+    },
+    "dataset_card_ref": {
+        "path": "docs/build/reports/2026-11-19-fp-dataset-card.md",
+        "sha256": "50c417b3c252bafffdae7f460e6d83572ef197fec6d313f0b7cd8d3e7212737a"
+    },
+    "dataset_flip": "done{human_h17:2026-11-19T04:23Z}",
+    "gate_row": "317 GATE-G31 (317_GATE-G31__pub-fp.md)",
+    "inputs": [
+        {
+            "path": "docs/build/reports/compute/2026-11-18-fp-ws1-l1-conformance.json",
+            "sha256": "bdbb0bc93a66988947e7f1712f9c9c397ba6ebbb9642d568fcf29c594e763218"
+        },
+        {
+            "path": "docs/build/reports/2026-11-20-fp-w4x-results-p3-l2-frozen.json",
+            "sha256": "9dff6ef4e0e954330e2713025b3943a7790b76330bb95b9caef623ea326c6d31"
+        },
+        {
+            "path": "docs/build/reports/2026-11-20-fp-w4x-l3-frozen.json",
+            "sha256": "1acf6f6c867d187a5c35a7985a773fd0798df9adbb2507982f3fe6cc5b4deba6"
+        }
+    ],
+    "inputs_digest": "sha256:6a7438a8252966fe1e96d48bec97cda3f3cdd73efbddab4fa5aea7ffc4ab0f51",
+    "labels": {
+        "evidence_class": "recorded execution",
+        "outside_verified": false
+    },
+    "pages": [
+        "/phase-3/"
+    ],
+    "phase": "phase-3",
+    "readout": "docs/build/readouts/GATE-G31.md",
+    "recorded_at": "2026-11-20 (HUMAN-H20 restore 18:26Z)",
+    "scan_refs": [
+        {
+            "path": "docs/build/reports/2026-11-19-fp-answer-scan.json",
+            "sha256": "f836343a99c056a0567fb2027fb4c9f9db0f90f6728765bc2cb75bddf0b13853"
+        },
+        {
+            "path": "docs/build/reports/2026-11-19-fp-contamination-scan.json",
+            "sha256": "421399fd7025375b288ce7cc01ecd8cde39bb75ee0942a8996e90647f8284cdd"
+        },
+        {
+            "path": "docs/build/reports/2026-11-19-fp-w4-answer-scan.json",
+            "sha256": "907f38d350dd0034b77fbdb6b6ed6cbad071b136209fba11c49bfd2215a42d88"
+        },
+        {
+            "path": "docs/build/reports/2026-11-19-fp-w4-flagged-review.json",
+            "sha256": "d56c0d91c16cca6a98c307246598ff457e3f00ce9e06cbbe748de632e50d312e"
+        },
+        {
+            "path": "docs/build/reports/2026-11-20-fp-w4x-answer-scan.json",
+            "sha256": "b132c026033718bac6a8282775482a300ffed438e2b343dbffe7f259de5cc1c3"
+        },
+        {
+            "path": "docs/build/reports/2026-11-20-fp-w4x-flag-analysis.json",
+            "sha256": "d8d98441e0ee73b5b18bc55374ffeda9fa6746dc89341d09c2391830de1325ce"
+        },
+        {
+            "path": "docs/build/reports/2026-11-20-fp-w4x-flagged-review.json",
+            "sha256": "27100660dcb66f5858959e96c548c75eb3c03de9b8e2be11cbcce65b91c7e2017d670caae51ca595f89a53d6bc055dc50e5e5e1ad2eb9c26f585f8cd"
+        }
+    ],
+    "schema": "hh-site-publication/1",
+    "supersedes": "phase-3-2026-11-20.json",
+    "supersession": {
+        "gate": "docs/adr/ADR-0453-w4x-extension-unblock-rulings.md",
+        "reason": "ADR-0453's executed-W4x supersession \u2014 the phase pages re-pin to the W4x post-review frozen packets folded over the cleared flagged passes (HUMAN-H20: 'all 69 cleared. continue' \u2014 69/69 flags cleared, 0 confirmed; the 2026-11-20 W4 pins stay append-only history)",
+        "review": {
+            "readout": "docs/build/readouts/HUMAN-H20.md",
+            "record": "docs/build/reports/2026-11-20-fp-w4x-flagged-review.json",
+            "sha256": "27100660dcb66f5858959e96c548c75eb3c03de9b8e2be11cbcce65b91c7e2017d670caae51ca595f89a53d6bc055dc50e5e5e1ad2eb9c26f585f8cd"
+        },
+        "ticket": "R6.57"
+    }
+}

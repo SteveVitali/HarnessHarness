@@ -33,7 +33,8 @@ use std::path::Path;
 use hharness_assembly::catalog::ClassCatalog;
 use hharness_assembly::grammar::{Assembly, ParamRequirement, ParamType, ParameterSpec};
 use hharness_assembly::resolve::{resolve, ResolveEnv};
-use hharness_assembly::space::{enumerate, space, Override, SweepDesign};
+use hharness_assembly::space::{apply_override, enumerate, space, Override, SweepDesign};
+use hharness_assembly::validate::{validate_assembly, Subject};
 use hharness_assembly::Stage1Catalog;
 use hharness_hir::document::{HirDocument, Node, SealedDefinition};
 use hharness_hir::kinds::EntityKind;
@@ -175,6 +176,119 @@ pub enum SweepRefusal {
         /// The two identities.
         detail: String,
     },
+    /// An input manifest or record named an outcome field — the
+    /// W-rule and the forecast read non-outcome token records only
+    /// (REQ-XD-205/REQ-XD-209; X-07).
+    OutcomeField {
+        /// The offending field.
+        field: String,
+    },
+    /// A `window_cap` conditioned on task or replicate — the §8.3
+    /// composite applies W identically to every task and replicate
+    /// (REQ-XD-205).
+    TaskConditionedCap {
+        /// What was conditioned.
+        detail: String,
+    },
+    /// Input padding — the supplement's padding ban applies to the
+    /// phase-4 composites too (REQ-XD-205 carrying REQ-XE-127).
+    InputPadding {
+        /// The padding member.
+        detail: String,
+    },
+    /// A call's applied lane value differs from the level's declared
+    /// pin — the level is ineligible for selection (REQ-XD-204).
+    MisPinned {
+        /// The level id and the offending call detail.
+        detail: String,
+    },
+    /// A stop rule whose class is outside the §8.4 declared set
+    /// (budget, infrastructure, integrity, catalog identity —
+    /// REQ-XD-210).
+    StopClass {
+        /// The undeclared class.
+        detail: String,
+    },
+    /// An outcome-based stop — stopping or gating on a measured
+    /// outcome is never an exploration stop rule (REQ-XD-210).
+    OutcomeStop {
+        /// The offending member.
+        detail: String,
+    },
+    /// A level-dropping rule — exploration never drops a level on
+    /// observed evidence (REQ-XD-210).
+    LevelDrop {
+        /// The offending member.
+        detail: String,
+    },
+    /// A pooled estimand drawing records from two cohorts — X0 and
+    /// X1 never pool, exploration and confirmation never pool
+    /// (REQ-XD-206).
+    PoolAcrossCohorts {
+        /// The two cohorts.
+        detail: String,
+    },
+    /// A confirmatory label on an exploration figure — every
+    /// exploration figure is labelled exploratory (REQ-XD-207).
+    ConfirmatoryLabel {
+        /// The offending member.
+        detail: String,
+    },
+    /// A figure or display that must carry a label carries none.
+    MissingLabel {
+        /// The member path.
+        member: String,
+    },
+    /// A selection-packet input manifest named a held-out record
+    /// (REQ-XD-212 — enforced, never promised).
+    HeldOutInput {
+        /// The offending entry.
+        detail: String,
+    },
+    /// A selection-packet input manifest named a phase-2 or phase-3
+    /// outcome record (REQ-XD-212).
+    ForeignOutcomeInput {
+        /// The offending entry.
+        detail: String,
+    },
+    /// The selection packet's hash does not predate the confirmation
+    /// pre-registration (REQ-XD-212's ordering rule).
+    HashOrdering {
+        /// What was out of order.
+        detail: String,
+    },
+    /// A selected configuration's exploration estimate displayed
+    /// without its selection label and simulated expected optimism
+    /// (REQ-XD-213).
+    SelectionLabelAbsent {
+        /// What was absent.
+        detail: String,
+    },
+    /// A claim citing the exploration estimate — the confirmatory
+    /// estimate is the claim (REQ-XD-213).
+    ClaimCitesExploration {
+        /// The offending claim.
+        detail: String,
+    },
+    /// A combined configuration that was not pre-declared
+    /// (REQ-XD-214).
+    UndeclaredCombination {
+        /// What was undeclared.
+        detail: String,
+    },
+    /// A combined configuration admitted outside confirmation
+    /// (REQ-XD-214 — confirmation only).
+    CombinationContext {
+        /// The phase it was attempted in.
+        detail: String,
+    },
+    /// A pre-registration's frozen rule that is not byte-equal to the
+    /// §8.5 frozen selection rule the machinery executes
+    /// (REQ-XD-211).
+    FrozenRuleMismatch {
+        /// What differed.
+        detail: String,
+    },
 }
 
 impl std::fmt::Display for SweepRefusal {
@@ -216,6 +330,60 @@ impl std::fmt::Display for SweepRefusal {
             SweepRefusal::MergeAcrossIdentities { detail } => {
                 write!(f, "refused{{merge_across_identities:{detail}}}")
             }
+            SweepRefusal::OutcomeField { field } => {
+                write!(f, "refused{{outcome_field:{field}}}")
+            }
+            SweepRefusal::TaskConditionedCap { detail } => {
+                write!(f, "refused{{task_conditioned_cap:{detail}}}")
+            }
+            SweepRefusal::InputPadding { detail } => {
+                write!(f, "refused{{input_padding:{detail}}}")
+            }
+            SweepRefusal::MisPinned { detail } => {
+                write!(f, "ineligible{{mis_pinned:{detail}}}")
+            }
+            SweepRefusal::StopClass { detail } => {
+                write!(f, "refused{{stop_class:{detail}}}")
+            }
+            SweepRefusal::OutcomeStop { detail } => {
+                write!(f, "refused{{outcome_stop:{detail}}}")
+            }
+            SweepRefusal::LevelDrop { detail } => {
+                write!(f, "refused{{level_drop:{detail}}}")
+            }
+            SweepRefusal::PoolAcrossCohorts { detail } => {
+                write!(f, "refused{{pool_across_cohorts:{detail}}}")
+            }
+            SweepRefusal::ConfirmatoryLabel { detail } => {
+                write!(f, "refused{{confirmatory_label_on_exploration:{detail}}}")
+            }
+            SweepRefusal::MissingLabel { member } => {
+                write!(f, "refused{{missing_label:{member}}}")
+            }
+            SweepRefusal::HeldOutInput { detail } => {
+                write!(f, "refused{{held_out_input:{detail}}}")
+            }
+            SweepRefusal::ForeignOutcomeInput { detail } => {
+                write!(f, "refused{{foreign_outcome_input:{detail}}}")
+            }
+            SweepRefusal::HashOrdering { detail } => {
+                write!(f, "refused{{hash_ordering:{detail}}}")
+            }
+            SweepRefusal::SelectionLabelAbsent { detail } => {
+                write!(f, "refused{{selection_label_absent:{detail}}}")
+            }
+            SweepRefusal::ClaimCitesExploration { detail } => {
+                write!(f, "refused{{claim_cites_exploration:{detail}}}")
+            }
+            SweepRefusal::UndeclaredCombination { detail } => {
+                write!(f, "refused{{undeclared_combination:{detail}}}")
+            }
+            SweepRefusal::CombinationContext { detail } => {
+                write!(f, "refused{{combination_outside_confirmation:{detail}}}")
+            }
+            SweepRefusal::FrozenRuleMismatch { detail } => {
+                write!(f, "refused{{frozen_rule_mismatch:{detail}}}")
+            }
         }
     }
 }
@@ -251,6 +419,9 @@ pub const LEVEL_OPTIONAL: &[&str] = &[
     "declaration_sha256",
     "reason",
     "admission_route",
+    "withheld",
+    "forecast",
+    "admission",
 ];
 
 /// The exercising branch of a level's liveness declaration.
@@ -339,6 +510,11 @@ pub fn check_registry(reg: &Json) -> Vec<SweepRefusal> {
             "label",
             "recorded_at",
             "baseline",
+            "admissibility",
+            // A superseding generation's lineage cite (R7.3 — the
+            // frozen gen-1 record stays byte-untouched; the cite is
+            // append-only, never an in-place edit).
+            "supersedes",
         ]
         .contains(&k.as_str())
         {
@@ -478,8 +654,17 @@ fn check_level(l: &Json, i: usize, tier1: &mut BTreeSet<String>, out: &mut Vec<S
 
 /// `freeze_registry(reg)` — the frozen record: the registry canonical
 /// bytes with `frozen_sha256` + `exploration_identity` stamped
-/// (REQ-XD-201's "frozen with its hash").
+/// (REQ-XD-201's "frozen with its hash"). The first-pass freeze is
+/// the `x1:` identity.
 pub fn freeze_registry(reg: &Json) -> Json {
+    freeze_registry_as(reg, "x1")
+}
+
+/// `freeze_registry_as(reg, tag)` — the tagged freeze: a later pass
+/// freezes its own registry under its own exploration tag (a level
+/// changed after the freeze is a new identity, REQ-XD-202 — the pass's
+/// record never merges with x1).
+pub fn freeze_registry_as(reg: &Json, tag: &str) -> Json {
     let mut m = as_obj(reg).cloned().unwrap_or_default();
     m.remove("frozen_sha256");
     m.remove("exploration_identity");
@@ -488,7 +673,7 @@ pub fn freeze_registry(reg: &Json) -> Json {
     m.insert("frozen_sha256".to_string(), Json::str(&sha));
     m.insert(
         "exploration_identity".to_string(),
-        Json::str(exploration_identity(&sha)),
+        Json::str(exploration_identity_as(tag, &sha)),
     );
     Json::Obj(m)
 }
@@ -496,7 +681,12 @@ pub fn freeze_registry(reg: &Json) -> Json {
 /// The exploration identity a frozen registry binds — the freeze hash
 /// itself names the identity (X1 for the first-pass freeze).
 pub fn exploration_identity(frozen_sha256: &str) -> String {
-    format!("x1:sha256:{frozen_sha256}")
+    exploration_identity_as("x1", frozen_sha256)
+}
+
+/// `exploration_identity_as(tag, sha)` — `<tag>:sha256:<hash>`.
+pub fn exploration_identity_as(tag: &str, frozen_sha256: &str) -> String {
+    format!("{tag}:sha256:{frozen_sha256}")
 }
 
 /// `registry_sha256(reg)` — the freeze digest over the registry's
@@ -626,6 +816,78 @@ pub fn materialize_level(
         sealed,
         version_id,
         level_spec,
+    })
+}
+
+/// `materialize_level_composite` — a level whose declaration is a
+/// *conjunction* of spellings (the §8.3 composite: S + W, or V7's
+/// tools + template). `enumerate`'s `OverrideList` enumerates one
+/// arm per spelling; a composite applies every spelling to ONE
+/// candidate, then takes the same validate → resolve → seal path
+/// (`apply_override` + `validate_assembly` inside `enumerate`, never
+/// a second delta interpreter — REQ-XD-205's S+W row).
+pub fn materialize_level_composite(
+    sp: &hharness_assembly::space::ParameterSpace,
+    level_id: &str,
+    spellings: &[&str],
+    env: &mut ResolveEnv<'_>,
+    catalog: &dyn ClassCatalog,
+    kernel: &ProvenanceRecord,
+) -> Result<SealedLevel, SweepRefusal> {
+    let overrides: Result<Vec<Override>, SweepRefusal> = spellings
+        .iter()
+        .map(|s| {
+            Override::parse(s).map_err(|e| SweepRefusal::UnexpressibleSurface {
+                detail: format!("{level_id}: spelling `{s}`: {e}"),
+            })
+        })
+        .collect();
+    let overrides = overrides?;
+    let mut doc = sp.base.clone();
+    for ov in &overrides {
+        apply_override(&mut doc, ov, kernel).map_err(|e| SweepRefusal::UnexpressibleSurface {
+            detail: format!("{level_id}: spelling `{}`: {e}", ov.spelling),
+        })?;
+    }
+    let validation = validate_assembly(Subject::Authored(&doc), catalog, None, kernel);
+    if !matches!(
+        validation.status,
+        hharness_assembly::diagnostics::ReportStatus::Pass
+            | hharness_assembly::diagnostics::ReportStatus::PassWithWarnings
+    ) {
+        let why = validation
+            .diagnostics
+            .first()
+            .map(|d| format!("{:?}: {}", d.code, d.subject))
+            .unwrap_or_else(|| "rejected".to_string());
+        return Err(SweepRefusal::UnexpressibleSurface {
+            detail: format!("{level_id}: the declared params cannot express the delta ({why})"),
+        });
+    }
+    let sealed = resolve(&doc, env).map_err(|diags| SweepRefusal::UnexpressibleSurface {
+        detail: format!(
+            "{level_id}: resolve refused: {}",
+            diags
+                .iter()
+                .map(|d| format!("{:?}", d.code))
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+    })?;
+    let version_id = sealed.definition_ref.version_id.clone();
+    Ok(SealedLevel {
+        level_id: level_id.to_string(),
+        spellings: spellings.iter().map(|s| s.to_string()).collect(),
+        sealed,
+        version_id: version_id.clone(),
+        level_spec: LevelSpec {
+            level_id: level_id.to_string(),
+            ref_: version_id,
+            overrides: Some(Json::Arr(spellings.iter().map(|s| Json::str(*s)).collect())),
+            label: SWEEP_VARIANT_LABEL.to_string(),
+            class: ParticipantClass::Native,
+            non_portable: false,
+        },
     })
 }
 
@@ -1095,6 +1357,18 @@ pub fn sweep_seeded_store(dir: &Path) -> RegistryStore {
     store
 }
 
+/// `class_record_for_p4` — the fixture class-record builder, shared
+/// with the pass-2 seeded store (one implementation, CC1).
+pub fn class_record_for_p4(id: &str) -> ClassRecord {
+    sweep_class_record(id)
+}
+
+/// `variant_record_for_p4` — the fixture variant-record builder,
+/// shared with the pass-2 seeded store.
+pub fn variant_record_for_p4(class_ref: &str, variant_id: &str) -> VariantRecord {
+    sweep_variant_record(class_ref, variant_id)
+}
+
 fn sweep_class_record(id: &str) -> ClassRecord {
     ClassRecord {
         class_id: id.to_string(),
@@ -1233,6 +1507,202 @@ pub struct V5Materialization {
 /// `sealed_definition_json` — the canonical export spelling.
 pub fn sealed_json(s: &SealedDefinition) -> Json {
     hharness_hir::wire::sealed_definition_json(s)
+}
+
+// ── the corrected V5 seal (R6.55; ADR-0453 extension ruling) ─────────────────
+//
+// W4's bound V5 document re-spelled the level's `version_id` pins as
+// `version_selector:"sha256:<vid>"` — a selector spelling the grammar
+// never admitted (`latest | label:<l> | version:<vid> | range: | deny:`),
+// so the slot's `resolve` refused `RefUnresolved` and the arm recorded
+// `verifier_unavailable`. The ADR-0453 ruling: the original sealed
+// artifact (`level_ref sha256:38d1389a…`) stays byte-untouched; the
+// correction is a NEW sealed document minted through the real
+// resolve→seal path whose authored selectors spell `version:<vid>`
+// against the **kernel's own Stage-1 seed set** (`suites::seed_stage1`
+// — the same content-derived `version_id`s a slot's store carries, so
+// the corrected seal's pins resolve on the window's probe/store without
+// a derived-selector rewrite).
+
+/// The corrected V5 materialization result.
+#[derive(Debug)]
+pub struct V5Correction {
+    /// The newly sealed `version_id` — the corrected artifact's identity.
+    pub version_id: String,
+    /// The sealed corrected document (canonical JSON).
+    pub sealed_json: Json,
+    /// The published `version_id`s the authored `version:<vid>` selectors
+    /// named (slot → vid — recorded so the supersession record cites the
+    /// concrete pins).
+    pub bound_vids: BTreeMap<String, String>,
+    /// The registry snapshot the resolve recorded.
+    pub snapshot_id: String,
+}
+
+/// The kernel Stage-1 seed's published `version_id` for `hh/<name>`.
+fn seeded_vid(store: &RegistryStore, variant_id: &str) -> Result<String, SweepRefusal> {
+    for vid in store.version_ids() {
+        if let Some((_, RegistryRecord::Variant(v))) = store.get(vid) {
+            if v.variant_id == variant_id {
+                return Ok(vid.clone());
+            }
+        }
+    }
+    Err(SweepRefusal::UnexpressibleSurface {
+        detail: format!("seed published no {variant_id}"),
+    })
+}
+
+/// The authored corrected V5 document — the `sweep_baseline_doc` shape
+/// with the W4 bound substitutions applied honestly: `model_port` binds
+/// `hh/gateway_http` (the env-mediated provider lane) under a
+/// `version:<vid>` selector naming the **published** vid; `context_policy`
+/// and `control_strategy` re-spell their pins as `version:<vid>`; the
+/// model-port params are the recorded W4 bound set (env: indirections +
+/// `transcript_render.assistant_replay.reasoning` still on the
+/// `$param:reasoning_replay` marker so the declared override flow is
+/// unchanged); the process environment names the window's `cell:task`.
+fn corrected_v5_doc(gw_vid: &str, rr_vid: &str, fw_vid: &str) -> HirDocument {
+    let mut doc = sweep_baseline_doc();
+    let mut a = Assembly::from_json(
+        doc.assembly.as_ref().expect("baseline carries assembly"),
+        "/assembly",
+        &ProvenanceRecord::kernel("sweep:seal", 0),
+        &mut Vec::new(),
+    )
+    .expect("baseline assembly decodes");
+    a.values
+        .insert("reasoning_replay".to_string(), Json::str("drop"));
+    // `model_port` — the env-mediated provider lane, version-pinned.
+    let mut mp = SlotBinding::of(ComponentVariantRef::selected(
+        "model_port",
+        "hh/gateway_http",
+        format!("version:{gw_vid}"),
+    ));
+    mp.params = BTreeMap::from([
+        ("credential_ref".to_string(), Json::str("env:HH_L1_API_KEY")),
+        ("dialect_ref".to_string(), Json::str("openai-compatible@1")),
+        ("endpoint".to_string(), Json::str("env:HH_L1_ENDPOINT")),
+        (
+            "provider_model_id".to_string(),
+            Json::str("env:HH_L1_MODEL"),
+        ),
+        ("provider_params".to_string(), Json::obj([])),
+        (
+            "retry".to_string(),
+            Json::obj([
+                ("attempts", Json::Int(10)),
+                (
+                    "classes",
+                    Json::Arr(vec![Json::str("rate_limited"), Json::str("server_error")]),
+                ),
+            ]),
+        ),
+        ("tool_choice".to_string(), Json::str("omit")),
+        (
+            "transcript_render".to_string(),
+            Json::obj([(
+                "assistant_replay",
+                Json::obj([("reasoning", Json::str("$param:reasoning_replay"))]),
+            )]),
+        ),
+        ("transport".to_string(), Json::str("non_stream")),
+    ]);
+    a.slots
+        .insert("model_port".to_string(), SlotBindings::One(mp));
+    a.slots.insert(
+        "control_strategy".to_string(),
+        SlotBindings::One(SlotBinding::of(ComponentVariantRef::selected(
+            "control_strategy",
+            "hh/round_robin",
+            format!("version:{rr_vid}"),
+        ))),
+    );
+    a.slots.insert(
+        "context_policy".to_string(),
+        SlotBindings::One(SlotBinding::of(ComponentVariantRef::selected(
+            "context_policy",
+            "hh/full_window",
+            format!("version:{fw_vid}"),
+        ))),
+    );
+    doc.assembly = Some(a.to_json());
+    // The root native's slots ride the same bindings (materialise would
+    // project them anyway) and the environment names the window cell —
+    // `env:sweep` never existed on the lane (the baseline bound doc's
+    // `cell:task` is the recorded window spelling).
+    let root_id = doc.root.semantic_id.clone();
+    for n in &mut doc.nodes {
+        if n.semantic_id() != root_id {
+            continue;
+        }
+        if let KindRecord::AgentProcess(ap) = &mut n.semantic {
+            if let AgentProcessBody::Native(nat) = &mut ap.body {
+                nat.slots = a.slots.clone();
+                nat.environment = EnvironmentRef {
+                    environment: "cell:task".to_string(),
+                };
+            }
+        }
+    }
+    doc
+}
+
+/// `corrected_v5(work_dir)` — mint the corrected V5 sealed document:
+/// seed a store with the kernel's own Stage-1 set, author the corrected
+/// doc with `version:<vid>` selectors naming the published heads, then
+/// run the real `resolve` (the same parser that refused `sha256:<vid>`
+//  as `RefUnresolved` in W4) and `hir::ops::seal`. Deterministic — the
+/// seed rows, the resolved_at stamp and the authored doc are fixed.
+pub fn corrected_v5(work_dir: &Path) -> Result<V5Correction, SweepRefusal> {
+    let kernel = ProvenanceRecord::kernel("sweep:seal", 0);
+    let mut store =
+        RegistryStore::open(work_dir.join("registry"), &kernel).expect("correction store opens");
+    hharness_registry::suites::seed_stage1(&mut store);
+    let gw = seeded_vid(&store, "hh/gateway_http")?;
+    let rr = seeded_vid(&store, "hh/round_robin")?;
+    let fw = seeded_vid(&store, "hh/full_window")?;
+    let authored = corrected_v5_doc(&gw, &rr, &fw);
+    let catalog = Stage1Catalog::stage1();
+    let mut env = ResolveEnv {
+        registry: &mut store,
+        catalog: &catalog,
+        snapshot_id: None,
+        mode: ResolveMode::Audit,
+        registrar: kernel.clone(),
+        resolved_at: 1_763_000_000_000,
+        notices: None,
+    };
+    let sealed =
+        resolve(&authored, &mut env).map_err(|diags| SweepRefusal::UnexpressibleSurface {
+            detail: format!(
+                "corrected V5 resolve refused: {}",
+                diags
+                    .iter()
+                    .map(|d| format!("{:?}:{}", d.code, d.subject))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            ),
+        })?;
+    let snapshot_id = sealed
+        .document
+        .assembly
+        .as_ref()
+        .and_then(|a| a.get("resolved"))
+        .and_then(|r| r.get("registry_snapshot_id"))
+        .and_then(Json::as_str)
+        .unwrap_or_default()
+        .to_string();
+    Ok(V5Correction {
+        version_id: sealed.definition_ref.version_id.clone(),
+        sealed_json: hharness_hir::wire::sealed_definition_json(&sealed),
+        bound_vids: BTreeMap::from([
+            ("model_port".to_string(), gw),
+            ("control_strategy".to_string(), rr),
+            ("context_policy".to_string(), fw),
+        ]),
+        snapshot_id,
+    })
 }
 
 /// The V5 liveness declaration — the §8.1 row: request-diff kind,
@@ -1474,4 +1944,10 @@ fn t2(id: &str, factor: &str, reason: &str, route: &str) -> Json {
         ("upstream_locator", Json::str("HH-only")),
         ("tier", Json::Int(2)),
     ])
+}
+
+/// `t2_for_p4` — the Tier-2 entry builder, shared with the pass-2
+/// registry (one implementation, CC1).
+pub fn t2_for_p4(id: &str, factor: &str, reason: &str, route: &str) -> Json {
+    t2(id, factor, reason, route)
 }

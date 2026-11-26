@@ -1,0 +1,2 @@
+c6fa0ffa9494e6023bbb03a04d9a416a560afe965fb0c0aea5150bcdd54059cf  docs/build/reports/2026-11-21-fp-p4x-quote-inputs-gen3.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-21-fp-p4x-quote-inputs-gen3.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)

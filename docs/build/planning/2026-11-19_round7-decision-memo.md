@@ -69,3 +69,26 @@ appendix range; the two owed ADRs).
 **Recommendation:** O-1 conditioned on all preconditions; O-2 is the
 honest default if budget/timeline does not admit a second window. O-3
 changes requirement dispositions — it is a gate act, not a memo act.
+
+---
+
+## Addendum 2026-11-19 (post-ADR-0453) — what the W4 extension adds to the Round-7 picture
+
+ADR-0453's rulings are executing inside Round 6's manifest (inserts 325d–325f), not Round 7 —
+but they change what a Round-7 manifest would inherit:
+
+- **Pi + Claude-Code admission** — if R6.55's PP0 battery lands AG3/AG5/AG6(/AG8) evidence and
+  R6.56's window runs them, the comparative arm set grows from the protected pair to five
+  real arms; P2-FP's frozen members become a superseding packet. If admission still fails, the
+  typed `not_run{admission}` rows carry into Round-7 scope verbatim.
+- **Corrected V5** — a `version:<vid>`-grammar sealed doc (original byte-untouched) makes V5 a
+  real arm; its 20 `verifier_unavailable` outcomes may be superseded by executed results.
+- **Still-open engineering rows** the memo's precondition note already names: DF-CAP6.1-1…5
+  (checker/register hygiene), DF-R6.45l-1 (runtime-observed transitive host derivation — needs
+  its own derivation ticket), BL-50 (Round-5 G17-carried scope dispositions — operator decision,
+  not engineering).
+- **Clock item**: the W4 ≥24h billing confirming read (demoted from gate to check by ADR-0453
+  ruling 5) lands ≥2026-11-20T17:50Z — recorded honestly whichever way it reads.
+
+The memo's O-1/O-2/O-3 options stand; the extension outcome only sharpens whether a second-pass
+window (O-1) would run against a 5-arm or a 2-arm comparative set.

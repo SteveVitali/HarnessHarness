@@ -1,0 +1,132 @@
+{
+  "authorization": {
+    "ceiling_micros": 4690420,
+    "gate": "ADR-0453",
+    "quote_id": "pq-b70e6859db3f6011",
+    "readout_path": "docs/adr/ADR-0453-w4x-extension-unblock-rulings.md",
+    "verbatim_sha256": "ad92a45346d3440877020e06e016754499169148f4d5d2d811759ab12077549e"
+  },
+  "commands": [
+    {
+      "argv_redacted": [
+        "auth",
+        "list",
+        "--format=value(account)"
+      ],
+      "ended_at": "2026-11-20T15:38:10Z",
+      "exit": 0,
+      "started_at": "2026-11-20T15:38:10Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "14stevevitali@gmail.com\n",
+      "stdout_sha256": "664266223ad53c9a2e5c5b893f89cc7a92975b49c96485cff8ed26ecaa89e950"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "ssh",
+        "hh-fp-w4xv",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "--tunnel-through-iap",
+        "--command",
+        "hh-runner drain --window 'w4xv' --inconclusive teardown"
+      ],
+      "ended_at": "2026-11-20T15:38:11Z",
+      "exit": 1,
+      "started_at": "2026-11-20T15:38:10Z",
+      "stderr_excerpt": "ERROR: (gcloud.compute.ssh) Could not fetch resource:\n - The resource 'projects/hh-fp-a1b2c3/zones/us-central1-a/instances/hh-fp-w4xv' was not found\n\n",
+      "stdout_excerpt": "",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "instances",
+        "list",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-20T15:38:12Z",
+      "exit": 0,
+      "started_at": "2026-11-20T15:38:11Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[]\n",
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "ssh",
+        "hh-fp-w4xv",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "--tunnel-through-iap",
+        "--command",
+        "cat /proc/uptime; df -BG --output=avail / | tail -1"
+      ],
+      "ended_at": "2026-11-20T15:38:16Z",
+      "exit": 1,
+      "started_at": "2026-11-20T15:38:15Z",
+      "stderr_excerpt": "ERROR: (gcloud.compute.ssh) Could not fetch resource:\n - The resource 'projects/hh-fp-a1b2c3/zones/us-central1-a/instances/hh-fp-w4xv' was not found\n\n",
+      "stdout_excerpt": "",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "declaration": {
+    "path": "scripts/gce-backend/declarations/fp-w4xv-r656.json",
+    "sha256": "6eee766eec3124a4f3fe7b7b2f30017fa3aec6f5791bb3ac75d920ad60ccf22d"
+  },
+  "harvest": {
+    "journald": {
+      "path": "/private/tmp/hh-r6.53-wt/docs/build/reports/compute/harvest/fp-w4xv/journald.log",
+      "sha256": "a28de5a5ddd733328e67e233e754f1f2062cbb1259622c4e9cd1b3805f39e6c7"
+    },
+    "manifest": {
+      "path": "/private/tmp/hh-r6.53-wt/docs/build/reports/compute/harvest/fp-w4xv/MANIFEST.sha256",
+      "sha256": "5d3f15e139d92b7e53cf899170e85d9620d1ef33c32f77fe3c75c4ca35e2b7ef"
+    },
+    "run_root_tar": {
+      "path": "/private/tmp/hh-r6.53-wt/docs/build/reports/compute/harvest/fp-w4xv/run-root.tar.gz",
+      "sha256": "b6881bcc001d38f724d749f6bbc74fdcc47d16f44bf0ca844729a883e5b1edb7"
+    },
+    "serial": {
+      "path": "/private/tmp/hh-r6.53-wt/docs/build/reports/compute/harvest/fp-w4xv/serial.log",
+      "sha256": "c101d6d47d1abc4338f01143d0950301ff6a60e3d049fd6815635773dee4fe4f"
+    },
+    "verified_locally": true
+  },
+  "kind": "harvest",
+  "phase": "fp",
+  "provided": {
+    "OLLAMA_API_KEY": "yes",
+    "gcloud_auth": "yes"
+  },
+  "recipe": {
+    "git_head": "82cdfa74d14ef45de271510f4994fc8e917190f1",
+    "path": "scripts/gce-backend.sh",
+    "sha256": "7a415c041c6660f6e1f1fa7814eff0f62c721e64ed67d2a4acbeeb32ae138590"
+  },
+  "recorded_at": "2026-11-20T15:38:16Z",
+  "resources": {
+    "creation_timestamp": null,
+    "deletion_operation_end": null,
+    "disks": [],
+    "external_ipv4": "absent",
+    "instance_id": null,
+    "instance_name": null,
+    "machine_type": "e2-standard-8",
+    "project_id": "hh-fp-a1b2c3",
+    "project_number": null,
+    "zone": "us-central1-a"
+  },
+  "schema": "hh-compute-receipt/1",
+  "ticket": "R6.56",
+  "verification": null,
+  "window": "w4xv"
+}

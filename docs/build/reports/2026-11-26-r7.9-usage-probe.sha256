@@ -1,0 +1,2 @@
+224fb4b7e61e09ae04402c78903f2549bff997bb08bcbeef5bd967efade6313b  docs/build/reports/2026-11-26-r7.9-usage-probe.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-26-r7.9-usage-probe.sha256 (run from the repo root)

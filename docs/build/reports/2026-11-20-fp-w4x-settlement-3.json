@@ -1,0 +1,45 @@
+{
+ "attempt": "a4",
+ "attribution": {
+  "conclusion": "trailing-24h read at 18:05Z/18:45Z agrees at 9,622,700 \u00b5$ total. Nonzero buckets 03:00\u201310:00Z ($7.76254) span the a4 window 03:18\u201310:35Z \u2014 all inside window hours, zero post-teardown usage; harness-tracked a4 spend 10,930,000 \u00b5$ exceeds provider-side window-hour billing $7.76 \u2014 the harness figure is the conservative bound and stands; the delta direction is provider<tracked here (usage-less SSE legs bounded by projection, not double-billed)",
+  "provider_trailing_24h_usd": 9.6227,
+  "provider_window_hours_usd": 7.76254,
+  "window_span": "2026-11-20T03:18:46Z\u219210:35:00Z (a4); teardown 10:35Z"
+ },
+ "balance_observed": "included-allowance 36.68009 USD remaining of 60; purchased 0",
+ "boundary_flags": [
+  "concurrent_hour_unattributed",
+  "unmetered_streaming_usage"
+ ],
+ "kind": "confirming_read",
+ "phase": "fp",
+ "provided": {
+  "OLLAMA_API_KEY": "yes"
+ },
+ "reads": [
+  {
+   "file": "~/hh-retained/w4x/settle/settlement-3-usage.json",
+   "kind": "usage-1",
+   "read_at": "2026-11-20T18:05:24Z",
+   "status": 200
+  },
+  {
+   "file": "~/hh-retained/w4x/settle/settlement-3-usage2.json",
+   "kind": "usage-2",
+   "read_at": "2026-11-20T18:45:01Z",
+   "status": 200
+  },
+  {
+   "file": "~/hh-retained/w4x/settle/settlement-3-balance.json",
+   "kind": "balance",
+   "read_at": "2026-11-20T18:06:26Z",
+   "status": 200
+  }
+ ],
+ "recorded_at": "2026-11-20T18:45:40Z",
+ "schema": "hh-fp-settlement/1",
+ "status": "settled_discrepant{unmetered_streaming_usage} \u2014 unchanged; the confirming read adds no post-window leakage",
+ "supersedes_note": "confirms 2026-11-20-fp-w4x-settlement-2.json (settled_discrepant{unmetered_streaming_usage}); does not restate it",
+ "ticket": "R6.56",
+ "window": "w4x"
+}

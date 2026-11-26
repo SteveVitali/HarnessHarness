@@ -1,0 +1,2 @@
+1d55d48a803c00848c9306c8d2bec4552f98031e52ec80eafa3d8c47ae7e722d  docs/build/reports/2026-11-24-fp-p4c-prereg.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-24-fp-p4c-prereg.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)

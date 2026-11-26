@@ -1,0 +1,2 @@
+0670634b1e7bb8b195566fca85b514d12dc8c3c84740871f52644b9a55b52f0f  docs/build/reports/2026-11-20-fp-w4x-admission-claude-code-executed.json
+# recompute: shasum -a 256 -c 2026-11-20-fp-w4x-admission-claude-code-executed.sha256 (run from the repo root)

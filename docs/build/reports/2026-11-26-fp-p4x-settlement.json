@@ -1,0 +1,44 @@
+{
+ "attribution": {
+  "boundary_mix": "Nov-24 $15.99 includes P4-C window-1's first ~3.4 h (~20:40Z launch); per-day granularity cannot split the boundary \u2014 recorded verbatim",
+  "conclusion": "provider billed daily buckets Nov-21 $1.85 + Nov-22 $0.00 + Nov-23 $6.37 + Nov-24 $15.99 = $24.21 over the X0+X1 window span (X0 ~Nov-21\u219222, X1 p4x-x1-r3 Nov-23\u2192~20:40Z Nov-24); Nov-24's bucket is boundary-mixed with P4-C window-1's first ~3.4 h (launched 20:40Z, a few \u00b5$M) and the shared account carries non-window usage, so the provider-side window-span figure exceeds recorded $21.08 model (X0 $1.83 + X1 $19.25 WAL-authoritative) \u2014 direction provider>recorded consistent with the concurrent-usage/boundary class, the recorded figure stands",
+  "provider_window_days_usd": 24.21,
+  "window_span": "X0 ~2026-11-21\u219222; X1 2026-11-23\u21922026-11-24 ~20:40Z; X1 teardown Nov-24 (p4x VM deleted at its closeout \u2014 zero instances in project hh-p4-a1b2c3 prior to p4c provisioning)"
+ },
+ "balance_observed": "purchased 3.42965 USD remaining; included allowance 0 of period 2026-11-22\u21922026-12-22",
+ "boundary_flags": [
+  "concurrent_day_unattributed",
+  "shared_account_non_window_usage",
+  "nov24_boundary_mixed_with_p4c_w1_start"
+ ],
+ "kind": "confirming_read",
+ "phase": "fp",
+ "provided": {
+  "OLLAMA_API_KEY": "yes"
+ },
+ "reads": [
+  {
+   "file": "~/hh-retained/p4x/settle/h21-usage.json",
+   "kind": "usage-24h",
+   "read_at": "2026-11-26T07:14:01Z",
+   "status": 200
+  },
+  {
+   "file": "~/hh-retained/p4x/settle/h21-balance.json",
+   "kind": "balance",
+   "read_at": "2026-11-26T07:12:55Z",
+   "status": 200
+  },
+  {
+   "file": "~/hh-retained/p4c/settle/h21-usage-7d.json",
+   "kind": "usage-7d",
+   "read_at": "2026-11-26T07:15:5xZ",
+   "status": 200
+  }
+ ],
+ "recorded_at": "2026-11-26T07:20:00Z",
+ "schema": "hh-fp-settlement/1",
+ "status": "settled \u2014 model `within` (provider window-span $24.21 vs recorded $21.08, boundary-mixed); compute `unavailable` (GCP billed figure unreachable \u2014 recorded estimates $9.00 X1 + dead-man idle stand); \u226524 h post-teardown clock elapsed (X1 teardown Nov-24)",
+ "ticket": "HUMAN-H21",
+ "window": "p4x0+p4x1"
+}

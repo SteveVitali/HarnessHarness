@@ -79,6 +79,9 @@ the merged-main SHA, then tag it; any gitleaks finding → rotate first, history
 - **HUMAN-H17** (`318_HUMAN-H17__dataset-flip.md`): HF dataset visibility flip after both scans; revision pinned; `Status: DEFERRED` + DF id withholds the viewer claim
 - **HUMAN-H18** (`320_HUMAN-H18__billing-reconcile.md`): Consolidated billing reconciliation: one dated entry per window (W1, W2, W3, Wc, W4), each a billing read ≥ 24 h after that window’s teardown, appended as soon as it is due; W3/Wc entries `N/A` when the window did not r…
 
+**Round 7 HUMAN rows (§8.x second pass)** — owner: the operator.
+- **HUMAN-H21** (`334_HUMAN-H21__r7-billing.md`): Round-7 billing/settlement reconciliation — one dated entry per executed window ≥ 24 h post-teardown (the H18 consolidated pattern); billed-figure claims withheld until the entries land
+
 ## The chain
 
 | # | file | phase | kind | scope | gate |
@@ -652,6 +655,41 @@ Source: [ratified experiments supplement](../experiments-spec.md) (canonical v0.
 | 325a | `325a_R6.52__w4-resurrect.md` | Round 6 addendum | ticket | W4 resurrection window (ADR-0452 operator amendment): undelete `hh-fp-a1b2c3`, provision+declare, run protected pair + V5, Pi/CC `not_run{admission}`, teardown+receipts | GATE-G32, ADR-0452 |
 | 325b | `325b_R6.53__w4-results-refold.md` | Round 6 addendum | ticket | W4 results re-fold: superseding P2-FP/P3-L2/P4-FP packets + publication records over executed evidence | 325a |
 | 325c | `325c_R6.54__w4-reconcile-addendum.md` | Round 6 addendum | ticket | W4 reconcile addendum: H18 billing entry superseding `N/A{scope_end}` + SETTLE-W4 confirming reads | 325b |
+| 325d | `325d_R6.55__w4x-adapters-pp0.md` | Round 6 addendum | ticket | W4-extension prep (ADR-0453): corrected V5 sealed doc (new vid, supersession recorded) + Pi/Claude-Code real adapters (harness configs, install wiring, headless invocation) + PP0 $0 smoke battery → AG3/AG5/AG6/AG8 admission evidence + BL-49 facade exception (offline, $0) | 325c, ADR-0453 |
+| 325e | `325e_R6.56__w4x-window.md` | Round 6 addendum | ticket | W4-extension window (ADR-0453, $100 ceiling): undelete `hh-fp-a1b2c3` → provision+declare → run Pi (50) + Claude-Code (50) + corrected-V5 (50) → teardown → receipts → settle → archive | 325d |
+| 325f | `325f_R6.57__w4x-fold.md` | Round 6 addendum | ticket | W4-extension fold + reconcile: outcomes/packets supersession, phase-2 `hh-site-publication/1` (publish — same terms as G31, verbatim ADR-0453), flagged review routing as needed, H18/settlement addenda, closure bookkeeping | 325e |
+
+### Round 7 — 2026-11-20 · §8.x exploration/confirmation second pass (decompose-spec mode=extend; tail=minimal)
+
+Scope ruling: GATE-G34 PASSED 2026-11-20 (`docs/build/readouts/GATE-G34.md`), recorded as
+ADR-0454 — operator verbatim "O1 approve, O-2 i'm not sure, O-3 approved, yes fold in
+BL-50. go". O-1 = the bounded second pass over CAP6.2's 18 routed §8.x ids
+(`docs/build/reports/round6/LATER_PASS_ROUTING.md`); O-3 = the conditional permanent
+scope-out minting at the pass's honest terminal state; BL-50 folded into the closure.
+Registration authorizes no spend, provisioning, publication or merge — every window
+declares its envelope up front and stops at its own gate (the R6.45x skeleton→flesh
+pattern; REQ-XD-221's recorded-verbatim authorizations). Partition + decisions:
+`docs/build/planning/2026-11-20_round7-decomposition.md`.
+
+| # | file | phase | kind | scope | gate |
+|---|---|---|---|---|---|
+| 326 | `326_R7.1__p4-admissibility.md` | Round 7 | ticket | Level-admissibility machinery (offline): the pass's frozen sweep-registry record (new exploration identity), tier-2 admission (REQ-XD-225), effort lane + proxy pin (REQ-XD-204), W-rule derivation from non-outcome token records (REQ-XD-205 + REQ-XE-127), activation fold (REQ-XD-208), inert forecast (REQ-XD-209) | — |
+| 327 | `327_R7.2__p4-prereg-selection.md` | Round 7 | ticket | Exploration pre-registration + frozen selection machinery (offline): declared X0/X1 design (REQ-XD-206), stop rules (REQ-XD-210), packet labels (REQ-XD-207), frozen selection rule (REQ-XD-211), deterministic selection packet (REQ-XD-212), optimism labels (REQ-XD-213), combination (REQ-XD-214) | — |
+| 328 | `328_GATE-G35__p4-x.md` | Round 7 | gate | G-P4-X: authorize the X0+X1 exploration envelope — declared slots/arms/ceiling, verbatim model+compute authorizations outside the pilot authorization (REQ-XD-221 leg 1) | STOP |
+| 329 | `329_R7.3__x0x1-window.md` | Round 7 | ticket | X0+X1 exploration window body — declared envelope upfront; fleshes only after GATE-G35 PASSED | — |
+| 330 | `330_R7.4__x1-fold-confirm-prereg.md` | Round 7 | ticket | X1 fold (offline): exploration packet, selection packet minted (hash predates the confirmation pre-registration), confirmation pre-registration frozen (REQ-XD-217), confirmation quote (REQ-XD-218) | — |
+| 331 | `331_GATE-G36__p4-c.md` | Round 7 | gate | G-P4-C: authorize the held-out confirmation envelope — frozen member list, T=37 census, hash-before-subjects (REQ-XD-221 leg 2) | STOP |
+| 332 | `332_R7.5__confirm-window.md` | Round 7 | ticket | Held-out confirmation window body — declared envelope upfront; fleshes only after GATE-G36 PASSED | — |
+| 333 | `333_R7.6__confirm-fold-claims.md` | Round 7 | ticket | Confirmation fold + claims packet (offline): Holm estimation (REQ-XD-216), null/inconclusive dispositions (REQ-XD-219), §8.8 two-statement claims | — |
+| 334 | `334_HUMAN-H21__r7-billing.md` | Round 7 | human | Round-7 billing/settlement reconciliation — one dated entry per executed window ≥ 24 h post-teardown (H18 pattern) | — |
+| 335 | `335_CAP7.1__gap-analysis.md` | Round 7 | capstone | Pass terminal-state gap analysis: per-id verdicts over the 18 routed §8.x ids; honest terminal-state determination; DF-R6.45l-1 discharge verification | — |
+| 336 | `336_CAP7.2__closure-scope-out.md` | Round 7 | capstone | Closure: O-3 disposition record mint (per-id verbatim, conditional on the terminal state), BL-50's 40 rows dispositioned, register/lead-token reconciliation | — |
+| 337 | `337_GATE-G37__accept.md` | Round 7 | gate | Round-7 acceptance — terminal state + minted O-3 record + BL-50 + reconciliation verified; an incomplete pass re-presents the O-3 ruling here | STOP |
+| 338 | `338_DOC7.1__docs.md` | Round 7 | docs | Docs refresh over accepted Round-7 evidence (§8.x surfaces, claims checks, bookkeeping) | — |
+| 339 | `339_GATE-G38__pub-p4c.md` | Round 7 | gate | PUB-P4-C: authorize phase-4 second-pass publication — pinned `hh-p4-c-confirmation/1` input set, packet-only transcript surface | — |
+| 340 | `340_R7.7__pub-p4c-land.md` | Round 7 | ticket | Publication leg: `p4c-confirm` site input + `hh-p4-c-confirmation/1` renderer + `hh-site-publication/1` mint (gate_row GATE-G38) + site-data regen + claims checks | — |
+| 341 | `341_R7.8__df-sweep.md` | Round 7 | ticket | Machinery-debt sweep: DF-R7.5-1/-2, DF-CAP7.1-1/-2, DF-R7.3-4(a) repairs; DF-R7.3-2 disposition; DF-R7.3-1 ADR draft; compute-open receipt; PR-424 conflict resolution | — |
+| 342 | `342_R7.9__probe-v345.md` | Round 7 | ticket | DF-R7.1-2 unblock: usage/activation-metric machinery + conditional operator probe window — pre-authorized ≤ $25; estimate over ceiling re-presents before spend | — |
 
 ## Milestone gates
 **GATE-G1 — Stage-0 acceptance & ecosystem-decision revalidation** (Stage 0). Criterion (verbatim): S1/S2 gates pass and the revalidation rule is evaluated: any C5/C7/C12 score outside the assumed ±1 band, or a gate failure on the winning candidate, re-runs ADR-0009 steps 5–7 (§10.6; OQ-131).
@@ -738,6 +776,9 @@ The operator's adopt/amend/decline rows drive a scoped `mode=extend` that fleshe
 - **GATE-G30** (`312_GATE-G30__fp-e.md`): FP-E main window: arm inclusion by priority, D_max, caps, m, A_eff, W4 quote, holds; `run{full\
 - **GATE-G31** (`317_GATE-G31__pub-fp.md`): First-pass publication: `hh-site-publication/1`; flip as separate HUMAN act; terms read (Q-H1-6)
 - **GATE-G32** (`324_GATE-G32__accept.md`): Round-6 acceptance (GATE-ACCEPT role) over the minimal tail: CAP6.1’s verdicts, CAP6.2’s closure, live reads and routing register, and CAP6.3’s reconciliation and integration plan; accepted deviations listed
+- **GATE-G35** (`328_GATE-G35__p4-x.md`): G-P4-X — authorize the X0+X1 exploration envelope (declared slots/arms/ceiling; verbatim model + compute authorizations outside the pilot authorization — REQ-XD-221 leg 1)
+- **GATE-G36** (`331_GATE-G36__p4-c.md`): G-P4-C — authorize the held-out confirmation envelope (frozen member list, T = 37 census, hash-before-subjects — REQ-XD-221 leg 2)
+- **GATE-G37** (`337_GATE-G37__accept.md`): Round-7 acceptance — the pass's terminal state, the minted O-3 record, BL-50's dispositions and the reconciliation verified; an incomplete pass re-presents the O-3 ruling
 
 ## Phase gates & ownership notes
 - **Removability** (CC6): from Stage 2, every stage gate runs `removability(0…3)` — the build with
@@ -782,6 +823,10 @@ Full-target D/E/R/P closure is distinct from bounded ticket completion: at an ea
 ### Round 6 scope
 
 [Round-6 contract invariants](../build/planning/2026-11-07_round6-invariants.md) X-01–X-08 and XO-01–XO-06 apply to every Round-6 row (the round-5 clauses continue wherever round-5 machinery is touched). Dispatch: GATE-G20 authorizes R6.1 only, with the retained guard's ROUTE computed in `--no-checker` mode plus the stock validator at 0 violations (GATE-G8 precedent); from R6.2 on, `check-supplement-guard.sh` → `PASS` with `DISPATCH — <id>` before and after each dispatch boundary. Paid/provisioning window bodies are skeletons fleshed by a scoped `decompose-spec` insert after their gate. Merges remain `mergePolicy: OPERATOR`.
+
+### Round 7 scope
+
+The §8.x second pass is bounded to CAP6.2's 18 routed §8.x ids plus the conditional O-3/BL-50 records closure under GATE-G34/ADR-0454. The Round-6 contract invariants XO-01–XO-06 continue wherever Round-6 machinery is touched. Dispatch: `check-supplement-guard.sh` → `PASS` with `DISPATCH — <id>` before and after each dispatch boundary; the guard's round-6-keyed marker/window legs are inert under `round: 7` (a recorded limitation — the skeleton discipline still binds through the contracts and the stock validator's skeleton/no-`Run` check). Paid window bodies are skeletons fleshed by scoped `decompose-spec` inserts after their gates (the R6.45x pattern). Registration authorizes no spend, provisioning, publication or merge. Merges remain `mergePolicy: OPERATOR`.
 
 ## Out of scope
 No ticket builds any of these (the scope-creep guard; ADR-0006 D3):
@@ -886,6 +931,10 @@ The original canonical source and legacy matcher/index above remain unchanged. S
 ### Round 6 supplemental requirement ownership
 
 Supplemental canonical source: `docs/experiments-spec.md` (canonical v0.3); literal ERE `REQ-X[A-H]-[0-9]+`. The [456-row owner/alias register](../build/planning/2026-11-07_round6-coverage.md) and its [machine-readable companion](../build/planning/2026-11-07_round6-coverage.json) bind all 370 adopted ids to exactly one primary Round-6 row (336 first-pass; 34 routed to later passes by CAP6.2), retaining 81 merged and 5 superseded aliases with their literal predicates. No acceptance is earned by this table.
+
+### Round 7 supplemental requirement ownership
+
+Round-7 implementation mapping (the Round-6 registers stay append-only — primary owner of record remains CAP6.2's routing row; contributing rows retain owners, rule O2): REQ-XD-204, REQ-XD-205 (+REQ-XE-127), REQ-XD-208, REQ-XD-209, REQ-XD-225 → R7.1; REQ-XD-206, REQ-XD-207, REQ-XD-210, REQ-XD-211, REQ-XD-212, REQ-XD-213, REQ-XD-214 → R7.2 machinery + R7.3/R7.4 execution legs; REQ-XD-217, REQ-XD-218 → R7.4; REQ-XD-215, REQ-XD-216, REQ-XD-219 → R7.5/R7.6; REQ-XD-221 → the GATE-G35/GATE-G36 readout legs. The conditional O-3 remainder set (15 non-§8.x routed ids + any unsatisfied §8.x member) is CAP7.2's verbatim disposition record, never a new engineering owner. No acceptance is earned by this table.
 
 ## Spec amendments applied
 (none — the spec is ratified v1.0-rc2, gate-passed PASS 7/7; amend via the protocol above.)
@@ -1217,6 +1266,15 @@ Supplemental canonical source: `docs/experiments-spec.md` (canonical v0.3); lite
 - G-L1 (GATE-G29) is a decision gate with pre-registered `full` | `fallback` dispositions, each recorded PASSED with its basis, so the hosted-only fallback is routable in a linear chain; results rows land honestly under either.
 - [Partition, Phase-4 independent review record, re-partition merge map and tail split](../build/planning/2026-11-07_round6-decomposition.md).
 
+### Round 7 decomposition decisions
+
+- Round 7 is the experiments program's bounded §8.x second pass under GATE-G34/ADR-0454 (13 rows, 326–338): two offline machinery legs → G-P4-X → the X0/X1 skeleton → fold + confirmation pre-registration → G-P4-C → the confirmation skeleton → fold → H21 → the minimal tail (capstone, capstone, gate, docs). Tail: `tail=minimal` declared in the banner, matching the operator's Round-6 tail decision.
+- Two spend gates, not one — §8.7's order is load-bearing (selection over committed X1 records; the confirmation pre-registration frozen and gated before any subject; REQ-XD-212's hash-predates rule; REQ-XD-221's two-leg authorization).
+- No DF-R6.45l-1 derivation ticket: its dated DONE discharge (R6.51, PR #413 on `main`) is recorded at CAP7.1/CAP7.2 instead — minting new work would fabricate it. Deviation from the suggested partition, justified in the planning record.
+- The ruling's "15 ids" reconciles to the register's 18 routed §8.x ids (the contiguous XD-204…XD-225 range minus the first-pass-owned REQ-XD-220/222/224 and the merged alias REQ-XD-223); all 18 are covered, and any unsatisfied member joins the O-3 remainder verbatim.
+- The guard's round-6-keyed checks (`check_markers6`, `check_window6`, `LATER_ROUND_ID6`) do not fire under `round: 7`; skeleton discipline binds via contract + stock validator. A Round-7 guard extension is out of this registration's scope (recorded as an OPEN FINDING).
+- [Partition, Phase-4 self-review record, deviations](../build/planning/2026-11-20_round7-decomposition.md).
+
 ## Plan extensions
 (append-only: inserts `NNa_…`, splits `<ID>a`/`<ID>b` with the original marked superseded-by-split, rounds)
 - 2026-09-15 · **inserted** `003a_S0.3b__cross-candidate-online-spike.md` (id `S0.3b`, row `3a`) between S0.3 and GATE-G1. Reason: the operator's GATE-G1 disposition authorized an **online** spike budget to close the machine-achievable cells of DF-S0.3-1 (MCP/ACP official SDK round-trip + cross-candidate G1 byte-identity) and DF-S0.3-3 (E2/E3 cross-candidate scoring + E5b/E5c splits). The R2 human cross-camp reviewer signature and the Stage-3 polyglot CI (DF-S0.3-2) are explicitly NOT pulled into this ticket. GATE-G1 stays PENDING until S0.3b lands and the operator re-reads the extended sheet.
@@ -1386,3 +1444,5 @@ Supplemental canonical source: `docs/experiments-spec.md` (canonical v0.3); lite
 
 - 2026-11-16T23:55Z · **inserted** rows `309r`–`309s` (ids `GATE-G28l`, `R6.45o`) between `309q` (R6.45n, diagnostic smokes — both windows spent) and `309` (GATE-G29) — the re-proof insert under GATE-G29's recorded operator ruling (route to a re-proof PROV gate; neither `full` nor `fallback` recorded). Rows: `309r` GATE-G28l PROV-Wc10 gate (ceiling 3,193,860 µ$, quote `pq-a2d99ef16c6c3814`, `verbatim_sha256` all-zeros pending the stamp), `309s` R6.45o Wc10 skeleton (fleshes after GATE-G28l). No other file renamed; no landed row superseded; no gate pre-signed — GATE-G28l's readout is presented PENDING for the operator's answer.
 
+- 2026-11-20T19:30Z · **Round 7 extension — §8.x second pass (decompose-spec mode=extend):** operator authorization verbatim (GATE-G34 readout, PASSED 2026-11-20; ADR-0454): "O1 approve, O-2 i'm not sure, O-3 approved, yes fold in BL-50. go". Rows 326–338 (13) appended after row 325f under the `### Round 7` banner (`tail=minimal`): `326_R7.1`, `327_R7.2`, `328_GATE-G35` (G-P4-X), `329_R7.3` (X0/X1 skeleton), `330_R7.4`, `331_GATE-G36` (G-P4-C), `332_R7.5` (confirmation skeleton), `333_R7.6`, `334_HUMAN-H21`, `335_CAP7.1`, `336_CAP7.2` (O-3 + BL-50 + reconciliation closure), `337_GATE-G37` (acceptance), `338_DOC7.1`. No existing file renamed, no row superseded, no gate pre-signed. LEDGER: `round` → 7, `nextTicket` → `R7.1`; `chainTip` stays `codex/harnessharness-r6.53`. This records planning authorization only; no implementation, provisioning, spend, publication or merge is authorized by it — the windows' envelopes are declared in their skeletons and stop at GATE-G35/GATE-G36.
+- 2026-11-26T09:00Z · **Round-7 post-round extension — publication + backlog closeout (operator-directed):** operator authorizations verbatim in the same CLI session — publish: "We should publish what we have so far and later we can follow up and  publish updated results when they're ready" (verbatim_sha256 `e2773490…`); transcripts: "Perhaps we defer on the sanitized p4c archive in HF and do packet-only for now" (`aa273de7…`); DF-R7.1-2 probe: "I authorize up to $25 of spend in advance. If it's estimated to be more than that, you can raise to me for re-authorization" (`a312b4a9…`); a second confirmation attempt deferred ("Defer decision" — inconclusive stands, no new envelope drafted). Rows 339–342 (4) appended after row 338: `339_GATE-G38` (publication authorization — readout presented and signed by the same rulings), `340_R7.7` (publication leg), `341_R7.8` (machinery-debt sweep), `342_R7.9` (DF-R7.1-2 unblock + conditional probe window). No existing file renamed, no row superseded. The $25 probe authorization is a spend bound, not a new confirmation envelope — GATE-G38 authorizes publication only; the retry decision stays deferred by the operator's verbatim.

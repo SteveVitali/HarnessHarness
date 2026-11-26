@@ -1,0 +1,48 @@
+{
+ "attribution_read": "the ~.02 hh-vs-provider delta is window-internal: pi + claude-code calls reached the provider (real responses, real agent work \u2014 3,554 completed calls, native logs + ctrf verdicts) but upstream usage objects were absent, so hh attribution recorded honest 0 micro_units. Class: unmetered_streaming_usage \u2014 the provider hourly buckets bound the true figure inside the W4x window hours.",
+ "boundary": "2026-11-20T11:00:00Z",
+ "clock_settles_at": "2026-11-20T13:00:00Z",
+ "hh": {
+  "attributed_calls": 5001,
+  "attributed_micro_units": 1740556,
+  "cache_read_tokens": 1212021,
+  "input_uncached_tokens": 205382,
+  "output_visible_tokens": 320722,
+  "per_arm": {
+   "claude-code": {
+    "calls": 2184,
+    "micro_units": 0,
+    "note": "same unmetered-streaming class as pi"
+   },
+   "lane-probe": {
+    "calls": 1,
+    "micro_units": 8
+   },
+   "pi": {
+    "calls": 1370,
+    "micro_units": 0,
+    "note": "upstream usage absent on every call (\"source\":\"absent\", tokens 0/0) \u2014 proxy recorded honest 0; true pi spend is inside the provider hourly buckets, unmetered by the harness"
+   },
+   "v5": {
+    "calls": 1446,
+    "micro_units": 1740548
+   }
+  },
+  "requested_calls": 5140
+ },
+ "kind": "settlement",
+ "phase": "fp",
+ "provided": {
+  "OLLAMA_API_KEY": "yes"
+ },
+ "provider": {
+  "trailing_24h_micro_units": 15223020,
+  "window_buckets": "2026-11-20T03:00Z..10:00Z nonzero (8 buckets, 4,915 provider-counted requests); all other buckets in the trailing 24h either pre-window W4 remainder (2026-11-19T11:00Z..17:00Z) or zero",
+  "window_hourly_sum_usd": 7.7627
+ },
+ "recorded_at": "2026-11-20T11:29:00Z",
+ "schema": "hh-settlement/1",
+ "status": "pending{clock} \u2014 REQ-XC-127: last metered call 2026-11-20T10:32:14Z, hour boundary 11:00Z, >=2h clock lands >=13:00Z; paced reads (balance-pre 11:24:41Z, usage-1 11:25:38Z, usage-2 11:26:46Z +70s gap, balance-post 11:28:36Z) appended to docs/build/reports/live/PHASE_SPEND.jsonl window=w4x",
+ "ticket": "R6.56",
+ "window": "w4x"
+}

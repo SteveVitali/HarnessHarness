@@ -74,7 +74,11 @@ class Relocations(unittest.TestCase):
             original = self.read(rel)
             expected = copy.deepcopy(original)
             if "supersedes" in expected:
-                expected["supersedes"] = PUB + expected["supersedes"]
+                # the owner-supported basename form normalizes to the
+                # canonical archive path; an already-absolute form is
+                # the canonical identity verbatim (phase-2 11-20 record).
+                s = expected["supersedes"]
+                expected["supersedes"] = s if "/" in s else PUB + s
             self.assertEqual(view, expected)
             self.assertEqual((self.root / rel).read_bytes(), before[self.root / rel])
         self.assertEqual(publication.checked_pin_errors(
@@ -291,7 +295,7 @@ class Relocations(unittest.TestCase):
         inputs, _digest, _bodies = build.emit_bodies()
         records = build.load_publications(inputs)
         self.assertEqual(publication.published_phases(records, inputs, ROOT),
-                         {"phase-1", "phase-3", "phase-4"})
+                         {"phase-1", "phase-2", "phase-3", "phase-4"})
         out = self.root / "actual-public"
         build.run_out(out, "public")
         home = Links()

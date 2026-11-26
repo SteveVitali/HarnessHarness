@@ -272,19 +272,22 @@ fn ac2_lapsed_verifier_tree_dies_confirmed_and_attempt2_owns_collect() {
 }
 
 /// The guarded exec's argv-level contract over a `podman` stub: a
-/// deadline-bearing exec carries `setsid timeout --kill-after` AND a
+/// deadline-bearing exec carries `setsid --wait timeout --kill-after`
+/// AND a
 /// `-e HH_EXEC_TAG=<tag>` marker; the lapse path's environ walk
 /// addresses the SAME tag (TERM then KILL, then the confirm walk) —
 /// never a cmdline pattern like "agent" the verifier tree lacks.
 /// Pre-fix: the exec argv carried no tag, no `setsid timeout`, and the
-/// sweep walked `/proc/*/cmdline` for "agent".
+/// sweep walked `/proc/*/cmdline` for "agent". (`--wait` is the R6.55
+/// repair: bare `setsid` under `podman exec` forks and exits 0 at once,
+/// dropping the wrapped tree — the `adapter:silent_exit` signature.)
 #[test]
 fn ac2_guarded_exec_tag_wrap_sweep_and_confirm() {
     let dir = scratch("podstub");
     let log = dir.join("podman.log");
     let stub = dir.join("podman");
     // The stub: logs every argv; for the phase exec (carries `setsid
-    // timeout`) it emits partial stdout and exits 124 (the in-cell
+    // --wait timeout`) it emits partial stdout and exits 124 (the in-cell
     // `timeout` ladder firing); for environ walks it exits 1 = dead.
     std::fs::write(
         &stub,
@@ -292,7 +295,7 @@ fn ac2_guarded_exec_tag_wrap_sweep_and_confirm() {
          echo \"$@\" >> \"$HH_PODMAN_LOG\"\n\
          if [ \"$1\" = \"exec\" ]; then\n\
            case \" $* \" in\n\
-             *\" setsid timeout \"*) echo 'partial verifier stream'; exit 124;;\n\
+             *\" setsid --wait timeout \"*) echo 'partial verifier stream'; exit 124;;\n\
              *\"/environ\"*kill*) exit 0;;\n\
              *\"/environ\"*) exit 1;;\n\
              *) exit 0;;\n\
@@ -335,8 +338,11 @@ fn ac2_guarded_exec_tag_wrap_sweep_and_confirm() {
     // The lapse kept the captured streams (pre-fix: empty).
     assert!(String::from_utf8_lossy(&out.stdout).contains("partial verifier stream"));
     let logged = std::fs::read_to_string(&log).unwrap();
-    // setsid timeout wrap + the env marker on the phase exec.
-    assert!(logged.contains("setsid timeout --kill-after="), "{logged}");
+    // setsid --wait timeout wrap + the env marker on the phase exec.
+    assert!(
+        logged.contains("setsid --wait timeout --kill-after="),
+        "{logged}"
+    );
     assert!(logged.contains("-e HH_EXEC_TAG=hh-exec-"), "{logged}");
     // The sweep + confirm walks address the tag through /proc environ —
     // never the cmdline "agent" pattern.

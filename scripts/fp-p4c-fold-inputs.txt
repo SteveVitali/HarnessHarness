@@ -1,0 +1,18 @@
+# fp-p4c-fold-inputs.txt — the inputs manifest for the `p4c_fold`
+# emitter (manifest 333/R7.6). The reader rule keeps every docs/
+# relpath at script level, never in crates/**. Format: name=relpath.
+# Inputs: the committed P4-C records — the frozen hh-p4-c-prereg/1, the
+# hh-p4-selection/1 packet it cites (the selection-labelled exploratory
+# estimates + packet sha), the executed hh-fp-window/1 r4 record whose
+# slot_results member embeds the 370-slot matrix verbatim, and the
+# earlier terminal-window records the packet's terminal-state member
+# carries (the w1 stop{budget} window and the r2 attempt1
+# native_lane_hold record).
+prereg=docs/build/reports/2026-11-24-fp-p4c-prereg.json
+selection=docs/build/reports/2026-11-24-fp-p4x-selection.json
+window=docs/build/reports/2026-11-26-fp-p4c-window-r4.json
+window_history_1=docs/build/reports/2026-11-26-fp-p4c-window.json
+window_history_2=docs/build/reports/2026-11-26-fp-p4c-window-r2-attempt1-native_lane_hold.json
+# Outputs: the confirmation packet + sha256 sidecar.
+confirmation=docs/build/reports/2026-11-26-fp-p4c-confirmation.json
+confirmation_sha256=docs/build/reports/2026-11-26-fp-p4c-confirmation.sha256

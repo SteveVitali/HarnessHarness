@@ -77,6 +77,12 @@ rules = ["generic-api-key"]
 paths = ['''^docs/build/reports/2026-11-11-fp-partition\.json$''', '''^docs/build/reports/2026-11-11-fp-dev-projection\.json$''']
 
 [[allowlists]]
+description = "R7.3 p4x0 window record: generic-api-key false positives on `order_key` members — 64-hex sha256 deterministic schedule-ordering digests (same member shape as committed fp-w4/fp-w4x window records), not credentials. Scoped to this file; any new hit elsewhere still reports"
+condition = "AND"
+rules = ["generic-api-key"]
+paths = ['''^docs/build/reports/2026-11-21-fp-p4x0-window\.json$''']
+
+[[allowlists]]
 description = "R6.52c order_key scheduling SHA-256 digests recomputed from public seed/task/replicate, not credentials; exact introducing commit, file and field format only"
 condition = "AND"
 commits = ["b2a469ae3c891e7246f1dba1085bde5c68e1646c"]
@@ -112,3 +118,12 @@ rules = ["generic-api-key"]
 paths = ['''^docs/build/reports/2026-11-20-r6\.55-w4x-pp0(-r2)?/SM-[a-z0-9]+/session\.json$''']
 regexTarget = "match"
 regexes = ['''^slot_token": "[0-9a-f]{32}"$''']
+
+
+[[allowlists]]
+description = "R7.5/R7.6 p4c window records: generic-api-key false positives on `order_key` members — 64-hex sha256 deterministic schedule-ordering digests (same member shape as committed fp-w4/fp-w4x/fp-p4x0 window records), not credentials. Scoped to these files + the exact field format; any new hit elsewhere still reports"
+condition = "AND"
+rules = ["generic-api-key"]
+paths = ['''^docs/build/reports/2026-11-26-fp-p4c-window\.json$''', '''^docs/build/reports/2026-11-26-fp-p4c-window-r4\.json$''', '''^docs/build/reports/2026-11-26-fp-p4c-window-r2-attempt1-native_lane_hold\.json$''']
+regexTarget = "match"
+regexes = ['''^order_key": "[0-9a-f]{64}"$''']

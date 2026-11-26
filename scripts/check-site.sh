@@ -316,11 +316,18 @@ except OSError:
 hits = []
 # The spec-fixed REQ-XF-111 band label is allowed verbatim — its second
 # "leader" is defined text, exempt like the record's bounds block.
+# R7.7: the same class of exemption covers the §6.11 ratified
+# exploratory-label wording carried verbatim by the
+# hh-p4-c-confirmation/1 family block (GATE-G38's authorized packet) —
+# the exact packet string only; bare "leader" stays banned elsewhere.
 BAND_LABEL_FIXED = (
     "observed-leader group · descriptive · 95% interval of difference "
     "covers 0 · leader selected from the same data")
+P4C_FAMILY_LABEL = (
+    "exploratory; leader selected from the same data — the 95% "
+    "interval of difference covers 0 is not equivalence evidence")
 for where, t in hay.items():
-    t = t.replace(BAND_LABEL_FIXED, " ")
+    t = t.replace(BAND_LABEL_FIXED, " ").replace(P4C_FAMILY_LABEL, " ")
     for entry in BANNED + RECORD_BANNED + SITE_BANNED:
         for phrase, ex in banned_hits(entry, t):
             hits.append("%s: banned phrase %r (%s…)" % (where, phrase, ex))
@@ -474,7 +481,7 @@ try:
     _input_sets = {"phase-2": {"p2-fp", "p2-pilot", "p2-quote",
                              "p2-index"},
                    "phase-3": {"p3-l1", "p3-l2", "p3-l3"},
-                   "phase-4": {"p4-fp", "p3-l2"}}
+                   "phase-4": {"p4-fp", "p3-l2", "p4c-confirm"}}
     if profile == "internal":
         published_here |= {ph for ph, ids in _input_sets.items()
                            if ids <= _have}
@@ -510,13 +517,17 @@ if ev:
         if 'class="absent"' not in htmls[rel] \
                 and ph not in published_here:
             bad.append("%s renders non-absent with no packet/card" % rel)
-    # home channels: P2–P4 must be absent/withheld; P1 must not be
+    # home channels: P2–P4 must be absent/withheld (unpublished or the
+    # internal awaiting-gate stamp) or inconclusive (a published
+    # executed-W4 phase — landed values beside typed verdicts); P1 must
+    # not be
     home = htmls.get("index.html", "")
     for n in (2, 3, 4):
         m = re.search(r"P%d[^<]*</h3><p>(.*?)</p>" % n, home, re.S)
-        if m and not re.search(r'data-stamp="(absent|withheld)"',
+        if m and not re.search(r'data-stamp="(absent|withheld|inconclusive)"',
                                m.group(1)):
-            bad.append("home P%d channel not stamped absent/withheld" % n)
+            bad.append("home P%d channel not stamped "
+                       "absent/withheld/inconclusive" % n)
     m = re.search(r"P1[^<]*</h3><p>(.*?)</p>", home, re.S)
     if m and 'data-stamp="verified"' not in m.group(1) \
             and profile == "internal":

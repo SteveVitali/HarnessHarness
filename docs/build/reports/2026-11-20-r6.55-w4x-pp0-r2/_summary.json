@@ -1,0 +1,9 @@
+{
+ "battery_sha256": "sha256:809ec6a08c204ca95fb6d9911252b05638fb517346645330326b2a01fd091a01",
+ "evidence_dir": "/var/tmp/hh-w4x/out/pp0-r9",
+ "held": [],
+ "legs": 10,
+ "mode": "replay",
+ "run_at": "2026-11-20T02:07:01Z",
+ "schema": "hh-w4x-smoke-summary/1"
+}

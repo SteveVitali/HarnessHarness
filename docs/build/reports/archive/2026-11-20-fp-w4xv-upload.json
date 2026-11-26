@@ -1,0 +1,487 @@
+{
+ "attempt": "a5",
+ "commands": [
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/2026-11-20-fp-w4xv-authorization.json",
+    "w4xv/2026-11-20-fp-w4xv-authorization.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/2026-11-20-fp-w4xv-cost.json",
+    "w4xv/2026-11-20-fp-w4xv-cost.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/2026-11-20-fp-w4xv-harvest-elisions.json",
+    "w4xv/2026-11-20-fp-w4xv-harvest-elisions.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/2026-11-20-fp-w4xv-harvest.json",
+    "w4xv/2026-11-20-fp-w4xv-harvest.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/2026-11-20-fp-w4xv-provision.json",
+    "w4xv/2026-11-20-fp-w4xv-provision.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/2026-11-20-fp-w4xv-quote.json",
+    "w4xv/2026-11-20-fp-w4xv-quote.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/2026-11-20-fp-w4xv-settlement.json",
+    "w4xv/2026-11-20-fp-w4xv-settlement.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/2026-11-20-fp-w4xv-spend-bound.json",
+    "w4xv/2026-11-20-fp-w4xv-spend-bound.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/2026-11-20-fp-w4xv-teardown.json",
+    "w4xv/2026-11-20-fp-w4xv-teardown.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/2026-11-20-fp-w4xv-verify.json",
+    "w4xv/2026-11-20-fp-w4xv-verify.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/harvest/MANIFEST.sha256",
+    "w4xv/harvest/MANIFEST.sha256",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/harvest/journald.log",
+    "w4xv/harvest/journald.log",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/harvest/serial.log",
+    "w4xv/harvest/serial.log",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/harvest/usage.txt",
+    "w4xv/harvest/usage.txt",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/run-root-tree.json",
+    "w4xv/run-root-tree.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/run-root/checkpoint-r2.json",
+    "w4xv/run-root/checkpoint-r2.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/run-root/lane-probe.json",
+    "w4xv/run-root/lane-probe.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/run-root/proxy-session.json",
+    "w4xv/run-root/proxy-session.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/run-root/proxy-session.log",
+    "w4xv/run-root/proxy-session.log",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/run-root/proxy.sentinel",
+    "w4xv/run-root/proxy.sentinel",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/run-root/w4-window.json",
+    "w4xv/run-root/w4-window.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/wiring/arms-file.json",
+    "w4xv/wiring/arms-file.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/wiring/auth.json",
+    "w4xv/wiring/auth.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/wiring/cfg.json",
+    "w4xv/wiring/cfg.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/wiring/fp-w4xv-r656.json",
+    "w4xv/wiring/fp-w4xv-r656.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/wiring/freeze.json",
+    "w4xv/wiring/freeze.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/wiring/hir-bind-baseline.json",
+    "w4xv/wiring/hir-bind-baseline.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/wiring/hir-bind-v5.json",
+    "w4xv/wiring/hir-bind-v5.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/wiring/instance_template.tmpl",
+    "w4xv/wiring/instance_template.tmpl",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/wiring/lane.json",
+    "w4xv/wiring/lane.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/wiring/mini-swe-agent.json",
+    "w4xv/wiring/mini-swe-agent.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/wiring/mswea.hir.json",
+    "w4xv/wiring/mswea.hir.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/wiring/pin.json",
+    "w4xv/wiring/pin.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/wiring/pricing.json",
+    "w4xv/wiring/pricing.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/wiring/system_template.tmpl",
+    "w4xv/wiring/system_template.tmpl",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/wiring/tasks-file.json",
+    "w4xv/wiring/tasks-file.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/wiring/v5-corrected.json",
+    "w4xv/wiring/v5-corrected.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/wiring/v5.bound.json",
+    "w4xv/wiring/v5.bound.json",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/wiring/w4-main-driver.py",
+    "w4xv/wiring/w4-main-driver.py",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/wiring/w4x-layers-build.sh",
+    "w4xv/wiring/w4x-layers-build.sh",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/wiring/w4xv-run.sh",
+    "w4xv/wiring/w4xv-run.sh",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/wiring/w4xv-setup.sh",
+    "w4xv/wiring/w4xv-setup.sh",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  },
+  {
+   "argv_redacted": [
+    "upload",
+    "SteveVitali/harnessharness-archive",
+    "/Users/stevenvitali/hh-retained/w4xv-upload-stage/w4xv/wiring/ws1-proxy-session.py",
+    "w4xv/wiring/ws1-proxy-session.py",
+    "--repo-type",
+    "dataset"
+   ],
+   "exit": 0
+  }
+ ],
+ "label": "archive-upload",
+ "member_count": 43,
+ "note": "hf CLI upload, HF_WRITE_TOKEN provided (env, never argv). Full log retained /tmp + ~/hh-retained/w4xv-upload-stage/.",
+ "prefix": "w4xv/",
+ "recorded_at": "2026-11-20T15:43:01Z",
+ "repo": "SteveVitali/harnessharness-archive",
+ "repo_type": "dataset",
+ "ticket": "R6.56",
+ "window": "w4xv"
+}

@@ -52,7 +52,7 @@
     {
       "frozen": true,
       "id": "p2-fp",
-      "path": "docs/build/reports/2026-11-19-fp-results-p2-fp-frozen.json",
+      "path": "docs/build/reports/2026-11-20-fp-w4x-results-p2-fp-frozen.json",
       "phase": "phase-2",
       "schema": "hh-comparative-results/1"
     },
@@ -88,25 +88,32 @@
     {
       "frozen": true,
       "id": "p3-l2",
-      "path": "docs/build/reports/2026-11-19-fp-results-p3-l2-frozen.json",
+      "path": "docs/build/reports/2026-11-20-fp-w4x-results-p3-l2-frozen.json",
       "phase": "phase-3",
       "schema": "hh-fp-l2/1"
     },
     {
       "frozen": true,
       "id": "p3-l3",
-      "path": "docs/build/reports/2026-11-19-fp-l3-frozen.json",
+      "path": "docs/build/reports/2026-11-20-fp-w4x-l3-frozen.json",
       "phase": "phase-3",
       "schema": "hh-fp-l3/1"
     },
     {
       "frozen": true,
       "id": "p4-fp",
-      "path": "docs/build/reports/2026-11-19-fp-results-p4-fp-frozen.json",
+      "path": "docs/build/reports/2026-11-20-fp-w4x-results-p4-fp-frozen.json",
       "phase": "phase-4",
       "schema": "hh-comparative-results/1"
+    },
+    {
+      "frozen": true,
+      "id": "p4c-confirm",
+      "path": "docs/build/reports/2026-11-26-fp-p4c-confirmation.json",
+      "phase": "phase-4",
+      "schema": "hh-p4-c-confirmation/1"
     }
   ],
-  "note": "R6.5 (F2-b) \u2014 every input the generator reads, named by path, schema and phase; never globbed (REQ-XF-119). The record participates with format markdown-bounds: its declared schema hh-p1-bounds-record/1 is the <!-- bounds --> block contract of REQ-XA-119, not JSON.",
+  "note": "R6.5 (F2-b) \u2014 every input the generator reads, named by path, schema and phase; never globbed (REQ-XF-119). The record participates with format markdown-bounds: its declared schema hh-p1-bounds-record/1 is the <!-- bounds --> block contract of REQ-XA-119, not JSON. R6.54: the first-pass packet inputs re-pin to the executed-W4 frozen copies (ADR-0452 supersession \u2014 the R6.50 pins stay append-only history).",
   "schema": "hh-site-inputs/1"
 }

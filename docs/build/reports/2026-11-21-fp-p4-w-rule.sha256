@@ -1,0 +1,2 @@
+a344c7f374712de9e5e254a9dbafc37b33c073e303936f734f77be2fb643f484  docs/build/reports/2026-11-21-fp-p4-w-rule.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-21-fp-p4-w-rule.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)

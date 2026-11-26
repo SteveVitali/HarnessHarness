@@ -87,9 +87,15 @@ echo "== removability(extension): no base crate depends on the variant host =="
 # contracts. The check: no *other* workspace crate names them as a normal
 # dependency (dev-dependency edges don't ship).
 EXT="hharness-varhost hharness-plugin-fixture hharness-compact-evict-oldest hharness-memory-store hharness-tracker-fixture hharness-github-issues"
+# BL-49 — declared facade exception (operator ruling "Admit facade exception",
+# ADR-0453): the `hharness` facade names `hharness-varhost` as a normal
+# dependency because the facade re-exports the publish set by design. The
+# exception admits exactly that one edge; any other ext-tier edge still fails.
+EXT_EXCEPTIONS="hharness -> hharness-varhost"
 cargo metadata --format-version 1 --no-deps | python3 -c "
 import json,sys
 ext=set(sys.argv[1].split())
+exceptions=set(sys.argv[2].split(';')) - {''}
 meta=json.load(sys.stdin)
 bad=[]
 for pkg in meta['packages']:
@@ -97,13 +103,15 @@ for pkg in meta['packages']:
         continue
     for d in pkg['dependencies']:
         if d['name'] in ext and d.get('kind') in (None, 'normal'):
-            bad.append(pkg['name'] + ' -> ' + d['name'])
+            edge=pkg['name'] + ' -> ' + d['name']
+            if edge not in exceptions:
+                bad.append(edge)
 if bad:
     print('extension-tier edges into the base:')
     for b in bad: print('  ' + b)
     sys.exit(1)
-print('extension tier is edge-free into the base (removable)')
-" "$EXT"
+print('extension tier is edge-free into the base (removable; %d declared exception(s) skipped)' % len(exceptions))
+" "$EXT" "$EXT_EXCEPTIONS"
 
 echo "check-removability: extension tier verified removable"
 

@@ -1,0 +1,92 @@
+{
+    "dataset": {
+        "contamination_scan_ref": "docs/build/reports/2026-11-19-fp-contamination-scan.json",
+        "revision": "a11591e931442908c34a5bc7a65e8e664f4752d7",
+        "secret_scan_ref": "docs/build/reports/2026-11-19-fp-answer-scan.json",
+        "visibility": "public"
+    },
+    "dataset_card_ref": {
+        "path": "docs/build/reports/2026-11-19-fp-dataset-card.md",
+        "sha256": "50c417b3c252bafffdae7f460e6d83572ef197fec6d313f0b7cd8d3e7212737a"
+    },
+    "dataset_flip": "done{human_h17:2026-11-19T04:23Z}",
+    "gate_row": "325f (ADR-0453 ruling 3 \u2014 verbatim 'Publish \u2014 same terms as G31'; the phase-2 gate remains GATE-G31 per the manifest/README)",
+    "gate_verbatim": {
+        "policy": "sanitized publish only",
+        "scope": "yes, publish",
+        "terms": "I've read hugging face and ollama terms",
+        "transcript_option": "(b) links only"
+    },
+    "inputs": [
+        {
+            "path": "docs/build/reports/2026-11-20-fp-w4x-results-p2-fp-frozen.json",
+            "sha256": "1b011728dc7954a4a104a19e7a504dccb57ee2f6c28466258b1273e8f54c4eb3"
+        },
+        {
+            "path": "scripts/site/fixtures/phase2-pilot.json",
+            "sha256": "76b4adc68e1a464dd95b32ba3ee1a7379681658785a81c657df478e8d447ca4d"
+        },
+        {
+            "path": "scripts/site/fixtures/phase2-quote.json",
+            "sha256": "c4e21d465fd0a71643b20317937bc6b8909039d15401d0e961b2263a2e70603f"
+        },
+        {
+            "path": "scripts/site/fixtures/phase2-receipt-index.json",
+            "sha256": "e17ab334733f9a4d4b577d5ba203549b0fd747bdf3da382fb69a0dcd7f8141c5"
+        }
+    ],
+    "inputs_digest": "sha256:1662f7e3cef79d663cd2f98ccfca84c5d6a36e10ba7cae14a7d0cc0f20e07a05",
+    "labels": {
+        "evidence_class": "recorded execution",
+        "outside_verified": false
+    },
+    "notes": "the HUMAN-H20 all-cleared ruling lifts the freeze veto \u2014 p2-fp re-pins to the W4x post-review frozen packet (cleared flagged passes counted; theta, deltas and Holm/BH family recomputed; the pre-review emitted packets stay committed as append-only history, never pinned).",
+    "pages": [
+        "/phase-2/"
+    ],
+    "phase": "phase-2",
+    "readout": "docs/build/readouts/GATE-G31.md",
+    "recorded_at": "2026-11-20 (HUMAN-H20 restore 18:26Z)",
+    "scan_refs": [
+        {
+            "path": "docs/build/reports/2026-11-19-fp-answer-scan.json",
+            "sha256": "f836343a99c056a0567fb2027fb4c9f9db0f90f6728765bc2cb75bddf0b13853"
+        },
+        {
+            "path": "docs/build/reports/2026-11-19-fp-contamination-scan.json",
+            "sha256": "421399fd7025375b288ce7cc01ecd8cde39bb75ee0942a8996e90647f8284cdd"
+        },
+        {
+            "path": "docs/build/reports/2026-11-19-fp-w4-answer-scan.json",
+            "sha256": "907f38d350dd0034b77fbdb6b6ed6cbad071b136209fba11c49bfd2215a42d88"
+        },
+        {
+            "path": "docs/build/reports/2026-11-19-fp-w4-flagged-review.json",
+            "sha256": "d56c0d91c16cca6a98c307246598ff457e3f00ce9e06cbbe748de632e50d312e"
+        },
+        {
+            "path": "docs/build/reports/2026-11-20-fp-w4x-answer-scan.json",
+            "sha256": "b132c026033718bac6a8282775482a300ffed438e2b343dbffe7f259de5cc1c3"
+        },
+        {
+            "path": "docs/build/reports/2026-11-20-fp-w4x-flag-analysis.json",
+            "sha256": "d8d98441e0ee73b5b18bc55374ffeda9fa6746dc89341d09c2391830de1325ce"
+        },
+        {
+            "path": "docs/build/reports/2026-11-20-fp-w4x-flagged-review.json",
+            "sha256": "27100660dcb66f5858959e96c548c75eb3c03de9b8e2be11cbcce65b91c7e2017d670caae51ca595f89a53d6bc055dc50e5e5e1ad2eb9c26f585f8cd"
+        }
+    ],
+    "schema": "hh-site-publication/1",
+    "supersedes": "phase-2-2026-11-20.json",
+    "supersession": {
+        "gate": "docs/adr/ADR-0453-w4x-extension-unblock-rulings.md",
+        "reason": "ADR-0453's executed-W4x supersession \u2014 the phase pages re-pin to the W4x post-review frozen packets folded over the cleared flagged passes (HUMAN-H20: 'all 69 cleared. continue' \u2014 69/69 flags cleared, 0 confirmed; the 2026-11-20 W4 pins stay append-only history)",
+        "review": {
+            "readout": "docs/build/readouts/HUMAN-H20.md",
+            "record": "docs/build/reports/2026-11-20-fp-w4x-flagged-review.json",
+            "sha256": "27100660dcb66f5858959e96c548c75eb3c03de9b8e2be11cbcce65b91c7e2017d670caae51ca595f89a53d6bc055dc50e5e5e1ad2eb9c26f585f8cd"
+        },
+        "ticket": "R6.57"
+    }
+}

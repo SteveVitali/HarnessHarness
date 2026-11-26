@@ -1,0 +1,156 @@
+{
+ "fold": {
+  "detail": "",
+  "status": "exited{0}"
+ },
+ "fold_dir": "/opt/p4x/l1/fold",
+ "gate_a": 8,
+ "legs": [
+  {
+   "l10_a": {
+    "status": "reused{durable}"
+   },
+   "l10_b": {
+    "status": "reused{durable}"
+   },
+   "l1_1": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "l1_2": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "task": "cobol-modernization",
+   "trajectory": "ws1-corpus-01"
+  },
+  {
+   "l10_a": {
+    "status": "reused{durable}"
+   },
+   "l10_b": {
+    "status": "reused{durable}"
+   },
+   "l1_1": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "l1_2": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "task": "cobol-modernization",
+   "trajectory": "ws1-corpus-02"
+  },
+  {
+   "l10_a": {
+    "status": "reused{durable}"
+   },
+   "l10_b": {
+    "status": "reused{durable}"
+   },
+   "l1_1": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "l1_2": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "task": "cobol-modernization",
+   "trajectory": "ws1-corpus-03"
+  },
+  {
+   "l10_a": {
+    "status": "reused{durable}"
+   },
+   "l10_b": {
+    "status": "reused{durable}"
+   },
+   "l1_1": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "l1_2": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "task": "cobol-modernization",
+   "trajectory": "ws1-corpus-04"
+  },
+  {
+   "l10_a": {
+    "status": "reused{durable}"
+   },
+   "l10_b": {
+    "status": "reused{durable}"
+   },
+   "l1_1": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "l1_2": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "task": "sqlite-with-gcov",
+   "trajectory": "ws1-corpus-25"
+  },
+  {
+   "l10_a": {
+    "status": "reused{durable}"
+   },
+   "l10_b": {
+    "status": "reused{durable}"
+   },
+   "l1_1": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "l1_2": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "task": "sqlite-with-gcov",
+   "trajectory": "ws1-corpus-26"
+  },
+  {
+   "l10_a": {
+    "status": "reused{durable}"
+   },
+   "l10_b": {
+    "status": "reused{durable}"
+   },
+   "l1_1": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "l1_2": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "task": "sqlite-with-gcov",
+   "trajectory": "ws1-corpus-27"
+  },
+  {
+   "l10_a": {
+    "status": "reused{durable}"
+   },
+   "l10_b": {
+    "status": "reused{durable}"
+   },
+   "l1_1": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "l1_2": {
+    "detail": "",
+    "status": "exited{0}"
+   },
+   "task": "sqlite-with-gcov",
+   "trajectory": "ws1-corpus-28"
+  }
+ ],
+ "run_at": "2026-11-21T02:51:27Z",
+ "schema": "hh-ws1-l1-summary/1"
+}

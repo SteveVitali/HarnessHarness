@@ -1,0 +1,48 @@
+# fp-p4x-inputs-gen3.txt — the inputs manifest for the
+# `p4_prereg supersede` and `fp_p4x_quote emit` emitters (manifest
+# 329/R7.3): the generation-3 exploration pre-registration over the
+# baseline carrying the declared `control_strategy` submission
+# contract (the ws1 marker the bare `submit` preset leaves dormant;
+# the gen-2 G-L1 battery's trajectory-termination divergence). Same-day
+# mint: the `-gen3` filename infix disambiguates the 2026-11-21
+# records. The gen-1 and gen-2 records stay byte-untouched; `emit`
+# and `supersede` with the gen-2 manifest still reproduce them.
+# `supersedes` names the gen-2 prereg; `supersedes_reason` is the
+# declared lineage reason. `selection_rule` points at the gen-1
+# path — the frozen §8.5 rule is envelope-wide, not
+# generation-scoped (the emit rewrites it byte-identical, proving it
+# unchanged). The comparative `quote` outputs also stay at the gen-1
+# paths — the priced envelope is unchanged, so the emit proves
+# byte-identity; only the inputs record (whose `records.prereg` cite
+# moved) mints a gen-3 file.
+# Format: name=relpath.
+# Inputs: the committed R7.3 gen-3 x2 registry + levels + W-rule +
+# admissibility records, and the frozen band-A task-selection record
+# (generation-neutral — the declared task set is unchanged).
+doc_gen=3
+sweep_registry=docs/build/reports/2026-11-21-fp-p4-sweep-registry-gen3.json
+levels=docs/build/reports/2026-11-21-fp-p4-levels-gen3.json
+w_rule=docs/build/reports/2026-11-21-fp-p4-w-rule-gen3.json
+admissibility=docs/build/reports/2026-11-21-fp-p4-admissibility-gen3.json
+task_selection=docs/build/reports/2026-11-08-fp-selection.json
+# Lineage: the superseded gen-2 prereg + the declared reason.
+supersedes=docs/build/reports/2026-11-21-fp-p4x-prereg.json
+supersedes_reason=control_strategy authoring-completeness repair (R7.3): the gen-2 baseline's control_strategy.params left the submit-marker detection dormant — the gen-2 G-L1 battery held request-level parity and diverged at trajectory termination; the authorized envelope (slots, arms, seeds, caps) is unchanged
+# Outputs: the superseding exploration pre-registration (with sha256
+# sidecar). The §8.5 frozen selection rule re-emits at its gen-1 path
+# — byte-identical by construction.
+prereg=docs/build/reports/2026-11-21-fp-p4x-prereg-gen3.json
+prereg_sha256=docs/build/reports/2026-11-21-fp-p4x-prereg-gen3.sha256
+selection_rule=docs/build/reports/2026-11-20-fp-p4x-selection-rule.json
+selection_rule_sha256=docs/build/reports/2026-11-20-fp-p4x-selection-rule.sha256
+# Quote inputs (GATE-G35): unchanged — the authorized envelope's
+# compute declaration + its hh-compute-quote/1 record.
+compute_decl=scripts/gce-backend/declarations/fp-p4x.json
+compute_quote=docs/build/reports/2026-11-20-fp-p4x-compute-quote.json
+# Outputs: the comparative-quote/1 packet re-emits byte-identical at
+# its gen-1 path (the envelope is unchanged); the declared-inputs
+# record mints a gen-3 file — its records.prereg cite moved.
+quote=docs/build/reports/2026-11-20-fp-p4x-quote.json
+quote_sha256=docs/build/reports/2026-11-20-fp-p4x-quote.sha256
+quote_inputs=docs/build/reports/2026-11-21-fp-p4x-quote-inputs-gen3.json
+quote_inputs_sha256=docs/build/reports/2026-11-21-fp-p4x-quote-inputs-gen3.sha256

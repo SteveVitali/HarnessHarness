@@ -1,0 +1,58 @@
+{
+ "authorization": {
+  "ceiling_micros": 4690420,
+  "gate": "ADR-0453",
+  "model_line": "authorized",
+  "quote_id": "pq-b70e6859db3f6011",
+  "readout_path": "docs/adr/ADR-0453-w4x-extension-unblock-rulings.md",
+  "ruling": "Extension window: \"$100 ceiling\" \u2014 continuation under the SAME ceiling: V5-only re-run of the 50 v5 slots after the verifier-mount fix (diagnosis + commit-clone verify in scripts/gce-backend/w4-main-driver.py); the a4 window's $10.93 spend stands recorded.",
+  "verbatim_sha256": "ad92a45346d3440877020e06e016754499169148f4d5d2d811759ab12077549e"
+ },
+ "bound_micros": 100000000,
+ "dead_man": "the declaration's own bounds stand \u2014 D 12 h max-run STOP + in-guest 735 min timer + h_r 6 h residual horizon; if the window cannot complete inside the bound the driver withholds verbatim and teardown runs",
+ "operator_verbatim": "$100 ceiling",
+ "phase": "fp",
+ "pinned_schedule": {
+  "concurrency": 4,
+  "drop_order": [
+   "v5",
+   "claude-code",
+   "pi"
+  ],
+  "replicates": 5,
+  "seed": "fp-w4-schedule-r6.33-2026-11-10",
+  "slot_deadline_s": 3738,
+  "slot_slice_micros": 850000,
+  "tasks": "overfull-hbox,write-compressor,fix-code-vulnerability,regex-log,build-cython-ext,headless-terminal,multi-source-data-merger,largest-eigenval,gcode-to-text,sanitize-git-repo"
+ },
+ "projection_micros": {
+  "compute": {
+   "ceiling": 4690420,
+   "source": "docs/build/reports/2026-11-20-fp-w4xv-quote.json pq-b70e6859db3f6011 (D 12h dead-man + 1h restart + disk + egress)"
+  },
+  "cumulative_window_micros": {
+   "a4_recorded": 10930000,
+   "a5_projected_ceiling": 6690420,
+   "total_ceiling_shape": 17600000
+  },
+  "model": {
+   "ceiling": 64188120,
+   "expected": 2000000,
+   "source": "a4 measured 1,740,548 \u00b5$ over v5's identical 50 slots (same model glm-5.3-flash, same tasks/schedule) \u2014 expected is a4's figure with ~15% headroom"
+  }
+ },
+ "recorded_at": "2026-11-20T13:19:08Z",
+ "recorded_before_first_metered_call": true,
+ "schema": "hh-fp-spend-bound/1",
+ "scope": [
+  "undelete hh-fp-a1b2c3 (soft-delete window; re-delete at teardown)",
+  "provision GCE instance per scripts/gce-backend/declarations/fp-w4xv-r656.json",
+  "lane probe + composed k=5 schedule: 10 held tasks x 5 replicates x 1 arm (50 slots)",
+  "arm: v5 corrected-seal (hh-fp-sweep-level/1 docs/build/reports/2026-11-20-fp-sweep-v5-corrected.json level_ref sha256:2e064214\u2026)",
+  "verifier: commit-clone verify (scripts/gce-backend/w4-main-driver.py run_verifier \u2014 the a5 fix)",
+  "harvest + teardown (phase_close: project delete) + archive upload + settlement"
+ ],
+ "stage": "r6.56-continuation-a5",
+ "ticket": "R6.56",
+ "window": "w4xv"
+}

@@ -1,0 +1,18 @@
+{
+ "bound_source": "--memory/--memory-swap wired into the slot cell_spec at R7.8 (commit 324e5976); this fixture exercises the same flag path on a synthetic allocating subject",
+ "fixture": {
+  "class": "container fixture (podman machine hh-r752-test, macOS podman 6.1.0, 4GiB VM) \u2014 the row's alternate verify leg ('verified on a live leg or a container fixture')",
+  "command": "podman run --name r752-oom3 --memory 128m --memory-swap 128m alpine:3.20 awk 'BEGIN{s=\"x\"; while(1) s=s s}'",
+  "result": "container rc 137; podman inspect OOMKilled=true ExitCode=137"
+ },
+ "guest_evidence": "NetworkManager `active` post-kill (podman machine ssh \u2014 guest network service unaffected; the ens4 collateral class did not occur)",
+ "kernel_evidence": {
+  "kill_line": "Memory cgroup out of memory: Killed process 2202 (awk) total-vm:198340kB, anon-rss:130416kB, UID:501",
+  "oom_line": "oom-kill:constraint=CONSTRAINT_MEMCG, ..., oom_memcg=/user.slice/user-501.slice/user@501.service/user.slice/libpod-01744878\u2026.scope, task_memcg=\u2026scope/container, task=awk",
+  "reading": "CONSTRAINT_MEMCG \u2014 the kill was scoped to the container's own cgroup; contrast the P4-C 17:39Z incident's host-global OOM (sshd invoked oom-killer under ~31 GB subject RSS) that collateral-killed journald + ens4"
+ },
+ "recorded_at": "2026-11-26T10:47Z",
+ "row": "DF-R7.5-2",
+ "schema": "hh-df-evidence/1",
+ "verdict": "DF-R7.5-2 verify criterion met: a synthetic slot allocating past the bound is OOM-killed inside its own cgroup while the guest keeps its network service alive, recording honest rc 137"
+}

@@ -53,6 +53,14 @@ import argparse, hashlib, json, os, subprocess, sys, time, urllib.request
 
 ARMS = ["mini-swe-agent", "hh_native", "v5"]   # Pi/CC: not_run{admission:AG3}
 PROBE_SLICE_MICROS = 50_000
+# R6.55/W4x — the extension arm-set. `--arms` re-opens the hosted pair
+# (Pi, Claude Code) whose AG3 layer evidence W4 recorded
+# `not_run{admission:AG3}`. Each hosted arm runs through the SAME
+# `hh-w1 arm-run` lane as mini-swe-agent — a new admission file and a
+# per-(arm × task) layer image, never a second driver.
+HOSTED_ARMS = {"mini-swe-agent", "pi", "claude-code"}
+ADMISSION_ARG = {"mini-swe-agent": "admission_mini",
+                 "pi": "admission_pi", "claude-code": "admission_cc"}
 
 def eprint(*a): print(*a, file=sys.stderr)
 
@@ -367,7 +375,7 @@ def run_lane_probe(a, sess, out_dir, adapter, pricing, plan, http=None,
     now = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     if not token:
         rec = {"schema": "hh-lane-probe/1", "stage": "lane-probe",
-               "window": "W4", "gate": "FP-E",
+               "window": a.window, "gate": "FP-E",
                "disposition": "failed{no_slot_grant}",
                "evidence_label": "recorded_execution", "recorded_at": now}
         return rec, False
@@ -408,7 +416,7 @@ def run_lane_probe(a, sess, out_dir, adapter, pricing, plan, http=None,
         rec = out["stage"]
     except (AdapterRefused, KeyError) as e:
         rec = {"schema": "hh-lane-probe/1", "stage": "lane-probe",
-               "window": "W4", "gate": "FP-E",
+               "window": a.window, "gate": "FP-E",
                "disposition": f"failed{{adapter_refused:{e}}}",
                "evidence_label": "recorded_execution", "recorded_at": now}
     rec["probe_end_seq"] = max((r[0] for r in rows if isinstance(r[0], int)),
@@ -466,39 +474,159 @@ def podman_containers():
     except Exception:
         return []
 
-def run_verifier(slot_dir):
-    """Post-drive verify: the drive's `local_container` env leaves the
-    podman container alive under `PreserveUntil` custody; find the one
-    bind-mounting this slot's workspace, exec `/tests/test.sh`, then
-    remove it (honest teardown — never a leaked billable)."""
+def task_verify_deadline_s(tasks_dir, task, cfg):
+    """The D15 mirror in the driver's own narrow reader (task_toml.rs):
+    `[verifier].timeout_sec` out of the task's own task.toml when it
+    declares one, else the cfg's `verify_deadline_ms` bound recorded
+    `cfg_default`. A malformed declared value is a typed error, never
+    a silent default."""
+    toml_path = os.path.join(tasks_dir, task, "task.toml")
+    try:
+        in_verifier = False
+        with open(toml_path) as tf:
+            lines = list(tf)
+        for line in lines:
+            s = line.split("#", 1)[0].strip()
+            if s.startswith("["):
+                in_verifier = s == "[verifier]"
+                continue
+            if in_verifier and s.startswith("timeout_sec"):
+                v = float(s.split("=", 1)[1].strip())
+                if v <= 0:
+                    raise ValueError(
+                        f"{toml_path}: [verifier].timeout_sec {v} "
+                        "is not positive")
+                return v, "task_toml"
+    except FileNotFoundError:
+        pass
+    return ((cfg.get("verify_deadline_ms") or 600000) / 1000.0,
+            "cfg_default")
+
+
+def image_workdir(image):
+    """`podman image inspect … .Config.WorkingDir` — the hosted lane's
+    `image_workdir()` verbatim (empty declares → the caller's cfg
+    fallback, never a fabricated `/`)."""
+    if not image:
+        return None
+    try:
+        p = subprocess.run(["podman", "image", "inspect", image,
+                            "--format", "{{.Config.WorkingDir}}"],
+                           capture_output=True, text=True, timeout=30)
+        w = p.stdout.strip()
+        return w if p.returncode == 0 and w else None
+    except Exception:
+        return None
+
+
+def run_verifier(a, m, slot_dir):
+    """Post-drive verify — the commit-clone form (R6.56 continuation;
+    cell.rs ST5's ordering for the native lane). The slot's
+    `local_container` ran `--network none` under kernel_default and
+    nothing stages `/tests` into it during the agent phase — the
+    REQ-XB-106 phase boundary the hosted lane's ST5 staging honors.
+    Bare `podman exec … bash /tests/test.sh` therefore recorded 127 on
+    every native slot (W4 hh_native 50/50, W4x v5 50/50) — this leg
+    was the defect, not the task packages (the hosted slots staged the
+    same `tests/` trees into `staging/`).
+
+    After the drive settles, the still-live cell is `podman commit`ed
+    into a verify image (the agent's post-run rootfs, /work excluded
+    as a mount) and a verify clone runs with: the declared verify
+    egress — `bridge`, honestly recorded (the allowlist-mediated
+    verify profile is the hosted lane's mediator machinery, absent
+    from this lane); the task's `tests/` staged at `/tests` read-only
+    (tests enter the cell only at verify time); `/logs/verifier`
+    bind-mounted to the slot's `collect/` so reward + CTRF bytes land
+    through the host edge, never `/work`; and cwd = the task image's
+    declared WORKDIR (cfg fallback) — the hosted lane's verifier cwd.
+    Both cells are then removed (honest teardown — never a leaked
+    billable)."""
     ws = os.path.abspath(os.path.join(slot_dir, "ws"))
     hit = None
     for c in podman_containers():
-        if any(os.path.abspath(m) == ws for m in c["mounts"]):
+        if any(os.path.abspath(mm) == ws for mm in c["mounts"]):
             hit = c
             break
     if not hit:
         return {"disposition": "verifier_unavailable{env_closed_or_unmounted}"}
     cid = hit["id"]
+    vimg = None
     try:
-        p = subprocess.run(
-            ["podman", "exec", cid, "bash", "/tests/test.sh"],
-            capture_output=True, text=True, timeout=600)
-        row = {"disposition": "recorded", "returncode": p.returncode,
-               "stdout_tail": p.stdout[-4000:], "stderr_tail": p.stderr[-4000:]}
-        # the TB reward file — read it out of the same container when present
-        q = subprocess.run(
-            ["podman", "exec", cid, "bash", "-c",
-             "cat /logs/verifier/reward.txt 2>/dev/null || "
-             "cat /logs/verifier/reward.json 2>/dev/null || true"],
-            capture_output=True, text=True, timeout=60)
-        if q.stdout.strip():
-            row["reward_file"] = q.stdout.strip()[:2000]
+        tests_src = os.path.join(a.tasks_dir, m["task"], "tests")
+        if not (os.path.isdir(tests_src)
+                and os.path.isfile(os.path.join(tests_src, "test.sh"))):
+            return {"disposition":
+                    "verifier_unavailable{no_test_in_package}",
+                    "detail": tests_src}
+        # ST1 mirror — `/tests` present before the verify phase is a
+        # phase-boundary breach, never silently overwritten.
+        p = subprocess.run(["podman", "exec", cid, "test", "-e", "/tests"],
+                           capture_output=True, timeout=30)
+        if p.returncode == 0:
+            return {"disposition":
+                    "verifier_unavailable{phase_boundary:tests_present}"}
+        verify_s, src = task_verify_deadline_s(
+            a.tasks_dir, m["task"], a.cfg_obj)
+        tag = hashlib.sha256(m["slot_id"].encode()).hexdigest()[:16]
+        vimg = f"hh-verify-{tag}"
+        vname = f"hh-verify-run-{tag}"
+        p = subprocess.run(["podman", "commit", cid, vimg],
+                           capture_output=True, text=True, timeout=300)
+        if p.returncode != 0:
+            return {"disposition": "verifier_unavailable{commit_failed}",
+                    "stderr_tail": p.stderr[-2000:]}
+        collect = os.path.join(slot_dir, "collect")
+        os.makedirs(collect, exist_ok=True)
+        img_ref = a.task_images.get(m["task"])
+        if isinstance(img_ref, dict):
+            img_ref = img_ref.get("image")
+        workdir = (image_workdir(img_ref)
+                   or a.cfg_obj.get("workdir_default") or "/app")
+        run_argv = ["podman", "run", "--rm", "--name", vname,
+                    "--network", "bridge",
+                    "-v", f"{ws}:/work:rw",
+                    "-v", f"{tests_src}:/tests:ro",
+                    "-v", f"{collect}:/logs/verifier:rw",
+                    "--workdir", workdir,
+                    vimg, "bash", "/tests/test.sh"]
+        try:
+            p = subprocess.run(run_argv, capture_output=True, text=True,
+                               timeout=verify_s)
+            row = {"disposition": "recorded", "returncode": p.returncode,
+                   "stdout_tail": p.stdout[-4000:],
+                   "stderr_tail": p.stderr[-4000:],
+                   "verify_cell": "commit_clone",
+                   "verify_egress": "bridge",
+                   "workdir": workdir,
+                   "deadline_s": verify_s, "deadline_source": src}
+        except subprocess.TimeoutExpired:
+            subprocess.run(["podman", "stop", "-t", "5", vname],
+                           capture_output=True)
+            subprocess.run(["podman", "rm", "-f", vname],
+                           capture_output=True)
+            row = {"disposition":
+                   "verifier_unavailable{verifier_timeout}",
+                   "verify_cell": "commit_clone",
+                   "deadline_s": verify_s, "deadline_source": src}
+        # The reward + CTRF bytes landed host-side through the collect
+        # mount — report the reward file verbatim like the W4 leg did.
+        for name in ("reward.txt", "reward.json"):
+            rp = os.path.join(collect, name)
+            if os.path.isfile(rp):
+                with open(rp) as f:
+                    row["reward_file"] = f.read().strip()[:2000]
+                break
+        return row
     except Exception as e:
-        row = {"disposition": "verifier_unavailable{exec_error}",
-               "detail": str(e)}
-    remove_container(cid)
-    return row
+        return {"disposition": "verifier_unavailable{exec_error}",
+                "detail": str(e)}
+    finally:
+        subprocess.run(["podman", "rm", "-f", cid], capture_output=True)
+        if vimg:
+            subprocess.run(["podman", "rmi", "-f", vimg],
+                           capture_output=True)
+
 
 def remove_container(cid):
     """Remove one exact, recorded slot container (never a sweep), bounded."""
@@ -540,14 +668,25 @@ def launch_member(a, sess, m, slot_dir):
     token = grant.get("slot_token")
     if not token:
         raise LaunchRefused("grant_absent")
-    image = a.task_images.get(m["task"])
+    if arm in HOSTED_ARMS:
+        # hosted arms take their per-(arm × task) layer image — the
+        # base task image only when no layer map was staged (the W4
+        # default; every staged layer is an `hh-admit/<arm>-<ver>-<t>`
+        # mint from layers-build).
+        image = (a.arm_layers.get(arm) or {}).get(m["task"]) \
+            if getattr(a, "arm_layers", None) else a.task_images.get(m["task"])
+    else:
+        image = a.task_images.get(m["task"])
     if not image:
         raise LaunchRefused("image_absent")
     os.makedirs(slot_dir, exist_ok=True)
     tok_file = os.path.join(slot_dir, "slot-token")
-    if arm == "mini-swe-agent":
+    if arm in HOSTED_ARMS:
+        admission = getattr(a, ADMISSION_ARG[arm], None)
+        if not admission:
+            raise LaunchRefused(f"admission_absent:{arm}")
         cmd = [a.w1_bin, "arm-run", "--cfg", a.cfg, "--task", m["task"],
-               "--image", image, "--admission", a.admission_mini,
+               "--image", image, "--admission", admission,
                "--slot-id", sid, "--slot-token-file", tok_file,
                "--model-upstream", str(a.model_upstream),
                "--slot-slice-micros", str(a.slot_slice_micros),
@@ -1122,6 +1261,14 @@ def main():
     ap.add_argument("--tasks", required=True)
     ap.add_argument("--replicates", type=int, default=5)
     ap.add_argument("--admission-mini", required=True)
+    ap.add_argument("--admission-pi", default=None)
+    ap.add_argument("--admission-cc", default=None)
+    ap.add_argument("--arms", default=",".join(ARMS),
+                    help="CSV arm-set — default preserves the W4 plan; "
+                         "the W4x set re-opens pi + claude-code")
+    ap.add_argument("--arm-layers", default=None,
+                    help="JSON arm→task→image map from layers-build "
+                         "(hosted arms take their layer image)")
     ap.add_argument("--hir-doc", required=True)
     ap.add_argument("--v5-doc", required=True)
     ap.add_argument("--mswea-pack", required=True)
@@ -1143,11 +1290,22 @@ def main():
     ap.add_argument("--seed", default="fp-w4-schedule-r6.33-2026-11-10")
     ap.add_argument("--shim-close-timeout-s", type=int, default=120)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--window", default="W4",
+                    help="window label on emitted records (W4 / W4x)")
     ap.add_argument("--plan-only", action="store_true")
     a = ap.parse_args()
 
     tasks = a.tasks.split(",")
-    rounds = plan_schedule(tasks, a.replicates, ARMS, a.seed)
+    # the active arm-set — W4's plan when --arms is not extended.
+    arms = a.arms.split(",")
+    for arm in arms:
+        if arm not in HOSTED_ARMS | {"hh_native", "v5"}:
+            eprint(f"unknown arm: {arm}")
+            return 2
+        if arm in HOSTED_ARMS and not getattr(a, ADMISSION_ARG[arm], None):
+            eprint(f"arm {arm} requires --{ADMISSION_ARG[arm].replace('_','-')}")
+            return 2
+    rounds = plan_schedule(tasks, a.replicates, arms, a.seed)
     if a.plan_only:
         print(json.dumps({"rounds": [
             [{"task": u["task"], "replicate": u["replicate"],
@@ -1178,8 +1336,10 @@ def main():
         eprint(f"lane-probe plan refused before any call: {e}")
         return 2
     cfg = read_json(a.cfg)
+    a.cfg_obj = cfg
     a.tasks_dir = cfg["tasks_dir"]
     a.task_images = read_json(cfg["images_file"])
+    a.arm_layers = read_json(a.arm_layers) if a.arm_layers else None
     a.model_upstream = int(a.listen.rsplit(":", 1)[1])
     with open(a.continuation_config, "rb") as f:
         ccfg_sha = sha256_hex(f.read())
@@ -1212,8 +1372,8 @@ def main():
     shim_log = open(os.path.join(a.out, "proxy-session.log"), "w")
     shim = subprocess.Popen(ps_cmd, stdout=shim_log,
                             stderr=subprocess.STDOUT, text=True)
-    window = {"schema": "hh-fp-window/1", "window": "W4", "gate": "FP-E",
-              "run_id": a.run_id, "seed": a.seed, "arms": ARMS,
+    window = {"schema": "hh-fp-window/1", "window": a.window, "gate": "FP-E",
+              "run_id": a.run_id, "seed": a.seed, "arms": arms,
               "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
               "dead_man_epoch": a.dead_man_epoch,
               "concurrency": a.concurrency,
@@ -1228,9 +1388,13 @@ def main():
                   for ri, units in enumerate(rounds, start=1)
                   for u in units],
               "withheld": [], "checkpoints": [], "checkpoint": None,
-              "lane_probe": None, "not_run": {
-                  "pi": "not_run{admission:AG3}",
-                  "claude-code": "not_run{admission:AG3}"}}
+              "lane_probe": None,
+              # the extension pair reads `not_run{admission:AG3}` ONLY
+              # when the arm-set leaves them out — when armed, their
+              # per-slot outcomes are the record.
+              "not_run": {
+                  arm: "not_run{admission:AG3}"
+                  for arm in ("pi", "claude-code") if arm not in arms}}
     sched = None
     rc_out = 0
     owned = {}   # slot_id -> Popen (owned children only)
@@ -1296,7 +1460,7 @@ def main():
             if end:
                 row["end"] = end
             if m["arm"] in NATIVE_ARMS:
-                row["verifier"] = (run_verifier(sd) if not end
+                row["verifier"] = (run_verifier(a, m, sd) if not end
                                    else remove_slot_container(sd))
             evs = read_events(store)
             row["cost_micros"] = slot_cost_micros(evs, sid)

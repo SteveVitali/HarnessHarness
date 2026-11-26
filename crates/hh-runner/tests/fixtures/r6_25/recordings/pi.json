@@ -24,18 +24,22 @@
     "headers": {
      "content-type": "text/event-stream"
     },
-    "body_sha256": "sha256:2446d2d1778e47e3d680cd12b47a96cce8252ea968f86a0df3a2f629a65e8d7f",
+    "body_sha256": "sha256:b9c8af4fe610e1dee62cfcddbd5de8fb5d17c67cc6b32e1b444ead052102fbec",
     "body": {
-     "utf8": "{\"id\":\"chatcmpl-sp1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"call_p1\",\"type\":\"function\",\"function\":{\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"printf 'ok' > /app/hh_smoke.txt\\\"}\"}}]}}]}"
+     "utf8": "data: {\"id\":\"chatcmpl-sp1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"call_p1\",\"type\":\"function\",\"function\":{\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"printf 'ok' > /app/hh_smoke.txt\\\"}\"}}]}}]}\n\ndata: {\"id\":\"chatcmpl-sp1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\ndata: [DONE]\n\n"
     },
     "chunk_stamps": [
      [
       0,
-      80
+      266
      ],
      [
       40,
-      120
+      126
+     ],
+     [
+      80,
+      14
      ]
     ]
    },
@@ -43,9 +47,9 @@
    "released": {
     "status": 200,
     "headers": {},
-    "body_sha256": "sha256:2446d2d1778e47e3d680cd12b47a96cce8252ea968f86a0df3a2f629a65e8d7f",
+    "body_sha256": "sha256:b9c8af4fe610e1dee62cfcddbd5de8fb5d17c67cc6b32e1b444ead052102fbec",
     "body": {
-     "utf8": "{\"id\":\"chatcmpl-sp1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"call_p1\",\"type\":\"function\",\"function\":{\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"printf 'ok' > /app/hh_smoke.txt\\\"}\"}}]}}]}"
+     "utf8": "data: {\"id\":\"chatcmpl-sp1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"tool_calls\":[{\"index\":0,\"id\":\"call_p1\",\"type\":\"function\",\"function\":{\"name\":\"bash\",\"arguments\":\"{\\\"command\\\":\\\"printf 'ok' > /app/hh_smoke.txt\\\"}\"}}]}}]}\n\ndata: {\"id\":\"chatcmpl-sp1\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\ndata: [DONE]\n\n"
     }
    },
    "disposition": "forwarded",
@@ -72,14 +76,18 @@
     "headers": {
      "content-type": "text/event-stream"
     },
-    "body_sha256": "sha256:9820d8e4c5ddc7313c8a9a195c077439219b5f80a90f3a83b8943c4320376daf",
+    "body_sha256": "sha256:5912d66606b1ac337447e453920bab4b99bed705f11385c9f0a0574f95b90156",
     "body": {
-     "utf8": "{\"id\":\"chatcmpl-sp2\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok written \\u2014 task complete\"},\"finish_reason\":\"stop\"}]}"
+     "utf8": "data: {\"id\":\"chatcmpl-sp2\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok written \\u2014 task complete\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
     },
     "chunk_stamps": [
      [
       0,
-      200
+      163
+     ],
+     [
+      40,
+      14
      ]
     ]
    },
@@ -87,9 +95,9 @@
    "released": {
     "status": 200,
     "headers": {},
-    "body_sha256": "sha256:9820d8e4c5ddc7313c8a9a195c077439219b5f80a90f3a83b8943c4320376daf",
+    "body_sha256": "sha256:5912d66606b1ac337447e453920bab4b99bed705f11385c9f0a0574f95b90156",
     "body": {
-     "utf8": "{\"id\":\"chatcmpl-sp2\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok written \\u2014 task complete\"},\"finish_reason\":\"stop\"}]}"
+     "utf8": "data: {\"id\":\"chatcmpl-sp2\",\"object\":\"chat.completion.chunk\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok written \\u2014 task complete\"},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
     }
    },
    "disposition": "forwarded",

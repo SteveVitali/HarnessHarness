@@ -613,10 +613,24 @@ impl PodmanBackend {
 /// command in a fresh process group and TERMs the whole group at the
 /// deadline, then `--kill-after` SIGKILLs what survives — the entire
 /// in-container tree dies without depending on the host-side pgid's
-/// reach (UNVERIFIED across `podman exec`; ADR-0441 rejected the
-/// host-side kill for exactly that reason). Returns `argv` unchanged
-/// when no deadline is declared — an undated exec has nothing for the
-/// wrapper to enforce.
+/// reach (ADR-0441 rejected the host-side kill for exactly that
+/// reason). Returns `argv` unchanged when no deadline is declared —
+/// an undated exec has nothing for the wrapper to enforce.
+///
+/// `setsid --wait` (R6.55; the W4x `adapter:silent_exit` root cause):
+/// under `podman exec` the exec'd process is already a process-group
+/// leader, so bare `setsid` forks and its parent returns 0 immediately
+/// — the runtime tears down the exec session and the still-running
+/// `timeout` tree dies before its first output byte (verified on
+/// podman 6.1/FCOS: every deadline-bearing cell exec landed `exited{0}`
+/// with zero stream bytes). `--wait` keeps the exec'd parent alive for
+/// the wrapped child's full lifetime and propagates its exit status
+/// (124 on a `timeout` lapse included) — the session-leader topology
+/// is identical; on a runtime whose exec is not a group leader,
+/// `setsid` never forks and `--wait` changes nothing. util-linux ≥2.33
+/// carries `--wait` (the admitted debian/ubuntu cell families); a
+/// non-util-linux `setsid` errors loudly instead of forking silently —
+/// the honest failure, never the silent drop.
 pub fn wrap_kill(argv: &[String], deadline_ms: Option<u64>) -> Vec<String> {
     let Some(ms) = deadline_ms else {
         return argv.to_vec();
@@ -634,6 +648,7 @@ pub fn wrap_kill(argv: &[String], deadline_ms: Option<u64>) -> Vec<String> {
     };
     let mut out = vec![
         "setsid".to_string(),
+        "--wait".to_string(),
         "timeout".to_string(),
         format!("--kill-after={}", dur(crate::exec::TERM_GRACE_MS)),
         dur(ms),

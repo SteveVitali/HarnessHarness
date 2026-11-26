@@ -1,0 +1,53 @@
+{
+ "attempt": "a5",
+ "attribution": {
+  "conclusion": "all nonzero trailing-24h hourly buckets sit inside the two live window spans \u2014 nothing outside. w4xv hours 13:00\u201315:00Z: $1.86016 provider-side vs 1,744,554 \u00b5$ harness-attributed \u2014 the \u22480.116 \u00b5$M gap is concurrent-hour unattributed usage on the shared account (same class as W4's settlement-4); every attributed call in this window carried usage, so the a4 unmetered-streaming class does not apply",
+  "nonzero_buckets": "2026-11-20T13:00Z\u201315:00Z only; all other buckets in-span are w4x a4's (03:00\u201310:00Z, $7.76254)",
+  "provider_trailing_24h_usd": 9.6227,
+  "provider_window_hours_usd": 1.86016
+ },
+ "balance_observed": "included-allowance 36.68009 USD remaining of 60 (period 2026-10-22\u21922026-11-22); purchased 0",
+ "boundary": "2026-11-20T16:00:00Z",
+ "boundary_flags": [
+  "concurrent_hour_unattributed"
+ ],
+ "clock_settles_at": "2026-11-20T18:00:00Z",
+ "evidence": {
+  "reads_root": "~/hh-retained/w4x/settle/",
+  "settled_record_superseded": "2026-11-20-fp-w4xv-settlement.json"
+ },
+ "hh": {
+  "attributed_calls": 1348,
+  "attributed_micro_units": 1744554
+ },
+ "phase": "fp",
+ "provided": {
+  "OLLAMA_API_KEY": "yes"
+ },
+ "reads": [
+  {
+   "file": "~/hh-retained/w4x/settle/settlement-3-usage.json",
+   "kind": "usage-1",
+   "read_at": "2026-11-20T18:05:24Z",
+   "status": 200
+  },
+  {
+   "file": "~/hh-retained/w4x/settle/settlement-3-usage2.json",
+   "kind": "usage-2",
+   "read_at": "2026-11-20T18:45:01Z",
+   "status": 200
+  },
+  {
+   "file": "~/hh-retained/w4x/settle/settlement-3-balance.json",
+   "kind": "balance",
+   "read_at": "2026-11-20T18:06:26Z",
+   "status": 200
+  }
+ ],
+ "recorded_at": "2026-11-20T18:45:40Z",
+ "schema": "hh-fp-settlement/1",
+ "status": "settled_discrepant{concurrent_hour_unattributed} \u2014 provider window-hours $1.86 vs harness-attributed 1,744,554 \u00b5$; ~$0.12 concurrent-hour unattributed recorded, not absorbed; cumulative live spend remains far under the ADR-0453 USD-100 ceiling",
+ "supersedes": "docs/build/reports/2026-11-20-fp-w4xv-settlement.json (status pending{clock})",
+ "ticket": "R6.56",
+ "window": "w4xv"
+}

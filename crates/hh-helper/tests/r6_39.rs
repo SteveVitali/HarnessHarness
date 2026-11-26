@@ -32,7 +32,11 @@ fn argv_of(cmd: &Command) -> Vec<String> {
 
 #[test]
 fn ac1_argv_golden_declared_cwd_env_and_incell_kill() {
-    // armed + deadline ⇒ setsid/timeout wrapper; cwd=image_workdir ⇒ no --workdir
+    // armed + deadline ⇒ setsid --wait/timeout wrapper (R6.55: `--wait`
+    // pins the exec'd parent to the wrapped child's lifetime — the
+    // bare-`setsid` fork + immediate-exit under `podman exec` dropped
+    // every phase's tree to `exited{0}`/0 bytes); cwd=image_workdir ⇒
+    // no --workdir
     let argv = wrap_kill(
         &["/bin/sh".into(), "-c".into(), "echo hi".into()],
         Some(30_000),
@@ -41,6 +45,7 @@ fn ac1_argv_golden_declared_cwd_env_and_incell_kill() {
         argv,
         [
             "setsid",
+            "--wait",
             "timeout",
             "--kill-after=2",
             "30",
@@ -61,7 +66,7 @@ fn ac1_argv_golden_declared_cwd_env_and_incell_kill() {
     assert!(a.contains(&"-e".to_string()) && a.iter().any(|s| s.contains("PAGER=cat")));
     assert!(!a.contains(&"--workdir".to_string()), "argv: {a:?}");
     // fractional grace/duration stay exact
-    assert_eq!(wrap_kill(&["x".into()], Some(1_500))[3], "1.5");
+    assert_eq!(wrap_kill(&["x".into()], Some(1_500))[4], "1.5");
     assert_eq!(wrap_kill(&["x".into()], None), vec!["x".to_string()]);
 }
 

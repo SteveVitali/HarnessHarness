@@ -2380,9 +2380,72 @@ pub fn compaction_strategy_for(
         cf::MODEL_OWNED_REF => Err(bad(format!(
             "{variant_ref} is the model-owned boundary (β(compact) = model) — a proposal channel, never a slot-bound code variant"
         ))),
+        // R7.3 (manifest 329) — the frozen P4 level docs' sealed
+        // `compaction_strategy` slot spells the sweep fixture's
+        // `hh/compactor` variant with `strategy:"none"` + a declared
+        // `window_cap`. "none" arms a declining rung: the variant
+        // proposes nothing, the ladder falls through to the kernel's
+        // `evict_oldest` floor — byte-identical to the unbound slot,
+        // never a silently-armed strategy the doc did not declare. A
+        // `strategy` spelling without a runtime binding is the arm's
+        // typed refusal, not a guessed substitution.
+        "hh/compactor" => {
+            no_unknown(&["strategy", "window_cap"])?;
+            match s("strategy").as_deref() {
+                Some("none") => Ok(Box::new(DeclineCompaction {
+                    window_cap: u("window_cap").unwrap_or(0),
+                })),
+                Some(other) => Err(bad(format!(
+                    "{variant_ref}.strategy {other:?} has no runtime binding"
+                ))),
+                None => Err(bad(format!("{variant_ref}.strategy required"))),
+            }
+        }
         other => Err(bad(format!(
-            "variant {other:?} names no first-party binding                  (declared: hh/summarize-rolling@1 | hh/offload-then-summarize@1 |                 hh/structured-checkpoint@1 | hh/fresh-window-with-notes@1 |                 hh/world-state-refresh@1 | hh/provider-compaction@1)"
+            "variant {other:?} names no first-party binding                  (declared: hh/summarize-rolling@1 | hh/offload-then-summarize@1 |                 hh/structured-checkpoint@1 | hh/fresh-window-with-notes@1 |                 hh/world-state-refresh@1 | hh/provider-compaction@1 | hh/compactor)"
         ))),
+    }
+}
+
+/// `DeclineCompaction` — the `hh/compactor` slot's `strategy:"none"`
+/// runtime binding (R7.3, manifest 329): a rung that declines every
+/// assessment (its `propose` errors — the ladder continues to the next
+/// variant, ending at the kernel `evict_oldest` floor). The declared
+/// `window_cap` is carried verbatim for `selection_parameters`
+/// (R5.18's persist-the-exact-bound-parameters rule); the rung never
+/// proposes.
+struct DeclineCompaction {
+    /// The slot's declared window cap — recorded, never consulted by a
+    /// declining rung.
+    window_cap: u64,
+}
+
+impl hharness_context::compact::CompactionStrategy for DeclineCompaction {
+    fn variant_ref(&self) -> &str {
+        "hh/compactor"
+    }
+
+    fn propose(
+        &self,
+        input: &hharness_context::compact::CompactInput,
+        _assessment: &hharness_context::compact::Assessment,
+    ) -> Result<
+        hharness_context::compact::CompactionProposal,
+        hharness_context::compact::CompactError,
+    > {
+        Err(
+            hharness_context::compact::CompactError::CompactionImpossible {
+                required_tokens: 0,
+                cap: input.window_cap,
+            },
+        )
+    }
+
+    fn selection_parameters(&self) -> Json {
+        Json::obj([
+            ("strategy", Json::str("none")),
+            ("window_cap", Json::Int(self.window_cap as i64)),
+        ])
     }
 }
 
@@ -3378,9 +3441,20 @@ pub fn probe_uname_slots(
                     cap.capability_ref.version_id.clone(),
                 ),
                 effect: cap.declared.clone(),
+                // R7.3 (manifest 329) — the probe's `argv` spelling: the
+                // executor arg contracts differ — the `local_host`
+                // `LocalExecutor` whitespace-splits `command` (no shell),
+                // while `hh-helper` runs `command` through `sh -c`; both
+                // exec `argv` verbatim. `/bin/sh -c` is the one spelling
+                // that runs the compound uname under every real executor
+                // (the replay double ignores args positionally).
                 args: Json::obj([(
-                    "command",
-                    Json::str("uname -s; uname -r; uname -v; uname -m"),
+                    "argv",
+                    Json::Arr(vec![
+                        Json::str("/bin/sh"),
+                        Json::str("-c"),
+                        Json::str("uname -s; uname -r; uname -v; uname -m"),
+                    ]),
                 )]),
                 env_handle_id: handle.to_string(),
                 attribution_token: token.clone(),

@@ -1,0 +1,145 @@
+{
+  "attribution": {
+    "idle_seconds": 3518.0,
+    "slot_wall_ms": 0,
+    "utilization_ppm": 0
+  },
+  "billed": {
+    "amount_micros": null,
+    "read_at": null,
+    "reason": null,
+    "record": null,
+    "source": "Cloud Billing report, project filter, read by operator",
+    "status": "pending"
+  },
+  "estimate": {
+    "free_tier_applied": false,
+    "lines_micros": {
+      "disk": 40164,
+      "egress": 360000,
+      "instance": 261935,
+      "ipv4": 4887,
+      "nat": 0
+    },
+    "rounding": "ceil per line",
+    "total_micros": 666986
+  },
+  "phase": "p4",
+  "project_id": "hh-p4-a1b2c3",
+  "provided": {
+    "OLLAMA_API_KEY": "no",
+    "gcloud_auth": "yes"
+  },
+  "provider": "gce",
+  "quote": {
+    "ceiling_micros": 13486340,
+    "dead_man_h": 40,
+    "id": "59a49747bfa5bdf0"
+  },
+  "rate_table": {
+    "path": "docs/build/reports/live/pricing.json",
+    "rows": [
+      {
+        "price_micros": 268040,
+        "retrieved": "2026-11-07",
+        "sku": "e2-standard-8",
+        "source": "https://cloud.google.com/compute/vm-instance-pricing#e2_standard_machine_types",
+        "unit": "hour"
+      },
+      {
+        "price_micros": 120000,
+        "retrieved": "2026-11-07",
+        "sku": "egress",
+        "source": "https://cloud.google.com/vpc/network-pricing#egress",
+        "unit": "gib"
+      },
+      {
+        "price_micros": 5000,
+        "retrieved": "2026-11-07",
+        "sku": "ipv4",
+        "source": "https://cloud.google.com/vpc/network-pricing#ipaddress",
+        "unit": "hour"
+      },
+      {
+        "price_micros": 44000,
+        "retrieved": "2026-11-07",
+        "sku": "nat_gateway",
+        "source": "https://cloud.google.com/nat/pricing",
+        "unit": "hour"
+      },
+      {
+        "price_micros": 137,
+        "retrieved": "2026-11-07",
+        "sku": "pd-balanced",
+        "source": "https://cloud.google.com/compute/disks-image-pricing#persistent-disk-pricing",
+        "unit": "gib_hour"
+      }
+    ],
+    "schema": "hh-live-pricing/2",
+    "sha256": "045e0b8612e901505b9dbd66cbb460286ba763f8b6a169bef7721eb6251033e2"
+  },
+  "receipts": {
+    "provision": {
+      "path": "/private/tmp/hh-r6.53-wt/docs/build/reports/compute/2026-11-20-p4-p4x-provision.json",
+      "sha256": "5a522b95b68508aa1dfed3ebcfd608042d2713a57209832a3bb75300f965e5e2"
+    },
+    "teardown": {
+      "path": "/private/tmp/hh-r6.53-wt/docs/build/reports/compute/2026-11-21-p4-p4x-teardown.json"
+    }
+  },
+  "reconciliation": {
+    "delta_micros": null,
+    "tolerance_micros": null,
+    "verdict": "pending"
+  },
+  "record_id": "cc-7960fb26f8e05495",
+  "recorded_at": "2026-11-21T00:32:13Z",
+  "schema": "hh-compute-cost/1",
+  "ticket": "GATE-G35",
+  "usage": {
+    "disk": {
+      "gib_seconds": 1055400.0,
+      "intervals": [
+        {
+          "from": "2026-11-20T23:33:35.766Z",
+          "to": "2026-11-21T00:32:13Z"
+        }
+      ],
+      "micros": 40164,
+      "size_gib": 300,
+      "type": "pd-balanced"
+    },
+    "egress": {
+      "gib_bound": 3.0,
+      "gib_measured": null,
+      "label": "estimated",
+      "method": "declared estimate \u2014 guest NIC counters unrecorded",
+      "micros": 360000
+    },
+    "instance": {
+      "billable_seconds": 3518.0,
+      "intervals": [
+        {
+          "from": "2026-11-20T23:33:35.766Z",
+          "state": "RUNNING",
+          "to": "2026-11-21T00:32:13Z"
+        }
+      ],
+      "machine_type": "e2-standard-8",
+      "micros": 261935,
+      "seconds": 3518.0
+    },
+    "ipv4": {
+      "kind": "ephemeral",
+      "micros": 4887,
+      "seconds": 3518.0
+    },
+    "nat": {
+      "micros": 0,
+      "present": false,
+      "seconds": 0
+    }
+  },
+  "window": "p4x",
+  "zone": "us-central1-a"
+}

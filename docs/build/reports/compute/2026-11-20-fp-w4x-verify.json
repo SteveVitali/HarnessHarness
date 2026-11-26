@@ -1,0 +1,311 @@
+{
+  "authorization": {
+    "ceiling_micros": 7988890,
+    "gate": "ADR-0453",
+    "quote_id": "pq-feb61167ae35dd0f",
+    "readout_path": "docs/adr/ADR-0453-w4x-extension-unblock-rulings.md",
+    "verbatim_sha256": "ad92a45346d3440877020e06e016754499169148f4d5d2d811759ab12077549e"
+  },
+  "commands": [
+    {
+      "argv_redacted": [
+        "auth",
+        "list",
+        "--format=value(account)"
+      ],
+      "ended_at": "2026-11-20T02:38:41Z",
+      "exit": 0,
+      "started_at": "2026-11-20T02:38:39Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "14stevevitali@gmail.com\n",
+      "stdout_sha256": "664266223ad53c9a2e5c5b893f89cc7a92975b49c96485cff8ed26ecaa89e950"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "ssh",
+        "hh-fp-w4x",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "--tunnel-through-iap",
+        "--command",
+        "curl -fs --unix-socket /run/podman/podman.sock http://d/_ping"
+      ],
+      "ended_at": "2026-11-20T02:38:50Z",
+      "exit": 0,
+      "started_at": "2026-11-20T02:38:42Z",
+      "stderr_excerpt": "WARNING: \n\nTo increase the performance of the tunnel, consider installing NumPy. For instructions,\nplease see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth\n\n",
+      "stdout_excerpt": "OK",
+      "stdout_sha256": "565339bc4d33d72817b583024112eb7f5cdf3e5eef0252d6ec1b9c9a94e12bb3"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "ssh",
+        "hh-fp-w4x",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "--tunnel-through-iap",
+        "--command",
+        "podman version --format json"
+      ],
+      "ended_at": "2026-11-20T02:38:58Z",
+      "exit": 0,
+      "started_at": "2026-11-20T02:38:50Z",
+      "stderr_excerpt": "WARNING: \n\nTo increase the performance of the tunnel, consider installing NumPy. For instructions,\nplease see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth\n\n",
+      "stdout_excerpt": "{\"Client\":{\"APIVersion\":\"4.3.1\",\"Version\":\"4.3.1\",\"GoVersion\":\"go1.19.8\",\"GitCommit\":\"\",\"BuiltTime\":\"Thu Jan  1 00:00:00 1970\",\"Built\":0,\"OsArch\":\"linux/amd64\",\"Os\":\"linux\"}}\n",
+      "stdout_sha256": "0d42dd5ff98eaed998d77ee67517aca25adbe0e87d0071d95002301c97081049"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "ssh",
+        "hh-fp-w4x",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "--tunnel-through-iap",
+        "--command",
+        "podman compose version --format json 2>/dev/null || podman-compose --version"
+      ],
+      "ended_at": "2026-11-20T02:39:07Z",
+      "exit": 0,
+      "started_at": "2026-11-20T02:38:58Z",
+      "stderr_excerpt": "WARNING: \n\nTo increase the performance of the tunnel, consider installing NumPy. For instructions,\nplease see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth\n\n",
+      "stdout_excerpt": "podman version 4.3.1\n['podman', '--version', '']\nusing podman version: 4.3.1\npodman-composer version  1.0.3\npodman --version \nexit code: 0\n",
+      "stdout_sha256": "a53a41285eecd6c10f8d385e10effae11ed16e9b4e66e618e06fbcc727b8bd66"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "ssh",
+        "hh-fp-w4x",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "--tunnel-through-iap",
+        "--command",
+        "uname -r"
+      ],
+      "ended_at": "2026-11-20T02:39:15Z",
+      "exit": 0,
+      "started_at": "2026-11-20T02:39:07Z",
+      "stderr_excerpt": "WARNING: \n\nTo increase the performance of the tunnel, consider installing NumPy. For instructions,\nplease see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth\n\n",
+      "stdout_excerpt": "6.1.0-53-cloud-amd64\n",
+      "stdout_sha256": "f7b86f670ec2c41de9927051a8c265c34579e5da3551da52f0382b96b83df72f"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "ssh",
+        "hh-fp-w4x",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "--tunnel-through-iap",
+        "--command",
+        "dpkg-query -W podman crun conmon netavark podman-compose"
+      ],
+      "ended_at": "2026-11-20T02:39:24Z",
+      "exit": 0,
+      "started_at": "2026-11-20T02:39:15Z",
+      "stderr_excerpt": "WARNING: \n\nTo increase the performance of the tunnel, consider installing NumPy. For instructions,\nplease see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth\n\n",
+      "stdout_excerpt": "conmon\t2.1.6+ds1-1\ncrun\t1.8.1-1+deb12u1\nnetavark\t1.4.0-3\npodman\t4.3.1+ds1-8+deb12u1+b3\npodman-compose\t1.0.3-3\n",
+      "stdout_sha256": "4312d2077d54b7f5fe05f039fb10dcd27df0bea82a68774bd2f0ec6136d3ab3b"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "ssh",
+        "hh-fp-w4x",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "--tunnel-through-iap",
+        "--command",
+        "nproc"
+      ],
+      "ended_at": "2026-11-20T02:39:32Z",
+      "exit": 0,
+      "started_at": "2026-11-20T02:39:24Z",
+      "stderr_excerpt": "WARNING: \n\nTo increase the performance of the tunnel, consider installing NumPy. For instructions,\nplease see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth\n\n",
+      "stdout_excerpt": "8\n",
+      "stdout_sha256": "aa67a169b0bba217aa0aa88a65346920c84c42447c36ba5f7ea65f422c1fe5d8"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "ssh",
+        "hh-fp-w4x",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "--tunnel-through-iap",
+        "--command",
+        "free -b | awk 'NR==2{print $2}'"
+      ],
+      "ended_at": "2026-11-20T02:39:40Z",
+      "exit": 0,
+      "started_at": "2026-11-20T02:39:32Z",
+      "stderr_excerpt": "WARNING: \n\nTo increase the performance of the tunnel, consider installing NumPy. For instructions,\nplease see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth\n\n",
+      "stdout_excerpt": "33664757760\n",
+      "stdout_sha256": "0afaf87f76815ddc5ed9780f0c495953cb5dab41cb58a8e4b02b38490bfb0bad"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "ssh",
+        "hh-fp-w4x",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "--tunnel-through-iap",
+        "--command",
+        "df -B1 --output=avail / | tail -1"
+      ],
+      "ended_at": "2026-11-20T02:39:48Z",
+      "exit": 0,
+      "started_at": "2026-11-20T02:39:40Z",
+      "stderr_excerpt": "WARNING: \n\nTo increase the performance of the tunnel, consider installing NumPy. For instructions,\nplease see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth\n\n",
+      "stdout_excerpt": "301545050112\n",
+      "stdout_sha256": "85ff7f305c69f204b570b60ea54441059597e28b802069253b7d41244b87c954"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "ssh",
+        "hh-fp-w4x",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "--tunnel-through-iap",
+        "--command",
+        "stat -c %a:%U:%G /run/podman/podman.sock"
+      ],
+      "ended_at": "2026-11-20T02:39:55Z",
+      "exit": 0,
+      "started_at": "2026-11-20T02:39:48Z",
+      "stderr_excerpt": "WARNING: \n\nTo increase the performance of the tunnel, consider installing NumPy. For instructions,\nplease see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth\n\n",
+      "stdout_excerpt": "660:root:hh\n",
+      "stdout_sha256": "0e9e2efd294f44abca0e6607e0c84b7bf2758bd8dc28c8c89a0373a3762f9c97"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "ssh",
+        "hh-fp-w4x",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "--tunnel-through-iap",
+        "--command",
+        "sh -c \"ss -tln 2>/dev/null | grep -c podman || true\""
+      ],
+      "ended_at": "2026-11-20T02:40:03Z",
+      "exit": 0,
+      "started_at": "2026-11-20T02:39:55Z",
+      "stderr_excerpt": "WARNING: \n\nTo increase the performance of the tunnel, consider installing NumPy. For instructions,\nplease see https://cloud.google.com/iap/docs/using-tcp-forwarding#increasing_the_tcp_upload_bandwidth\n\n",
+      "stdout_excerpt": "0\n",
+      "stdout_sha256": "9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "firewall-rules",
+        "list",
+        "--filter",
+        "network:hh-net",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-20T02:40:08Z",
+      "exit": 0,
+      "started_at": "2026-11-20T02:40:03Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[\n  {\n    \"allowed\": [\n      {\n        \"IPProtocol\": \"tcp\",\n        \"ports\": [\n          \"22\"\n        ]\n      }\n    ],\n    \"creationTimestamp\": \"2026-11-09T13:23:49.245-08:00\",\n    \"description\": \"\",\n    \"direction\": \"INGRESS\",\n    \"disabled\": false,\n    \"id\": \"2261950971915503370\",\n    \"kind\": \"compute#firewall\",\n    \"logConfig\": {\n      \"enable\": false\n    },\n    \"name\": \"hh-iap-ssh\",\n    \"network\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/networks/hh-net\",\n    \"priority\": 1000,\n    \"selfLink\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/firewalls/hh-iap-ssh\",\n    \"sourceRanges\": [\n      \"35.235.240.0/20\"\n    ]\n  }\n]\n",
+      "stdout_sha256": "df204115ad5667536af4795847b420aaf2e56430b714683176479a2a847e27f8"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "instances",
+        "describe",
+        "hh-fp-w4x",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-20T02:40:13Z",
+      "exit": 0,
+      "started_at": "2026-11-20T02:40:08Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "{\n  \"canIpForward\": false,\n  \"cpuPlatform\": \"AMD Rome\",\n  \"creationTimestamp\": \"2026-11-19T18:26:45.762-08:00\",\n  \"deletionProtection\": false,\n  \"disks\": [\n    {\n      \"architecture\": \"X86_64\",\n      \"autoDelete\": true,\n      \"boot\": true,\n      \"deviceName\": \"persistent-disk-0\",\n      \"diskSizeGb\": \"300\",\n      \"guestOsFeatures\": [\n        {\n          \"type\": \"UEFI_COMPATIBLE\"\n        },\n        {\n          \"type\": \"VIRTIO_SCSI_MULTIQUEUE\"\n        },\n        {\n          \"type\": \"GVNIC\"\n        },\n        {\n          \"type\": \"SEV_CAPABLE\"\n        },\n        {\n          \"type\": \"SEV_LIVE_MIGRATABLE_V2\"\n        },\n        {\n          \"type\": \"SUSPEND_SAFE_FPR\"\n        }\n      ],\n      \"index\": 0,\n      \"interface\": \"SCSI\",\n      \"kind\": \"compute#attachedDisk\",\n      \"licenses\": [\n        \"https://www.googleapis.com/compute/v1/projects/debian-cloud/global/licenses/debian-12-bookworm\"\n      ],\n      \"mode\": \"READ_WRITE\",\n      \"source\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/zones/us-central1-a/disks/hh-fp-w4x\",\n      \"type\": \"PERSISTENT\"\n    }\n  ],\n  \"fingerprint\": \"fnix63nwxkU=\",\n  \"id\": \"8497150545378808074\",\n  \"kind\": \"compute#instance\",\n  \"labelFingerprint\": \"tmlrejS_Tyo=\",\n  \"labels\": {\n    \"hh-phase\": \"fp\",\n    \"hh-ticket\": \"r6-56\",\n    \"hh-window\": \"w4x\",\n    \"ttl\": \"window\"\n  },\n  \"lastStartTimestamp\": \"2026-11-19T18:26:54.153-08:00\",\n  \"machineType\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/zones/us-central1-a/machineTypes/e2-standard-8\",\n  \"metadata\": {\n    \"fingerprint\": \"lDQuGH56nyg=\",\n    \"items\": [\n      {\n        \"key\": \"hh_deadman_minutes\",\n        \"value\": \"1365\"\n      },\n      {\n        \"key\": \"hh_packages\",\n        \"value\": \"podman=4.3.1+ds1-8+deb12u1+b3 crun=1.8.1-1+deb12u1 conmon=2.1.6+ds1-1 netavark=1.4.0-3 podman-compose=1.0.3-3\\n\"\n      },\n      {\n        \"key\": \"startup-script\",\n        \"value\": \"#!/usr/bin/env bash\\n# startup.sh \u2014 in-guest bootstrap for a hh compute window VM\\n# (manifest 266/R6.13; spec \u00a73.9; ADR-0431/AR-15; REQ-XB-204/209/220).\\n#\\n# Passed to `instances create` as `--metadata-from-file startup-script=`.\\n# NO SECRETS: this file is recorded by sha256 in every provision receipt and\\n# leak-swept before use. The only inputs are instance metadata keys set by\\n# gce-backend.sh: `hh_packages` (name=version pins) and\\n# `hh_deadman_minutes` (D + 15 \u2014 REQ-XB-209's in-guest timer).\\nset -euo pipefail\\nset +x # belt: tracing never exposes metadata contents\\n\\nMETA=\\\"http://metadata.google.internal/computeMetadata/v1/instance/attributes\\\"\\nmh() { curl -fs -H \\\"Metadata-Flavor: Google\\\" \\\"$META/$1\\\"; }\\n\\nDEADMAN_MIN=\\\"$(mh hh_deadman_minutes)\\\"   # minutes until in-guest poweroff\\nPACKAGES=\\\"$(mh hh_packages)\\\"            # whitespace-sep name=version pins\\n\\n# \u2500\u2500 REQ-XB-220: disable unattended upgrades for the window \u2014 the package\\n# set must not move mid-run (a podman restart kills in-flight cells).\\nsystemctl disable --now unattended-upgrades.service 2>/dev/null || true\\nsystemctl disable --now apt-daily.timer apt-daily-upgrade.timer 2>/dev/null || true\\nsystemctl mask apt-daily.service apt-daily-upgrade.service 2>/dev/null || true\\n\\n# \u2500\u2500 pinned package set (podman, crun, conmon, netavark, compose frontend)\\nexport DEBIAN_FRONTEND=noninteractive\\napt-get update -y\\napt-get install -y --allow-downgrades $PACKAGES\\nmkdir -p /var/log/hh\\ndpkg-query -W -f='${Package}=${Version}\\\\n' \\\\\\n  | sort > /var/log/hh/dpkg-pins.txt\\n\\n# \u2500\u2500 rootful podman socket, group-restricted (never TCP-bound, never\\n# forwarded \u2014 REQ-XB-205). The `hh` group owns the local socket.\\ngroupadd -f hh\\nmkdir -p /etc/systemd/system/podman.socket.d\\ncat > /etc/systemd/system/podman.socket.d/10-hh.conf <<'UNIT'\\n[Socket]\\nSocketMode=0660\\nSocketGroup=hh\\nUNIT\\nsystemctl daemon-reload\\nsystemctl enable --now podman.socket\\n\\n# \u2500\u2500 REQ-XB-209: in-guest dead-man timer at D + 15 min \u2014 the second physical\\n# layer. Runs even if every controller session is lost.\\nshutdown -h \\\"+${DEADMAN_MIN}\\\" || \\\\\\n  ( sleep \\\"$((DEADMAN_MIN * 60))\\\" && systemctl poweroff )",
+      "stdout_sha256": "b6dac9e3bcece094dacf31d5477f5c921b677aae45e96975fafe509c7852affa"
+    }
+  ],
+  "declaration": {
+    "path": "scripts/gce-backend/declarations/fp-w4x-r656.json",
+    "sha256": "dd68d6ab75efc56511acef9cf4f1704fc4df31c6f36fb2536dc8fe9332c2f21d"
+  },
+  "kind": "verify",
+  "phase": "fp",
+  "provided": {
+    "OLLAMA_API_KEY": "yes",
+    "gcloud_auth": "yes"
+  },
+  "recipe": {
+    "git_head": "612698557665a9ae06633dd8f31edb0f10d74b67",
+    "path": "scripts/gce-backend.sh",
+    "sha256": "7a415c041c6660f6e1f1fa7814eff0f62c721e64ed67d2a4acbeeb32ae138590"
+  },
+  "recorded_at": "2026-11-20T02:40:13Z",
+  "resources": {
+    "creation_timestamp": "2026-11-20T02:26:45.762Z",
+    "deletion_operation_end": null,
+    "disks": [],
+    "external_ipv4": "present",
+    "instance_id": 8497150545378808074,
+    "instance_name": "hh-fp-w4x",
+    "machine_type": "e2-standard-8",
+    "project_id": "hh-fp-a1b2c3",
+    "project_number": null,
+    "zone": "us-central1-a"
+  },
+  "schema": "hh-compute-receipt/1",
+  "ticket": "R6.56",
+  "verification": {
+    "compose_frontend": "podman version 4.3.1",
+    "disk_free_gib": 280.8,
+    "dpkg_sha256": "3c55f5eb43ff551048f7904bedd5049cfe0134fec7a1955b3a0892f31103d48d",
+    "firewall_rules": [
+      "tcp:22 from 35.235.240.0/20 (iap)"
+    ],
+    "image": "debian-12-bookworm-v20261014",
+    "kernel": "6.1.0-53-cloud-amd64",
+    "max_run_duration": 22.5,
+    "mem_gib": 31.4,
+    "podman_ping": "OK",
+    "podman_version": "4.3.1",
+    "service_account": "none",
+    "socket_mode": "local_rootful_group_restricted",
+    "vcpus": 8
+  },
+  "window": "w4x"
+}

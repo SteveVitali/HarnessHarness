@@ -1,0 +1,37 @@
+{
+  "amends": "docs/build/reports/archive/2026-11-20-fp-w4xv-{upload,verify}.json",
+  "attempt": "a5",
+  "label": "archive-member-replacement",
+  "members_replaced": {
+    "w4xv/2026-11-20-fp-w4xv-harvest-elisions.json": {
+      "occurrences": "self-recorded pattern literal",
+      "sha256_new": "584393e5dab11b890c26742084e531cc20925f2d7c7abd62361da6e39db88a1d"
+    },
+    "w4xv/run-root-tree.json": {
+      "occurrences": 2311,
+      "sha256_new": "da687444a29f6dc4d73b3ef69b7396efdcc92c6b00a98be74d04b173c7654ddd"
+    },
+    "w4xv/run-root/w4-window.json": {
+      "occurrences": 3,
+      "sha256_new": "a3e1cdd17cd650792c56022b72783e28bffd81221631f873f1ceeaf832fcfe7b"
+    }
+  },
+  "prefix": "w4xv/",
+  "readback": {
+    "bad": [],
+    "method": "hf download --local-dir, byte-exact cmp",
+    "ok": 3
+  },
+  "reason": "task-corpus AWS-format placeholder (sanitize-git-repo fixture, not a live credential) appeared verbatim in three published members; elided to [elided:task-corpus-placeholder-AKIA-format] consistent with the journald elision \u2014 see 2026-11-20-fp-w4xv-harvest-elisions.json. Retained evidence keeps the fixture verbatim under MANIFEST.sha256.",
+  "recorded_at": "2026-11-20T15:47:36Z",
+  "repo": "SteveVitali/harnessharness-archive",
+  "repo_type": "dataset",
+  "schema": "hh-archive-addendum/1",
+  "ticket": "R6.56",
+  "upload_commits": [
+    "e96c228d",
+    "5c4dcba6",
+    "39babad7"
+  ],
+  "window": "w4xv"
+}

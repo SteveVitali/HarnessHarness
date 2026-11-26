@@ -1,0 +1,513 @@
+{
+ "schema": "hh-round7-gap-analysis/1",
+ "ticket": "335_CAP7.1",
+ "recorded_at": "2026-11-26",
+ "branch": "codex/harnessharness-r6.53",
+ "scope": {
+  "routing_register": "docs/build/reports/round6/LATER_PASS_ROUTING.md — 34 routed ids; 'a routed id is routed, never satisfied' (Round 6); the 18 §8.x subset is this pass's",
+  "ruling": "GATE-G34 PASSED 2026-11-20 / ADR-0454 — operator verbatim \"O1 approve, O-2 i'm not sure, O-3 approved, yes fold in BL-50. go\"",
+  "count_note": "ADR-0454's '15, §8.1–§8.7' is the §8.3–§8.7 subset; the register's routed §8.x set is 18 ids (the contiguous REQ-XD-204…REQ-XD-225 range minus first-pass-owned REQ-XD-220/222/223/224, plus §8.1 REQ-XD-225 and §8.2 REQ-XD-208/REQ-XD-209 as cluster prerequisites). Count reconciliation verbatim in docs/build/planning/2026-11-20_round7-decomposition.md.",
+  "routed_ids_total": 34,
+  "section8x_ids": 18
+ },
+ "verdict_classes": {
+  "satisfied": "the routed predicate discharged — verdict cites committed evidence (hh-* packet by sha256 / committed report / gate decision)",
+  "typed_terminal": "the pass reached a spec-sanctioned typed terminal disposition for the id (withheld / not-admitted) — the verbatim typed outcome is cited, machinery discharged",
+  "unsatisfied": "not satisfied — the verbatim reason (withheld, refused, no_candidate, pending{clock}, machinery gap) is named",
+  "pending": "verdict depends on a billed/clocked figure still pending — typed pending, never counted as satisfied"
+ },
+ "verdicts": [
+  {
+   "id": "REQ-XD-225",
+   "spec_section": "§8.1",
+   "verdict": "satisfied",
+   "note": "tier-2 admission — a candidate enters only a later exploration identity; typed refusals (dependency_not_landed / forecast_below_floor / no_forecast) and admits{later_identity} emitted; this_identity: never admitted",
+   "evidence": [
+    {
+     "relpath": "docs/build/reports/2026-11-21-fp-p4-admissibility-gen3.json",
+     "sha256": "1ebab1799f583c94…",
+     "kind": "hh-p4-admissibility/1 (operative gen-3)"
+    },
+    {
+     "relpath": "docs/build/reports/2026-11-20-fp-p4-admissibility.json",
+     "sha256": "f999de0b9af2380a…",
+     "kind": "hh-p4-admissibility/1 (gen-1)"
+    },
+    {
+     "relpath": "docs/build/runs/R7.1.md",
+     "kind": "run ledger"
+    }
+   ]
+  },
+  {
+   "id": "REQ-XD-204",
+   "spec_section": "§8.3",
+   "verdict": "satisfied",
+   "note": "effort-lane fidelity — declared lane parameter (effort_pin) + proxy-pin evidence; served census glm-5.3-flash×10,602 == 10,602 attributed receipts, declared-vs-served effort 0 mismatches; one mis-pinned call → ineligible{mis_pinned} machinery",
+   "evidence": [
+    {
+     "relpath": "docs/build/reports/2026-11-24-fp-p4x-exploration.json",
+     "sha256": "dca30f7c4aa81243…",
+     "kind": "hh-p4-x-exploration/1 (fidelity census)"
+    },
+    {
+     "relpath": "docs/build/reports/2026-11-21-fp-p4-admissibility-gen3.json",
+     "sha256": "1ebab1799f583c94…",
+     "kind": "hh-p4-admissibility/1"
+    }
+   ]
+  },
+  {
+   "id": "REQ-XD-205",
+   "spec_section": "§8.3",
+   "verdict": "typed_terminal",
+   "note": "W-rule derivation over the committed non-outcome token corpus emitted the spec-sanctioned withhold: withheld{inert_at_admissible_window} — F(32768)=0.22 < 0.25; V8/V9 declared, never sealed, never scheduled or run; W never fabricated; outcome-member and padding inputs refuse typed",
+   "typed_outcome": "withheld{inert_at_admissible_window}",
+   "evidence": [
+    {
+     "relpath": "docs/build/reports/2026-11-21-fp-p4-w-rule-gen3.json",
+     "sha256": "98a2785a20389bd6…",
+     "kind": "hh-p4-w-rule/1 (operative gen-3)"
+    },
+    {
+     "relpath": "docs/build/reports/2026-11-21-fp-p4-sweep-registry-gen3.json",
+     "sha256": "0816291efe76c736…",
+     "kind": "sweep-registry/1 — V8/V9 withheld verbatim"
+    }
+   ]
+  },
+  {
+   "id": "REQ-XD-206",
+   "spec_section": "§8.4",
+   "verdict": "satisfied",
+   "note": "declared X design — X0 smoke (3 stratum tasks × 1 × 8 arms = 24 slots) + X1 OFAT (11 band-A dev tasks × k=5 × baseline+V1–V7 = 440 executable slots, seeded slot_schedule_randomization, 5 rounds) over the frozen gen-3 registry; pool_across_cohorts refuses; executed: X0 24/24, X1 440/440",
+   "evidence": [
+    {
+     "relpath": "docs/build/reports/2026-11-21-fp-p4x-prereg-gen3.json",
+     "sha256": "5db50be845c24488…",
+     "kind": "hh-p4-x-prereg/1 (operative gen-3)"
+    },
+    {
+     "relpath": "docs/build/reports/2026-11-21-fp-p4x0-window.json",
+     "sha256": "55af8a7576349d97…",
+     "kind": "hh-fp-window/1 — X0 24/24"
+    },
+    {
+     "relpath": "docs/build/reports/2026-11-24-fp-p4x1-slot-matrix.jsonl",
+     "sha256": "7ac1a07e6aad94df…",
+     "kind": "X1 440/440 verbatim slot matrix"
+    }
+   ]
+  },
+  {
+   "id": "REQ-XD-207",
+   "spec_section": "§8.4",
+   "verdict": "satisfied",
+   "note": "exploration labels — every figure-like object carries an 'exploratory' label; confirmatory/absent label spellings refuse typed; the emitted exploration packet is exploratory-labelled throughout",
+   "evidence": [
+    {
+     "relpath": "docs/build/reports/2026-11-24-fp-p4x-exploration.json",
+     "sha256": "dca30f7c4aa81243…",
+     "kind": "hh-p4-x-exploration/1"
+    },
+    {
+     "relpath": "docs/build/reports/2026-11-21-fp-p4x-prereg-gen3.json",
+     "sha256": "5db50be845c24488…",
+     "kind": "hh-p4-x-prereg/1 — label contract"
+    }
+   ]
+  },
+  {
+   "id": "REQ-XD-208",
+   "spec_section": "§8.2",
+   "verdict": "satisfied",
+   "note": "§4.2-generic activation fold — emitted measured verdicts (V1/V2 1.0 via served-effort receipts; V6 deterministic 1.0) and typed unmeasured{evidence_absent} for V5 (request bodies absent from the committed corpus) and the conditional knobs V3/V4/V7 (gate (c) fails on exactly that basis — recorded, never folded into a floor verdict). Residual evidence debt is rowed OPEN, verbatim: DF-R7.1-2 (unblocker: 'a later pass whose retained run-root carries per-call tokens.input.uncached for every arm plus a metric-bearing activation record (or an operator-directed probe window under its own budget)')",
+   "residual": "unmeasured{evidence_absent} on V3/V4/V5 activation metrics — OPEN DF-R7.1-2 (typed, rowed; never silently absent)",
+   "evidence": [
+    {
+     "relpath": "docs/build/reports/2026-11-24-fp-p4x-exploration.json",
+     "sha256": "dca30f7c4aa81243…",
+     "kind": "hh-p4-x-exploration/1 (activation fold)"
+    },
+    {
+     "relpath": "docs/build/reports/2026-11-24-fp-p4x-selection.json",
+     "sha256": "a1df9b74b3165ad8…",
+     "kind": "hh-p4-selection/1 — gate (c) unmeasured verbatim"
+    },
+    {
+     "relpath": "docs/tickets/DEFERRALS.md",
+     "kind": "DF-R7.1-2 OPEN + dated status rows"
+    }
+   ]
+  },
+  {
+   "id": "REQ-XD-209",
+   "spec_section": "§8.2",
+   "verdict": "satisfied",
+   "note": "inert pre-spend forecast — below-floor → withheld{inert_predicted} retained with its forecast; unmeasured{evidence_absent} recorded honestly, never folded into a floor verdict; forecasts carried in the admissibility/prereg records",
+   "evidence": [
+    {
+     "relpath": "docs/build/reports/2026-11-21-fp-p4-admissibility-gen3.json",
+     "sha256": "1ebab1799f583c94…",
+     "kind": "hh-p4-admissibility/1 (forecasts)"
+    },
+    {
+     "relpath": "docs/build/reports/2026-11-21-fp-p4x-prereg-gen3.json",
+     "sha256": "5db50be845c24488…",
+     "kind": "hh-p4-x-prereg/1"
+    }
+   ]
+  },
+  {
+   "id": "REQ-XD-210",
+   "spec_section": "§8.4",
+   "verdict": "satisfied",
+   "note": "declared stop rules — the four §8.4 classes (budget, infrastructure, integrity, catalog_identity) verbatim in the frozen prereg; undeclared class → refused{stop_class}, outcome member → refused{outcome_stop}, level-dropping member → refused{level_drop}. Exercised live: P4-C window-1 checkpoint minted batch_fits:false → stop{budget} → withheld{stop:budget} ×222 in the committed window record; the resume legs ran under the raised declared bound; X1 completed 440/440 with no stop class firing",
+   "evidence": [
+    {
+     "relpath": "docs/build/reports/2026-11-21-fp-p4x-prereg-gen3.json",
+     "sha256": "5db50be845c24488…",
+     "kind": "hh-p4-x-prereg/1 — stop set verbatim"
+    },
+    {
+     "relpath": "docs/build/reports/2026-11-26-fp-p4c-window.json",
+     "sha256": "e2f1950e75a3f984…",
+     "kind": "hh-fp-window/1 — withheld{stop:budget} ×222 verbatim"
+    }
+   ]
+  },
+  {
+   "id": "REQ-XD-211",
+   "spec_section": "§8.5",
+   "verdict": "satisfied",
+   "note": "frozen selection rule — p4-selection-rule/1 byte-pinned member (gates (a)–(f), Δ̂>0, one level per factor, m_max=2, exact 1/(|D_A|·k) tie band, combine flag, withheld{no_candidate} publishable) decoded and executed by the machinery; any byte drift → refused{frozen_rule_mismatch}",
+   "evidence": [
+    {
+     "relpath": "docs/build/reports/2026-11-20-fp-p4x-selection-rule.json",
+     "sha256": "67009098eb187a2a…",
+     "kind": "p4-selection-rule/1 — the byte-pinned rule"
+    },
+    {
+     "relpath": "docs/build/reports/2026-11-24-fp-p4x-selection.json",
+     "sha256": "a1df9b74b3165ad8…",
+     "kind": "hh-p4-selection/1 — the executed output"
+    }
+   ]
+  },
+  {
+   "id": "REQ-XD-212",
+   "spec_section": "§8.5",
+   "verdict": "satisfied",
+   "note": "deterministic selection packet — hh-p4-selection/1 minted as a pure function of the committed X1 record manifest (9 committed inputs; held-out + phase-2/3 members excluded by construction — refused{held_out_input}/refused{foreign_outcome_input} machinery); content hash 9c3c314c… committed before and predating the confirmation pre-registration that cites it (refused{hash_ordering} machinery)",
+   "evidence": [
+    {
+     "relpath": "docs/build/reports/2026-11-24-fp-p4x-selection.json",
+     "sha256": "a1df9b74b3165ad8…",
+     "kind": "hh-p4-selection/1 — content hash sha256:9c3c314c…"
+    },
+    {
+     "relpath": "docs/build/reports/2026-11-24-fp-p4c-prereg.json",
+     "sha256": "1d55d48a803c0084…",
+     "kind": "hh-p4-c-prereg/1 — cites the packet hash verbatim"
+    }
+   ]
+  },
+  {
+   "id": "REQ-XD-213",
+   "spec_section": "§8.5",
+   "verdict": "satisfied",
+   "note": "selection/optimism labels — a selected configuration's exploration estimate displays only with 'selected from the same data; estimate is exploratory' + 'expected optimism ≈ +.03 to +.10 (design simulation)'; claim_cites_exploration refuses; cost rows descriptive-only",
+   "evidence": [
+    {
+     "relpath": "docs/build/reports/2026-11-26-fp-p4c-confirmation.json",
+     "sha256": "ebaf0b17f7c3ae22…",
+     "kind": "hh-p4-c-confirmation/1 — selection_labelled_estimates + statement_exploratory verbatim"
+    },
+    {
+     "relpath": "docs/build/reports/2026-11-24-fp-p4x-selection.json",
+     "sha256": "a1df9b74b3165ad8…",
+     "kind": "hh-p4-selection/1"
+    }
+   ]
+  },
+  {
+   "id": "REQ-XD-214",
+   "spec_section": "§8.5",
+   "verdict": "typed_terminal",
+   "note": "combination admissibility — the C₁₂ combination member was pre-declared in the frozen rule; the deterministic selection emitted selected{m=1} (one qualified factor) so no combination member exists to admit; check_combination's typed refusals (undeclared_combination / combination_outside_confirmation / wrong-phase / non-union declared_delta, 'combination; interaction not estimated' label contract) are committed machinery",
+   "typed_outcome": "not_admitted{m_eq_1} — selected{m=1} mints no C₁₂ member; the pre-declared combination leg is exercised only by its committed checkers",
+   "evidence": [
+    {
+     "relpath": "docs/build/reports/2026-11-24-fp-p4x-selection.json",
+     "sha256": "a1df9b74b3165ad8…",
+     "kind": "hh-p4-selection/1 — selected{m=1}"
+    },
+    {
+     "relpath": "docs/build/reports/2026-11-24-fp-p4c-prereg.json",
+     "sha256": "1d55d48a803c0084…",
+     "kind": "hh-p4-c-prereg/1 — members baseline + V1 only"
+    }
+   ]
+  },
+  {
+   "id": "REQ-XD-215",
+   "spec_section": "§8.6",
+   "verdict": "satisfied",
+   "note": "baseline re-run — the confirmation's baseline arm is a fresh in-window execution (185 slots under the same seeded schedule), never L2/phase-2/X1 baseline reuse; GATE-G36's no-baseline-reuse attestation carried; confirmation packet baseline_label verbatim ('the in-window baseline re-run (REQ-XD-215's fresh baseline; never L2/phase-2 reuse)')",
+   "evidence": [
+    {
+     "relpath": "docs/build/reports/2026-11-26-fp-p4c-window-r4.json",
+     "sha256": "5d1fc5c001287e97…",
+     "kind": "hh-fp-window/1 — baseline 185 slots"
+    },
+    {
+     "relpath": "docs/build/reports/2026-11-26-fp-p4c-confirmation.json",
+     "sha256": "ebaf0b17f7c3ae22…",
+     "kind": "hh-p4-c-confirmation/1 — baseline_label verbatim"
+    },
+    {
+     "relpath": "docs/build/readouts/GATE-G36.md",
+     "kind": "no-baseline-reuse attestation"
+    }
+   ]
+  },
+  {
+   "id": "REQ-XD-216",
+   "spec_section": "§8.6",
+   "verdict": "satisfied",
+   "note": "Holm estimation — family P4-C1 (α=.05) over the member-vs-baseline family computed; the V1 member is unavailable (UnresolvedCell) and stays in the family at worst-case mass — adjusted_p_ppm=1000000, rejected_at_alpha=false; never silently dropped",
+   "evidence": [
+    {
+     "relpath": "docs/build/reports/2026-11-26-fp-p4c-confirmation.json",
+     "sha256": "ebaf0b17f7c3ae22…",
+     "kind": "hh-p4-c-confirmation/1 — family P4-C1 verbatim"
+    }
+   ]
+  },
+  {
+   "id": "REQ-XD-217",
+   "spec_section": "§8.6",
+   "verdict": "satisfied",
+   "note": "frozen confirmation pre-registration before subjects — hh-p4-c-prereg/1 committed 2026-11-24 (member list = the selection packet's output verbatim: baseline re-run + V1, T=37 held-out census, k=5, 370 slots, Holm α=.05, seeded schedule) before any confirmation subject ran (first slot ~2026-11-24T20:41Z); GATE-G36 verified hash-before-subjects at authorization",
+   "evidence": [
+    {
+     "relpath": "docs/build/reports/2026-11-24-fp-p4c-prereg.json",
+     "sha256": "1d55d48a803c0084…",
+     "kind": "hh-p4-c-prereg/1"
+    },
+    {
+     "relpath": "docs/build/readouts/GATE-G36.md",
+     "kind": "PASSED — run; hash-before-subjects element verbatim"
+    }
+   ]
+  },
+  {
+   "id": "REQ-XD-218",
+   "spec_section": "§8.6",
+   "verdict": "satisfied",
+   "note": "confirmation quote — comparative-quote/1 id eaaeda9f… with X1-MEASURED $/trial lines (baseline mean 46,165/p90 163,525; V1 mean 17,934/p90 45,275; Σ ceiling 46,353,600 µ$) citing compute pq-3a4187759b2d8411 (12,229,780 µ$) verbatim + resume-with-repair amendment pq-4e650fe71f863d22 (15,999,460 µ$); executed within ceilings: model 16,638,034 µ$ = 35.9% of cap_h; compute 31.6%/40.4%",
+   "evidence": [
+    {
+     "relpath": "docs/build/reports/2026-11-24-fp-p4c-quote.json",
+     "sha256": "6315e250810593c6…",
+     "kind": "comparative-quote/1 — id eaaeda9f114936df…"
+    },
+    {
+     "relpath": "docs/build/reports/2026-11-24-fp-p4c-quote-inputs.json",
+     "sha256": "f82877f5446cbf35…",
+     "kind": "hh-p4-c-quote-inputs/1 — measured basis + honesty members"
+    },
+    {
+     "relpath": "docs/build/reports/2026-11-24-fp-p4c-compute-quote.json",
+     "kind": "hh-compute-quote/1 — pq-3a4187759b2d8411"
+    }
+   ]
+  },
+  {
+   "id": "REQ-XD-219",
+   "spec_section": "§8.6",
+   "verdict": "satisfied",
+   "note": "typed dispositions — V1 carries inconclusive{unresolved_cell} (the REQ-XD-219 'not confirmed; interval includes 0 / inconclusive' family); banned equality/equivalence wording refused; withheld{…} stays typed; unexecuted members not_executed{…}, never null; earlier_attempts (w1 stop{budget} + 222 withheld, w2 native_lane_hold) carried verbatim",
+   "evidence": [
+    {
+     "relpath": "docs/build/reports/2026-11-26-fp-p4c-confirmation.json",
+     "sha256": "ebaf0b17f7c3ae22…",
+     "kind": "hh-p4-c-confirmation/1 — dispositions + terminal_state.earlier_attempts verbatim"
+    }
+   ]
+  },
+  {
+   "id": "REQ-XD-221",
+   "spec_section": "§8.7",
+   "verdict": "satisfied",
+   "note": "gate order — every spend leg followed a PASSED gate: GATE-G35 PASSED run (5d67d360, deferral DF-G35-1 withdrawn same-day) + X1 amendment c98cfcdc (pq-4263f129db914f88, verbatim_sha256 2be1a0d9…) + GATE-G36 PASSED run (8793885e, verbatim_sha256 acba2551…) + resume-with-repair amendment (565f1324, pq-4e650fe71f863d22, verbatim_sha256 718cad85…); selection ran on committed X1 records; the confirmation pre-registration + G-P4-C preceded any confirmation subject",
+   "evidence": [
+    {
+     "relpath": "docs/build/readouts/GATE-G35.md",
+     "kind": "Status: PASSED + X1 amendment"
+    },
+    {
+     "relpath": "docs/build/readouts/GATE-G36.md",
+     "kind": "Status: PASSED + resume amendment"
+    },
+    {
+     "relpath": "docs/build/LEDGER.md",
+     "kind": "GATE DECISIONS rows verbatim"
+    }
+   ]
+  }
+ ],
+ "counts": {
+  "satisfied": 16,
+  "typed_terminal": 2,
+  "unsatisfied": 0,
+  "pending": 0,
+  "silently_absent": 0
+ },
+ "terminal_state": {
+  "determination": "complete",
+  "pre_registered_form": "docs/tickets/335_CAP7.1__gap-analysis.md — `complete` (every routed id satisfied or typed-terminal) or `incomplete{…}` naming gaps verbatim",
+  "statement": "complete — every one of the 18 routed §8.x ids carries either a satisfied verdict on committed evidence (16) or a spec-sanctioned typed terminal disposition (2: REQ-XD-205 withheld{inert_at_admissible_window}; REQ-XD-214 not_admitted{m_eq_1}); zero ids are unsatisfied, pending, or silently absent. No routed id's verdict depends on a billed figure — the P4-C ≥24 h provider confirming read stays pending{clock} verbatim as a settlement hygiene item (HUMAN-H21), not a routed-id dependency.",
+  "gaps_carried_verbatim": [
+   "DF-R7.1-2 OPEN — activation-fold evidence for conditional knobs V3/V4/V5 unmeasured{evidence_absent}; unblocker verbatim: 'a later pass whose retained run-root carries per-call tokens.input.uncached for every arm plus a metric-bearing activation record (or an operator-directed probe window under its own budget)'",
+   "DF-R7.3-1 OPEN — refusal-bearing H drives cannot be gated by compare_drives (REQ-XD-104 fold semantics; an ADR is owed; the X1 46-slot detail_lost disposition and this confirmation fold's unresolved handling are material)",
+   "DF-R7.3-2 OPEN — attempt-3 settlement residuals (h_r 20.97 h; ≲36,000 µ$ harvest-boot interval; orphaned-provision lifecycle); HUMAN-H21 landed 2026-11-26 with compute unavailable — residuals stand as recorded estimates (dated noting appended this pass)",
+   "DF-R7.3-4 OPEN — harvest rroot derivation + empty-manifest verify gap; leg (b) fails-closed repair landed at R7.5 (gce-backend.sh harvest_manifest_nonempty); leg (a) outstanding (dated noting appended this pass)",
+   "DF-R7.5-1 OPEN — driver/session artifacts not resume-safe (stale proxy-session.json → withheld{admission:native_lane_hold} ×222; hardcoded artifact names; writer-lease WouldBlock)",
+   "DF-R7.5-2 OPEN — no per-container memory bound → host-global OOM → ens4/journald collateral (P4-C r3 17:39Z)",
+   "DF-CAP7.1-1 OPEN (minted this pass) — slot_result.cost_micros snapshot undercounts late-landing measurement.cost.attributed events; WAL-authoritative recompute is the honest figure and requires the retained store, which is not always in the harvest path",
+   "DF-CAP7.1-2 OPEN (minted this pass) — verify-cell podman container-name collision across resumes (one recorded instance: p4c-V1-model-extraction-relu-logits-r4 rc 125 → recorded{reward_absent} unresolved member)",
+   "pending{clock} — P4-C ≥24 h post-teardown provider confirming read due ≥2026-11-27 ~07:26Z (HUMAN-H21 readout verbatim; demoted to a confirming check — teardown complete, no post-teardown usage possible)",
+   "site publication pin — the §8.8 claims packet is not in docs/results/site-data (adding it trips the publication-record pin; a hh-site-publication/1 mint is a publication act outside this chain's authorization — R7.6 verbatim)"
+  ],
+  "o3_implication": "no §8.x routed member is left unsatisfied — the O-3 remainder set (CAP7.2's conditional mint) carries no §8.x additions on this record's evidence"
+ },
+ "df_r6_45l_1": {
+  "discharge": "verified — stands",
+  "dated_done_marker": "docs/tickets/DEFERRALS.md status-update row (2026-11-19): 'DONE | derivation machinery landed + smoke1 retroactive acceptance exact (R6.51, PR #413 — pending merge in Phase A)'",
+  "build_index_row": "docs/build/BUILD_INDEX.md row 321a — 'landed on its own branch — transitive verify-host derivation from captured runtime evidence emits exactly the three smoke1-observed hosts unaided; DF-R6.45l-1 DONE; index row + artifacts ride PR #413's merge'",
+  "landed_artifacts": "R6.51 committed on PR #413's branch: crates/hh-runner/src/verify_hosts.rs (hh-verify-host-derivation/1 fold) + bin/fp_verify_hosts.rs + tests/r6_51.rs + scripts/check-fp-allowlist-amendment-epoch5.sh + scripts/egress-conformance/runtime-verify.sh; record docs/build/reports/2026-11-19-fp-verify-host-derivation-smoke1.json emits hosts: [download-r2.pytorch.org, ossci-datasets.s3.amazonaws.com, yann.lecun.com] — exactly the three smoke1-observed hosts, emitted unaided with provenance; download.pytorch.org recorded under non_verify_denies ('excluded — decided under a non-verify policy layer'), never derived",
+  "branch_containment": "verified by git merge-base against refs/pull/413/head (6b14480b): IS an ancestor of origin/main (merge commit 3a03b4d2 — merged), NOT an ancestor of HEAD (codex/harnessharness-r6.53 @ 6e7e166b). PR #413 rides main, NOT an ancestor of this chain — an integration fact, never owed work; no derivation ticket minted",
+  "stale_lead": "the row's lead cell still reads OPEN — a stale lead token whose dated disposition is DONE; lead-token normalization is CAP7.2's named reconciliation scope (recorded, not acted on here)"
+ },
+ "sweep": {
+  "note": "shared-decision table over the round's machinery + packets; findings rowed, never silently fixed. Companion table: docs/build/reports/2026-11-26-round7-gap-analysis.md",
+  "rows": [
+   {
+    "seam": "gen-1→gen-3 repair loop",
+    "decision": "sealed P4 baseline docs superseded (never rewritten): gen-1 sha256:88042f… failed G-L1 on two doc-authoring gaps (transcript_render reduced set; control_strategy submit-marker dormancy); gen-3 sha256:4142fb10… passed l1_1+l1_2 8/8 (l1-pass:sha256:5b807c53…)",
+    "disposition": "recorded; superseding record chains minted per generation, all recompute byte-identical",
+    "home": "docs/build/runs/R7.3.md + compute/2026-11-21-fp-p4x-l1-gen3-conformance.json"
+   },
+   {
+    "seam": "W-rule withheld levels",
+    "decision": "V8/V9 declared with declaration/forecast/override_spellings, never sealed, never in any window plan (X0/X1/P4-C ran baseline+V1–V7 arms only)",
+    "disposition": "typed terminal — verbatim in registry/levels/w-rule records",
+    "home": "2026-11-21-fp-p4-w-rule-gen3.json + prereg records"
+   },
+   {
+    "seam": "selection gate outcomes",
+    "decision": "selected{m=1} V1 (+45,455 ppm, gates a–f); V2/V5/V6 fail (d) unresolved>10%; V3/V4/V7 fail (c) unmeasured + (d); no C₁₂",
+    "disposition": "typed outcomes verbatim; gate (c) failures are DF-R7.1-2's live evidence",
+    "home": "2026-11-24-fp-p4x-selection.json"
+   },
+   {
+    "seam": "X1 46 detail_lost slots",
+    "decision": "recorded{early_exit:zero_model_calls, detail_lost} — WAL-proven zero attributed calls; unresolved for every purpose, never imputed; counted in gate (d) unresolved accounting and the quote's cost census at 0 µ$",
+    "disposition": "typed; the harvest loss that caused it is DF-R7.3-4 (OPEN)",
+    "home": "slots-lost.json + selection/exploration packets + DF-R7.3-1 noting"
+   },
+   {
+    "seam": "running-slot deadline fence",
+    "decision": "repair 06b5847c (fence_overdue: SIGTERM at slot_deadline_s, SIGKILL after 60 s grace) fired 16× live across P4-C r3/r4; zero post-repair coordinator SIGTERMs",
+    "disposition": "DF-R7.3-3 live-discharged 2026-11-26 (dated disposition on the row)",
+    "home": "DEFERRALS.md DF-R7.3-3 + runs/R7.5.md terminal addendum"
+   },
+   {
+    "seam": "P4-C window-1 stop",
+    "decision": "checkpoint batch_fits:false → withheld{stop:budget} ×222 — driver-internal 40,000,000 µ$ bound sat below authorized 46,353,600; honest machinery stop inside the declared envelope",
+    "disposition": "recorded verbatim; resume authorized by GATE-G36 amendment",
+    "home": "2026-11-26-fp-p4c-window.json + GATE-G36 amendment"
+   },
+   {
+    "seam": "resume legs r2a/r2b defects",
+    "decision": "stale proxy-session.json → native_lane_hold ×222 (r2a); writer-lease WouldBlock cleared only by expiry takeover (r2b); hardcoded artifact names overwrite prior-window evidence",
+    "disposition": "DF-R7.5-1 OPEN — operational remediation applied verbatim on r3/r4; driver unpatched",
+    "home": "2026-11-26-fp-p4c-window-r2-attempt1-native_lane_hold.json + DF-R7.5-1"
+   },
+   {
+    "seam": "guest outages",
+    "decision": "14:01Z ens4 DHCP loss (un-triggered) + 17:39Z subject ~31 GB anon-RSS → global OOM → journald SIGABRT + ens4 death (OOM collateral)",
+    "disposition": "first outage recorded verbatim; second is DF-R7.5-2 OPEN (no per-container memory bound)",
+    "home": "runs/R7.5.md + DF-R7.5-2"
+   },
+   {
+    "seam": "confirmation estimand",
+    "decision": "367/370 resolved; primary Δ̂ refused{UnresolvedCell} (2 verifier_timeout + 1 podman rc-125 name-collision); bound [-10810,5406] ppm + labelled conditional secondary [-76470,58824] over 34 eligible tasks; Holm P4-C1 not-rejected",
+    "disposition": "honest refusal — the pairing refuses rather than pairs absence; conditional secondary never promoted",
+    "home": "2026-11-26-fp-p4c-confirmation.json ebaf0b17…"
+   },
+   {
+    "seam": "cost attribution fidelity",
+    "decision": "slot_result.cost_micros snapshots undercount late-landing cost.attributed events (X1: 6,099,597 vs checkpoint 6,202,514; P4-C: WAL recompute 16,896,165 vs per-slot 16,638,034)",
+    "disposition": "NEW FINDING — rowed DF-CAP7.1-1 (minted this pass); H21 closed the P4-C residual by WAL-authoritative recompute on the retained disk",
+    "home": "DEFERRALS.md DF-CAP7.1-1"
+   },
+   {
+    "seam": "verify-cell podman collision",
+    "decision": "p4c-V1-model-extraction-relu-logits-r4 verifier recorded rc 125 (container-name collision) → recorded{reward_absent} unresolved member — one of the three UnresolvedCell causes",
+    "disposition": "NEW FINDING — rowed DF-CAP7.1-2 (minted this pass)",
+    "home": "DEFERRALS.md DF-CAP7.1-2"
+   },
+   {
+    "seam": "settlement bookkeeping",
+    "decision": "model within both windows (X0+X1 $21.08 recorded vs $24.21 boundary-mixed; P4-C $16.90 WAL vs ≈$16–18 provider); compute unavailable — recorded estimates stand; p4c ≥24 h confirming read pending{clock}",
+    "disposition": "typed pending — verbatim in HUMAN-H21 readout + hh-fp-settlement/1 ×2; CAP7.2 cites or records verbatim",
+    "home": "readouts/HUMAN-H21.md + 2026-11-26-fp-p4x/p4c-settlement.json"
+   },
+   {
+    "seam": "readout bookkeeping defects",
+    "decision": "GATE-G36 Status line lagged PASSED at signature (repaired e784f583); a PASSED decision row fused into PHASE LOG was invisible to load_decisions (restated verbatim in GATE DECISIONS, dba6b08d)",
+    "disposition": "recorded + repaired append-only; originals preserved",
+    "home": "commits e784f583 + dba6b08d; LEDGER dated findings"
+   },
+   {
+    "seam": "gate deferral lifecycle",
+    "decision": "DF-G35-1 minted on operator deferral, withdrawn same-day ('Oh okay. Let's actually just do Phase 4 now then') — DONE by ruling, not by the publication trigger",
+    "disposition": "dated DONE on the row; stale OPEN lead → CAP7.2 reconciliation",
+    "home": "DEFERRALS.md DF-G35-1"
+   },
+   {
+    "seam": "stale lead tokens",
+    "decision": "dated dispositions DONE/discharged while lead cells read OPEN: DF-CAP6.1-1…5, DF-R6.45l-1, DF-R6.50-1, DF-R6.53-1, DF-R7.1-1, DF-G35-1, DF-R7.3-3",
+    "disposition": "CAP7.2's named reconciliation scope — recorded here, never flipped silently",
+    "home": "DEFERRALS.md dated rows + 336 contract item 3"
+   },
+   {
+    "seam": "results-site pin",
+    "decision": "the §8.8 claims packet added to site-data correctly trips the publication-record pin — not landed",
+    "disposition": "recorded honestly; claims leg satisfied packet-side (checker + AC-3 battery); a hh-site-publication/1 mint is a publication act outside authorization",
+    "home": "runs/R7.6.md verification section"
+   },
+   {
+    "seam": "commit-time secret scrub",
+    "decision": "GH013 flagged a fixture hf_ token inside window-r4 verifier.stdout_tail (task-corpus planted data); committed copy scrubbed to <scrubbed:task_fixture_hf_token>; pre-scrub sha256 a13d6098… binds it to the retained byte-verbatim mirror",
+    "disposition": "recorded verbatim; secrets-shaped strings never enter committed records",
+    "home": "runs/R7.5.md commit-time scrub addendum"
+   },
+   {
+    "seam": "run-ledger duplicate addendum",
+    "decision": "runs/R7.5.md carries the 2026-11-25T01:00Z intervention addendum twice verbatim (lines ~136–174); the events occurred once",
+    "disposition": "dated correction note appended to runs/R7.5.md this pass (append-only; verified counts in the terminal addendum govern)",
+    "home": "runs/R7.5.md Correction 2026-11-26"
+   }
+  ]
+ },
+ "verification": {
+  "guard_pre_write": "check-supplement-guard.sh --no-checker → PASS, route 'DISPATCH — CAP7.1' — verified against committed HEAD (pre-write state; git archive HEAD scratch checkout)",
+  "guard_post_write": "check-supplement-guard.sh --no-checker → PASS, route 'DISPATCH — CAP7.2' on the post-write working tree verbatim (route advances past CAP7.1 — index row 335 + lastCompleted: CAP7.1 / nextTicket: CAP7.2 consistent)",
+  "deferrals_read": "bm-row.sh reads: DF-R6.45l-1, DF-R7.1-1, DF-R7.1-2, DF-R7.3-1, DF-R7.3-2, DF-R7.3-3, DF-R7.3-4, DF-R7.5-1, DF-R7.5-2, DF-G35-1; deferrals-open.sh index read",
+  "bm_tools": "scripts/check-bm-tools.sh → OK (19 open deferrals post-mint — 17 carried + DF-CAP7.1-1/-2 — each resolving to exactly one row)",
+  "pr413_containment": "git fetch pull/413/head → 6b14480b; merge-base --is-ancestor FETCH_HEAD origin/main → true; --is-ancestor FETCH_HEAD HEAD → false"
+ }
+}

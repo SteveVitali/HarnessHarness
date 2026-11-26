@@ -297,15 +297,105 @@ def repo_member(p, repo):
     return p
 
 
+def _secs_precise(a, b):
+    """secs_between with fractional-second precision — usage intervals
+    record ms-granularity endpoints (`seconds`/`gib_seconds` carry the
+    sub-second residue; the truncated parser loses up to ~1 s/interval)."""
+    def p(s):
+        s = s.rstrip("Z")
+        fmt = "%Y-%m-%dT%H:%M:%S.%f" if "." in s else "%Y-%m-%dT%H:%M:%S"
+        return datetime.datetime.strptime(s, fmt)
+    return max(0.0, (p(b) - p(a)).total_seconds())
+
+
+def self_consistent_usage(rec):
+    """n/a{...} teardown refs — no receipt exists to merge a lifecycle
+    from (e.g. the p4c parked-VM records minted pre-teardown with
+    ops-log-reconstructed intervals). The record's own `usage`
+    intervals + `rate_table` rows are the authoritative source at its
+    minted posture; validate internal consistency — per-line micros
+    recompute from the recorded intervals, never re-derived against a
+    receipt minted later. Returns (lines_micros, total_micros)."""
+    usage = rec.get("usage") or {}
+    rows = {r.get("sku"): r.get("price_micros")
+            for r in (rec.get("rate_table") or {}).get("rows", [])}
+    F = Fraction
+
+    def rate(sku):
+        if sku not in rows or rows[sku] is None:
+            refuse(f"rate_table.missing:{sku}")
+        return rows[sku]
+
+    lines = {}
+    inst = usage.get("instance") or {}
+    if inst.get("intervals"):
+        run_iv = [i for i in inst["intervals"] if i.get("state") == "RUNNING"]
+        secs = sum(_secs_precise(i["from"], i["to"]) for i in run_iv)
+        bill = sum(max(60.0, _secs_precise(i["from"], i["to"]))
+                   for i in run_iv)
+        if abs(round(secs, 3) - float(inst.get("seconds") or 0)) > 0.01:
+            refuse("usage.instance.seconds")
+        if abs(round(bill, 3) - float(inst.get("billable_seconds") or 0)) > 0.01:
+            refuse("usage.instance.billable_seconds")
+        lines["instance"] = {"micros": ceil_micros(
+            F(rate(inst.get("machine_type"))) * F(str(bill)) / 3600)}
+    disk = usage.get("disk") or {}
+    if disk.get("intervals"):
+        gib_s = sum(_secs_precise(i["from"], i["to"]) * disk["size_gib"]
+                    for i in disk["intervals"])
+        if abs(round(gib_s, 3) - float(disk.get("gib_seconds") or 0)) > 0.01:
+            refuse("usage.disk.gib_seconds")
+        lines["disk"] = {"micros": ceil_micros(
+            F(rate(disk.get("type"))) * F(str(gib_s)) / 3600)}
+    ipv4 = usage.get("ipv4") or {}
+    if ipv4.get("kind") == "ephemeral":
+        lines["ipv4"] = {"micros": ceil_micros(
+            F(rate("ipv4")) * F(str(ipv4.get("seconds") or 0)) / 3600)}
+    eg = usage.get("egress") or {}
+    if "gib_bound" in eg:
+        lines["egress"] = {"micros": ceil_micros(
+            F(rate("egress")) * F(str(eg["gib_bound"])))}
+    lines["nat"] = {"micros": 0 if not (usage.get("nat") or {}).get("present")
+                    else refuse("usage.nat:unpriced")}
+    return lines, sum(v["micros"] for v in lines.values())
+
+
 def cmd_costvalidate(argv):
     rec = load(argv[2])
     repo = argv[4]
-    receipt = load(repo_member(argv[3], repo))
     if rec.get("schema") != "hh-compute-cost/1":
         refuse("cost.schema")
     # reconciliation appends carry supersedes_estimate_of; the base record
     # must not — the record is never rewritten in place (REQ-XB-215/216).
     base = "supersedes_estimate_of" not in rec
+    if str(argv[3]).startswith("n/a{"):
+        # no teardown receipt at mint — the estimate's provenance is the
+        # record's own interval reconstruction; verify arithmetic
+        # consistency against its own usage + rate_table, then the same
+        # estimate/usage/billed legs as the receipt-backed path.
+        lines, total = self_consistent_usage(rec)
+        got = rec.get("estimate", {})
+        if base:
+            for k, v in lines.items():
+                if got.get("lines_micros", {}).get(k) != v["micros"]:
+                    refuse(f"estimate.lines_micros.{k}")
+            if got.get("total_micros") != total:
+                refuse("estimate.total_micros")
+            for k in ("instance", "disk", "ipv4", "egress", "nat"):
+                if k not in (rec.get("usage") or {}):
+                    refuse(f"usage.missing:{k}")
+            if (rec.get("billed") or {}).get("status") != "pending":
+                refuse("billed.not_pending")
+        else:
+            st = (rec.get("billed") or {}).get("status")
+            if st not in ("within", "outside"):
+                refuse(f"billed.status:{st}")
+            recn = rec.get("reconciliation") or {}
+            if st == "outside" and not recn.get("explanation"):
+                refuse("reconciliation.explanation_absent")
+        print("cost record: valid (n/a teardown — self-consistent)")
+        return
+    receipt = load(repo_member(argv[3], repo))
     if receipt.get("kind") != "teardown":
         refuse("receipt.not_teardown")
     # recompute needs the declaration; it rides the receipt's declaration ref

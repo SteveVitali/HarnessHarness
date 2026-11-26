@@ -1,0 +1,17 @@
+{
+    "schema": "hh-site-publication-relocations/1",
+    "reason": "Extend the recorded 2026-11-19 L1 relocation to the executed-W4 superseding record minted at R6.54: phase-3-2026-11-20-flip.json pins the same byte-identical conformance input under its pre-relocation compute/ path. Original publication record, signed reference and archived pin preserved; no gate, dataset, measurement or input hash changes.",
+    "records": [
+        {
+            "record": "docs/results/publication/phase-3-2026-11-20-flip.json",
+            "sha256": "ff11d2214b38f7e1e3c82964d6ff28612e1e3415ec09c1fa52eb7fd140527912",
+            "relocations": [
+                {
+                    "from": "docs/build/reports/compute/2026-11-18-fp-ws1-l1-conformance.json",
+                    "to": "docs/build/reports/l1/2026-11-18-fp-ws1-l1-conformance.json",
+                    "sha256": "bdbb0bc93a66988947e7f1712f9c9c397ba6ebbb9642d568fcf29c594e763218"
+                }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,2 @@
+ebaf0b17f7c3ae22b1be39f2c646a17c58b4c4e23b7b233c3ede9c754752f44c  docs/build/reports/2026-11-26-fp-p4c-confirmation.json
+# recompute: shasum -a 256 -c docs/build/reports/2026-11-26-fp-p4c-confirmation.sha256 (run from the repo root — the record is canonical Json::to_canonical_string output, CC1)

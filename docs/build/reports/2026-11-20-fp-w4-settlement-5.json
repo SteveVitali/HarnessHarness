@@ -1,0 +1,26 @@
+{
+ "boundary_flags": [
+  "concurrent_hour_unattributed"
+ ],
+ "confirm": "\u226524h confirming read \u2014 W4 window (2026-11-19 ~07:33Z\u219217:50Z) has fully rolled off the provider trailing-24h window; reads 18:05Z/18:45Z agree 9,622,700 \u00b5$, all nonzero buckets inside the w4x/w4xv live windows (03:00\u201310:00Z + 13:00\u201315:00Z Nov-20) with zero elsewhere \u2014 no late-arriving or mis-attributed W4 usage surfaced",
+ "kind": "attribution_addendum",
+ "phase": "fp",
+ "provided": {
+  "OLLAMA_API_KEY": "yes"
+ },
+ "reads": [
+  {
+   "file": "~/hh-retained/w4x/settle/settlement-3-usage.json",
+   "kind": "usage-1",
+   "note": "shared read \u2014 the trailing-24h window at 18:05Z covers only Nov-20 window hours",
+   "read_at": "2026-11-20T18:05:24Z",
+   "status": 200
+  }
+ ],
+ "recorded_at": "2026-11-20T18:45:40Z",
+ "schema": "hh-fp-settlement/1",
+ "status": "settled_discrepant{concurrent_hour_unattributed} \u2014 confirmed; nothing new to reconcile",
+ "supersedes_note": "confirms settlement-3/settlement-4; the W4 metered figure 6,983,035 \u00b5$ ($6.98) and settled_discrepant{concurrent_hour_unattributed} stand",
+ "ticket": "R6.52/R6.56",
+ "window": "w4"
+}

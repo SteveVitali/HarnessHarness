@@ -1,0 +1,142 @@
+{
+ "adr": "ADR-0453",
+ "amendment_kind": "dated amendment \u2014 every earlier record is byte-untouched; this row supplies the executed-live discharge over the union of the fixture-verified PP0 evidence and the a4 w4x window",
+ "amends": "docs/build/reports/2026-11-20-fp-w4x-admission-pi.json",
+ "amends_sha256": "sha256:30d5328796fdc1522d29beee5b45e0eab869846b0d1617f8e1cc3fdcdcd29442",
+ "declaration": {
+  "fixture": "crates/hh-runner/tests/fixtures/r6_22/pi.json",
+  "fixture_sha256": "sha256:67c150d68030d00006623761fd39931f62e689d0b215d67d10024e4524e76c7f",
+  "harness": {
+   "name": "pi",
+   "role": "comparator",
+   "version": "0.52.3"
+  },
+  "schema": "hh-harness-admission/1",
+  "verification_class_as_declared": "fixture-verified"
+ },
+ "executed_evidence": {
+  "class": "live-executed (a4 w4x window \u2014 provider calls real, upstream usage objects absent \u2192 attributed 0 \u00b5$ unmetered_streaming_usage)",
+  "ctrf": "31 pass / 19 fail",
+  "outcomes_ref": "docs/build/reports/2026-11-20-fp-w4x-outcomes.json",
+  "outcomes_sha256": "sha256:5a05748a6e100a7ae1c1d7c66e170491097e31809fb3b474dd106121da2bfc91",
+  "rc": {
+   "rc=0": 50
+  },
+  "slots": 50,
+  "window": "w4x",
+  "window_ref": "docs/build/reports/2026-11-20-fp-w4x-window.json",
+  "window_sha256": "sha256:afcfb7de7eae0982799f3f9425814850efa3c3a8a85907098ade59738e1f6078"
+ },
+ "fixture_evidence": {
+  "battery_run_id": "w4x-pp0-r9",
+  "battery_sha256": "sha256:809ec6a08c204ca95fb6d9911252b05638fb517346645330326b2a01fd091a01",
+  "class": "fixture-verified (PP0 $0 replay \u2014 REQ-XC-324 battery, never live-service evidence)",
+  "evidence_dir": "docs/build/reports/2026-11-20-r6.55-w4x-pp0-r2/",
+  "legs": [
+   {
+    "agent_end_cause": "exited{0}",
+    "checks": {
+     "AG3": "pass",
+     "AG5": "pass",
+     "AG6": "pass",
+     "AG8": "pass"
+    },
+    "expected_end_cause": "exited{*}",
+    "leg_file": "docs/build/reports/2026-11-20-r6.55-w4x-pp0-r2/SM-pos/sm-pos-pi.json",
+    "leg_sha256": "sha256:76c89c15d2073c0a6053e7925c0719f37ff81bcb9561a608063084a8459058f8",
+    "native_log_bytes": 4756,
+    "outcome": "withheld{sealed_until_results}",
+    "receipt_count": 2,
+    "slot_id": "sm-pos-pi",
+    "variant": "SM-pos"
+   },
+   {
+    "agent_end_cause": "exited{0}",
+    "checks": {
+     "AG3": "pass",
+     "AG5": "pass",
+     "AG6": "pass",
+     "AG8": "pass"
+    },
+    "expected_end_cause": "exited{*}",
+    "leg_file": "docs/build/reports/2026-11-20-r6.55-w4x-pp0-r2/SM-429/sm-429-pi.json",
+    "leg_sha256": "sha256:42102db85e990ece8bcb6c0cd27de38b7315a27e178c35a11c364672e739f15e",
+    "native_log_bytes": 2116,
+    "outcome": "withheld{sealed_until_results}",
+    "receipt_count": 2,
+    "slot_id": "sm-429-pi",
+    "variant": "SM-429"
+   },
+   {
+    "agent_end_cause": "exited{0}",
+    "checks": {
+     "AG3": "pass",
+     "AG5": "pass",
+     "AG6": "pass",
+     "AG8": "pass"
+    },
+    "expected_end_cause": "exited{*}",
+    "leg_file": "docs/build/reports/2026-11-20-r6.55-w4x-pp0-r2/SM-402/sm-402-pi.json",
+    "leg_sha256": "sha256:076c285b9ce25c553d791d2798690b31fba89e75990fc890a1986bfa33fe1ada",
+    "native_log_bytes": 4773,
+    "outcome": "withheld{sealed_until_results}",
+    "receipt_count": 2,
+    "slot_id": "sm-402-pi",
+    "variant": "SM-402"
+   },
+   {
+    "agent_end_cause": "exited{0}",
+    "checks": {
+     "AG3": "pass",
+     "AG5": "pass",
+     "AG6": "pass",
+     "AG8": "pass"
+    },
+    "expected_end_cause": "exited{*}",
+    "leg_file": "docs/build/reports/2026-11-20-r6.55-w4x-pp0-r2/SM-slow/sm-slow-pi.json",
+    "leg_sha256": "sha256:298ba9af3a43c8f57a438f0e90ec5c9310615d75040cd2ab9c9836c15d19e66f",
+    "native_log_bytes": 4756,
+    "outcome": "withheld{sealed_until_results}",
+    "receipt_count": 2,
+    "slot_id": "sm-slow-pi",
+    "variant": "SM-slow"
+   },
+   {
+    "agent_end_cause": "agent_timeout",
+    "checks": {
+     "AG3": "pass",
+     "AG5": "pass",
+     "AG6": "pass",
+     "AG8": "pass"
+    },
+    "expected_end_cause": "agent_timeout",
+    "leg_file": "docs/build/reports/2026-11-20-r6.55-w4x-pp0-r2/SM-hang/sm-hang-pi.json",
+    "leg_sha256": "sha256:34d4b15fbe1d90ef2f2a91ef5f2f4ece9d2d82f529588abd7bd8d2ec5ffa0cb4",
+    "native_log_bytes": 0,
+    "outcome": "withheld{sealed_until_results}",
+    "receipt_count": 1,
+    "slot_id": "sm-hang-pi",
+    "variant": "SM-hang"
+   }
+  ],
+  "summary": "docs/build/reports/2026-11-20-r6.55-w4x-pp0-r2/_summary.json",
+  "summary_sha256": "sha256:afb737fc497d7b1c232b98bcd93357d1d418c44e59ea4655521e15fd0c5d5df6",
+  "union": {
+   "prior_ws1_union": "docs/build/reports/2026-11-19-fp-ws1-pp0-evidence.json (sha256:95f872641d41cc881d007b388a330ebeec54a4c5f1144094471441a0be2c30c5 \u2014 retained_unavailable, stands verbatim)",
+   "sets": [
+    "docs/build/reports/r6.55-w4x-pp0/ (10 legs \u2014 inconclusive{adapter:silent_exit}, byte-untouched history)",
+    "docs/build/reports/2026-11-20-r6.55-w4x-pp0/ (w4x-pp0-r5 \u2014 10 legs with receipts+native logs, 9 all-gates + 1 typed hold sm-429-claude-code discharged by r9)",
+    "docs/build/reports/2026-11-20-r6.55-w4x-pp0-r2/ (w4x-pp0-r9 \u2014 10/10 all-gates, authoritative)"
+   ]
+  }
+ },
+ "non_claims": [
+  "no live-service claim: every leg is $0 replay against committed recordings",
+  "no fixture rewrite: the r6_22 declarations are byte-untouched",
+  "no verdict evidence: admission gates are machinery, never a scored result"
+ ],
+ "recorded_at": "2026-11-20T16:05:00Z",
+ "schema": "hh-harness-admission-amend/1",
+ "state": "executed_with_evidence \u2014 the union of the PP0 r2 battery (fixture-verified) and the a4 w4x window (live-executed) covers AG3/AG5/AG6/AG8; the W4 not_run{admission:AG3} rows stay append-only history",
+ "ticket": "R6.57"
+}

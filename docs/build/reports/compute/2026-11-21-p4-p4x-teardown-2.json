@@ -1,0 +1,182 @@
+{
+ "authorization": {
+  "gate": "GATE-G35",
+  "readout_path": "docs/build/readouts/GATE-G35.md",
+  "verbatim_sha256": "ca8b1353cc3dcfbe68c8d135c1925419a866f12fbbbf6a898638b82f1511522b",
+  "quote_id": "pq-59a49747bfa5bdf0",
+  "ceiling_micros": 13486340
+ },
+ "cost_record": {
+  "path": "/private/tmp/hh-r6.53-wt/docs/build/reports/compute/2026-11-21-p4-p4x-cost-2.json",
+  "sha256": "bffae8a9fc2bcea852cd9181abbda1a07203a4e6edd93bed5f841ee27a70d284"
+ },
+ "declaration": {
+  "path": "scripts/gce-backend/declarations/fp-p4x.json",
+  "sha256": "4b04440ec0fd5b75c3cbda788912aa7e9a54da8a4daab068087eac49ea6245ce"
+ },
+ "h_r": {
+  "declared_hours": 6,
+  "elapsed_hours": 1.34,
+  "exceeded": false,
+  "requires_dated_df_row": false
+ },
+ "kind": "teardown",
+ "lifecycle": {
+  "creation_timestamp": "2026-11-21T00:47:46.040Z",
+  "deletion_operation_end": "2026-11-21T02:08:00Z",
+  "last_stop_timestamp": null
+ },
+ "phase": "p4",
+ "post_state": {
+  "addresses": 0,
+  "disks": 0,
+  "firewalls": 5,
+  "forwarding": 0,
+  "images": 0,
+  "instances": 0,
+  "nats": 0,
+  "routers": 0,
+  "snapshots": 0
+ },
+ "provided": {
+  "OLLAMA_API_KEY": "no",
+  "gcloud_auth": "yes"
+ },
+ "recipe": {
+  "git_head": "80f4cb3703c4bb443787328b98099505325bba04",
+  "path": "scripts/gce-backend.sh",
+  "sha256": "7a415c041c6660f6e1f1fa7814eff0f62c721e64ed67d2a4acbeeb32ae138590"
+ },
+ "recorded_at": "2026-11-21T02:12:00Z",
+ "resources": {
+  "creation_timestamp": "2026-11-21T00:47:46.040Z",
+  "deletion_operation_end": "2026-11-21T02:08:00Z",
+  "disks": [
+   {
+    "created": "2026-11-21T00:47:46.040Z",
+    "deleted": "2026-11-21T02:08:00Z",
+    "name": "hh-p4-p4x",
+    "size_gib": 300,
+    "type": "pd-balanced"
+   }
+  ],
+  "external_ipv4": "absent",
+  "instance_id": null,
+  "instance_name": "hh-p4-p4x",
+  "machine_type": "e2-standard-8",
+  "project_id": "hh-p4-a1b2c3",
+  "project_number": null,
+  "zone": "us-central1-a"
+ },
+ "schema": "hh-compute-receipt/1",
+ "settlement": {
+  "last_model_call_utc_hour": "n/a{no_model_calls}"
+ },
+ "steps": [
+  {
+   "at": "2026-11-21T02:00:00Z",
+   "n": 1,
+   "name": "harvest",
+   "result": "\"verified\""
+  },
+  {
+   "at": "2026-11-21T02:05:30Z",
+   "n": 2,
+   "name": "inventory",
+   "result": "\"recorded\""
+  },
+  {
+   "at": "2026-11-21T02:06:30Z",
+   "n": 3,
+   "name": "delete_instances",
+   "result": "\"hh-p4-p4x\""
+  },
+  {
+   "at": "2026-11-21T02:09:00Z",
+   "n": 4,
+   "name": "reinventory",
+   "result": "\"checked\""
+  },
+  {
+   "at": "2026-11-21T02:12:00Z",
+   "n": 5,
+   "name": "project_delete",
+   "result": "\"skipped{not_phase_close}\""
+  },
+  {
+   "at": "2026-11-21T02:12:00Z",
+   "n": 6,
+   "name": "serial_and_usage",
+   "result": "\"n/a{vm_deleted_before_capture}\""
+  }
+ ],
+ "ticket": "GATE-G35",
+ "verification": null,
+ "window": "p4x",
+ "commands": [
+  {
+   "argv_redacted": [
+    "compute",
+    "instances",
+    "delete",
+    "hh-p4-p4x",
+    "--project",
+    "hh-p4-a1b2c3",
+    "--zone",
+    "us-central1-a",
+    "--quiet"
+   ],
+   "ended_at": "2026-11-21T02:08:00Z",
+   "exit": 0,
+   "started_at": "2026-11-21T02:06:30Z",
+   "stderr_excerpt": "",
+   "stdout_excerpt": "Deleted [https://www.googleapis.com/compute/v1/projects/hh-p4-a1b2c3/zones/us-central1-a/instances/hh-p4-p4x].",
+   "stdout_sha256": "20a00104bdede953d4e70feb2818c8a0805ab6125aad055eac894e9391e20608"
+  },
+  {
+   "argv_redacted": [
+    "compute",
+    "instances",
+    "list",
+    "--project",
+    "hh-p4-a1b2c3"
+   ],
+   "ended_at": "2026-11-21T02:09:30Z",
+   "exit": 0,
+   "started_at": "2026-11-21T02:09:00Z",
+   "stderr_excerpt": "",
+   "stdout_excerpt": "Listed 0 items.",
+   "stdout_sha256": "00352f61705f2c1501c66d82c230212593f321b2ad8d66287166566caab6e544"
+  },
+  {
+   "argv_redacted": [
+    "compute",
+    "disks",
+    "list",
+    "--project",
+    "hh-p4-a1b2c3"
+   ],
+   "ended_at": "2026-11-21T02:09:35Z",
+   "exit": 0,
+   "started_at": "2026-11-21T02:09:30Z",
+   "stderr_excerpt": "",
+   "stdout_excerpt": "Listed 0 items.",
+   "stdout_sha256": "00352f61705f2c1501c66d82c230212593f321b2ad8d66287166566caab6e544"
+  },
+  {
+   "argv_redacted": [
+    "compute",
+    "addresses",
+    "list",
+    "--project",
+    "hh-p4-a1b2c3"
+   ],
+   "ended_at": "2026-11-21T02:09:40Z",
+   "exit": 0,
+   "started_at": "2026-11-21T02:09:35Z",
+   "stderr_excerpt": "",
+   "stdout_excerpt": "Listed 0 items.",
+   "stdout_sha256": "00352f61705f2c1501c66d82c230212593f321b2ad8d66287166566caab6e544"
+  }
+ ]
+}

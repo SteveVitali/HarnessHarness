@@ -1,0 +1,23 @@
+# fp-p4-inputs-gen2.txt — the inputs manifest for the
+# `p4_admissibility supersede` emitter (manifest 329/R7.3): the
+# generation-2 mint over the repaired `transcript_render` baseline
+# authoring. The gen-1 records at the 2026-11-20 paths stay
+# byte-untouched — `emit` still reproduces them; the `supersedes_*`
+# keys name them so the emitted records carry the lineage cite
+# (prior path + recomputed sha256 + reason + byte_untouched:true).
+# Format: name=relpath.
+corpus=docs/build/reports/2026-11-20-fp-p4-token-corpus.json
+recorded_at=2026-11-21
+supersedes_reason=transcript_render authoring-completeness repair (R7.3): the gen-1 baseline declared only assistant_replay.reasoning — G-L1 rerun-4 diverged on the undeclared members; the authorized envelope (slots, arms, seeds, caps) is unchanged
+supersedes_sweep_registry=docs/build/reports/2026-11-20-fp-p4-sweep-registry.json
+supersedes_levels=docs/build/reports/2026-11-20-fp-p4-levels.json
+supersedes_w_rule=docs/build/reports/2026-11-20-fp-p4-w-rule.json
+supersedes_admissibility=docs/build/reports/2026-11-20-fp-p4-admissibility.json
+sweep_registry=docs/build/reports/2026-11-21-fp-p4-sweep-registry.json
+sweep_registry_sha256=docs/build/reports/2026-11-21-fp-p4-sweep-registry.sha256
+levels=docs/build/reports/2026-11-21-fp-p4-levels.json
+levels_sha256=docs/build/reports/2026-11-21-fp-p4-levels.sha256
+w_rule=docs/build/reports/2026-11-21-fp-p4-w-rule.json
+w_rule_sha256=docs/build/reports/2026-11-21-fp-p4-w-rule.sha256
+admissibility=docs/build/reports/2026-11-21-fp-p4-admissibility.json
+admissibility_sha256=docs/build/reports/2026-11-21-fp-p4-admissibility.sha256

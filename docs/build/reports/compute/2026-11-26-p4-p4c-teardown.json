@@ -1,0 +1,211 @@
+{
+  "authorization": {
+    "ceiling_micros": 15999460,
+    "gate": "HUMAN-H21",
+    "quote_id": "pq-4e650fe71f863d22",
+    "readout_path": "docs/build/readouts/HUMAN-H21.md",
+    "verbatim_sha256": "a6a80923a2c355bcb7c35472fd327fe23b844db25ece1c09d7cb6232a77da6e7"
+  },
+  "commands": [
+    {
+      "argv_redacted": [
+        "compute",
+        "instances",
+        "delete",
+        "hh-p4-p4c",
+        "--project",
+        "hh-p4-a1b2c3",
+        "--zone",
+        "us-central1-a"
+      ],
+      "ended_at": "2026-11-26T07:26:00Z",
+      "exit": 0,
+      "started_at": "2026-11-26T07:26:00Z",
+      "stderr_excerpt": "verbatim ops log (operator-executed, minute granularity): 'teardown gcloud instances delete 2026-11-26 ~07:26Z \u2014 instance + 300 GB boot disk removed, zero billable resources verified (instances/disks/addresses all empty)' \u2014 docs/build/reports/2026-11-26-fp-p4c-settlement.json + readouts/HUMAN-H21.md\n",
+      "stdout_excerpt": "",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "instances",
+        "list",
+        "--project",
+        "hh-p4-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-26T07:27:00Z",
+      "exit": 0,
+      "started_at": "2026-11-26T07:26:00Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[]",
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "disks",
+        "list",
+        "--project",
+        "hh-p4-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-26T07:28:00Z",
+      "exit": 0,
+      "started_at": "2026-11-26T07:27:00Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[]",
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "addresses",
+        "list",
+        "--project",
+        "hh-p4-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-26T07:29:00Z",
+      "exit": 0,
+      "started_at": "2026-11-26T07:28:00Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[]",
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    }
+  ],
+  "cost_record": {
+    "path": "docs/build/reports/compute/2026-11-26-p4-p4c-r2-cost.json",
+    "sha256": "674860e68867c9520f6b876474d01188c7b6f3621306bb87050505a786de33a9"
+  },
+  "declaration": {
+    "path": "scripts/gce-backend/declarations/fp-p4c.json",
+    "sha256": "cc88d1dd2b4765411c1f892d2f0c763c1dbd0a5ccc065647c46ccc6fc29aa8aa"
+  },
+  "h_r": {
+    "declared_hours": 48,
+    "elapsed_hours": 35.08,
+    "exceeded": false,
+    "requires_dated_df_row": false
+  },
+  "kind": "teardown",
+  "lifecycle": {
+    "creation_timestamp": "2026-11-24T20:21:15.870Z",
+    "deletion_operation_end": "2026-11-26T07:26:00Z",
+    "last_stop_timestamp": "2026-11-26T04:14:50.204Z"
+  },
+  "phase": "p4",
+  "post_state": {
+    "addresses": 0,
+    "disks": 0,
+    "firewalls": "inconclusive{not_in_verbatim_ops_log}",
+    "forwarding": "inconclusive{not_in_verbatim_ops_log}",
+    "images": "inconclusive{not_in_verbatim_ops_log}",
+    "instances": 0,
+    "nats": "inconclusive{not_in_verbatim_ops_log}",
+    "routers": "inconclusive{not_in_verbatim_ops_log}",
+    "snapshots": "inconclusive{not_in_verbatim_ops_log}"
+  },
+  "provided": {
+    "OLLAMA_API_KEY": "no",
+    "gcloud_auth": "yes"
+  },
+  "recipe": {
+    "git_head": "unknown",
+    "path": "n/a{operator_executed}",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "recorded_at": "2026-11-26T12:15:00Z",
+  "resources": {
+    "creation_timestamp": "2026-11-24T20:21:15.870Z",
+    "deletion_operation_end": "2026-11-26T07:26:00Z",
+    "disks": [
+      {
+        "created": null,
+        "deleted": "2026-11-26T07:26:00Z",
+        "name": "hh-p4-p4c",
+        "size_gib": 300,
+        "type": "pd-balanced"
+      }
+    ],
+    "external_ipv4": "absent",
+    "instance_id": 3972479147051601748,
+    "instance_name": "hh-p4-p4c",
+    "machine_type": "e2-standard-8",
+    "project_id": "hh-p4-a1b2c3",
+    "project_number": null,
+    "zone": "us-central1-a"
+  },
+  "schema": "hh-compute-receipt/1",
+  "settlement": {
+    "last_model_call_utc_hour": "2026-11-26T03"
+  },
+  "steps": [
+    {
+      "at": "2026-11-26T12:15:00Z",
+      "n": 0,
+      "name": "provenance",
+      "result": "\"minted R7.8 deliverable 8 from the verbatim ops log \u2014 operator-executed teardown under HUMAN-H21 ruling B ('proceed with B'); the teardown recipe legs did not run: stop_admissions/harvest/serial were discharged in the R7.5 closeout before the 04:14:50Z park; timestamps carry the verbatim record's minute granularity\""
+    },
+    {
+      "at": "2026-11-26T04:14:50Z",
+      "n": 1,
+      "name": "stop_admissions",
+      "result": "\"prior{window terminal \u2014 370/370 recorded r4 03:33Z}\""
+    },
+    {
+      "at": "2026-11-26T04:14:50Z",
+      "n": 2,
+      "name": "harvest",
+      "result": "\"prior{harvested at closeout \u2014 run-root + guest-logs + serial committed before park}\""
+    },
+    {
+      "at": "2026-11-26T04:14:50Z",
+      "n": 3,
+      "name": "serial_and_usage",
+      "result": "\"prior{serial-console-r4.txt committed}\""
+    },
+    {
+      "at": "2026-11-26T07:26:00Z",
+      "n": 4,
+      "name": "inventory",
+      "result": "\"verified{zero_billable:instances,disks,addresses}\""
+    },
+    {
+      "at": "2026-11-26T07:26:00Z",
+      "n": 5,
+      "name": "delete_instances",
+      "result": "\"hh-p4-p4c\""
+    },
+    {
+      "at": "2026-11-26T07:29:00Z",
+      "n": 6,
+      "name": "reinventory",
+      "result": "\"checked{verbatim_ops_log}\""
+    },
+    {
+      "at": "2026-11-26T12:15:00Z",
+      "n": 7,
+      "name": "project_delete",
+      "result": "\"skipped{not_phase_close}\""
+    },
+    {
+      "at": "2026-11-26T12:15:00Z",
+      "n": 8,
+      "name": "kill_local_helpers",
+      "result": "\"0\""
+    },
+    {
+      "at": "2026-11-26T12:15:00Z",
+      "n": 9,
+      "name": "spend_notes",
+      "result": "\"governing decl fp-p4c2 dead_man 48 h (leg-1 fp-p4c 36 h also satisfied \u2014 elapsed 35.08 h); quotes pq-3a4187759b2d8411 12,229,780 (leg 1) + pq-4e650fe71f863d22 15,999,460 (amendment) \u2014 estimates 3,861,264 + 6,471,091 micros stand (billed unavailable); residual: parked-disk accrual ~41,100 micros/h 04:14:50Z->07:26Z carried to the H21 reconcile\""
+    }
+  ],
+  "ticket": "HUMAN-H21",
+  "verification": null,
+  "window": "p4c"
+}

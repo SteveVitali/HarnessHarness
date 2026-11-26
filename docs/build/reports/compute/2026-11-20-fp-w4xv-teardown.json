@@ -1,0 +1,532 @@
+{
+  "authorization": {
+    "ceiling_micros": 4690420,
+    "gate": "ADR-0453",
+    "quote_id": "pq-b70e6859db3f6011",
+    "readout_path": "docs/adr/ADR-0453-w4x-extension-unblock-rulings.md",
+    "verbatim_sha256": "ad92a45346d3440877020e06e016754499169148f4d5d2d811759ab12077549e"
+  },
+  "commands": [
+    {
+      "argv_redacted": [
+        "auth",
+        "list",
+        "--format=value(account)"
+      ],
+      "ended_at": "2026-11-20T15:38:10Z",
+      "exit": 0,
+      "started_at": "2026-11-20T15:38:10Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "14stevevitali@gmail.com\n",
+      "stdout_sha256": "664266223ad53c9a2e5c5b893f89cc7a92975b49c96485cff8ed26ecaa89e950"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "ssh",
+        "hh-fp-w4xv",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "--tunnel-through-iap",
+        "--command",
+        "hh-runner drain --window 'w4xv' --inconclusive teardown"
+      ],
+      "ended_at": "2026-11-20T15:38:11Z",
+      "exit": 1,
+      "started_at": "2026-11-20T15:38:10Z",
+      "stderr_excerpt": "ERROR: (gcloud.compute.ssh) Could not fetch resource:\n - The resource 'projects/hh-fp-a1b2c3/zones/us-central1-a/instances/hh-fp-w4xv' was not found\n\n",
+      "stdout_excerpt": "",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "instances",
+        "list",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-20T15:38:12Z",
+      "exit": 0,
+      "started_at": "2026-11-20T15:38:11Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[]\n",
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "ssh",
+        "hh-fp-w4xv",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "--tunnel-through-iap",
+        "--command",
+        "cat /proc/uptime; df -BG --output=avail / | tail -1"
+      ],
+      "ended_at": "2026-11-20T15:38:16Z",
+      "exit": 1,
+      "started_at": "2026-11-20T15:38:15Z",
+      "stderr_excerpt": "ERROR: (gcloud.compute.ssh) Could not fetch resource:\n - The resource 'projects/hh-fp-a1b2c3/zones/us-central1-a/instances/hh-fp-w4xv' was not found\n\n",
+      "stdout_excerpt": "",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "instances",
+        "list",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-20T15:38:17Z",
+      "exit": 0,
+      "started_at": "2026-11-20T15:38:16Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[]\n",
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "disks",
+        "list",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-20T15:38:18Z",
+      "exit": 0,
+      "started_at": "2026-11-20T15:38:17Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[]\n",
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "addresses",
+        "list",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-20T15:38:19Z",
+      "exit": 0,
+      "started_at": "2026-11-20T15:38:18Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[]\n",
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "snapshots",
+        "list",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-20T15:38:19Z",
+      "exit": 0,
+      "started_at": "2026-11-20T15:38:19Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[]\n",
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "images",
+        "list",
+        "--no-standard-images",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-20T15:38:20Z",
+      "exit": 0,
+      "started_at": "2026-11-20T15:38:19Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[]\n",
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "forwarding-rules",
+        "list",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-20T15:38:21Z",
+      "exit": 0,
+      "started_at": "2026-11-20T15:38:20Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[]\n",
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "routers",
+        "list",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-20T15:38:22Z",
+      "exit": 0,
+      "started_at": "2026-11-20T15:38:21Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[]\n",
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "firewall-rules",
+        "list",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-20T15:38:23Z",
+      "exit": 0,
+      "started_at": "2026-11-20T15:38:22Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[\n  {\n    \"allowed\": [\n      {\n        \"IPProtocol\": \"icmp\"\n      }\n    ],\n    \"creationTimestamp\": \"2026-11-09T13:22:45.161-08:00\",\n    \"description\": \"Allow ICMP from anywhere\",\n    \"direction\": \"INGRESS\",\n    \"disabled\": false,\n    \"id\": \"1508537906319296330\",\n    \"kind\": \"compute#firewall\",\n    \"logConfig\": {\n      \"enable\": false\n    },\n    \"name\": \"default-allow-icmp\",\n    \"network\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/networks/default\",\n    \"priority\": 65534,\n    \"selfLink\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/firewalls/default-allow-icmp\",\n    \"sourceRanges\": [\n      \"0.0.0.0/0\"\n    ]\n  },\n  {\n    \"allowed\": [\n      {\n        \"IPProtocol\": \"tcp\",\n        \"ports\": [\n          \"0-65535\"\n        ]\n      },\n      {\n        \"IPProtocol\": \"udp\",\n        \"ports\": [\n          \"0-65535\"\n        ]\n      },\n      {\n        \"IPProtocol\": \"icmp\"\n      }\n    ],\n    \"creationTimestamp\": \"2026-11-09T13:22:45.146-08:00\",\n    \"description\": \"Allow internal traffic on the default network\",\n    \"direction\": \"INGRESS\",\n    \"disabled\": false,\n    \"id\": \"7440129260991252298\",\n    \"kind\": \"compute#firewall\",\n    \"logConfig\": {\n      \"enable\": false\n    },\n    \"name\": \"default-allow-internal\",\n    \"network\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/networks/default\",\n    \"priority\": 65534,\n    \"selfLink\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/firewalls/default-allow-internal\",\n    \"sourceRanges\": [\n      \"10.128.0.0/9\"\n    ]\n  },\n  {\n    \"allowed\": [\n      {\n        \"IPProtocol\": \"tcp\",\n        \"ports\": [\n          \"3389\"\n        ]\n      }\n    ],\n    \"creationTimestamp\": \"2026-11-09T13:22:45.156-08:00\",\n    \"description\": \"Allow RDP from anywhere\",\n    \"direction\": \"INGRESS\",\n    \"disabled\": false,\n    \"id\": \"8681670204500969290\",\n    \"kind\": \"compute#firewall\",\n    \"logConfig\": {\n      \"enable\": false\n    },\n    \"name\": \"default-allow-rdp\",\n    \"network\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/networks/default\",\n    \"priority\": 65534,\n    \"selfLink\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/firewalls/default-allow-rdp\",\n    \"sourceRanges\": [\n      \"0.0.0.0/0\"\n    ]\n  },\n  {\n    \"allowed\": [\n      {\n        \"IPProtocol\": \"tcp\",\n        \"ports\": [\n          \"22\"\n        ]\n      }\n    ],\n    \"creationTimestamp\": \"2026-11-09T13:22:45.152-08:00\",\n    \"description\": \"Allow SSH from anywhere\",\n    \"direction\": \"INGRESS\",\n    \"disabled\": false,\n    \"id\": \"8919409481991817034\",\n    \"kind\": \"compute#firewall\",\n    \"logConfig\": {\n      \"enable\": false\n    },\n    \"name\": \"default-allow-ssh\",\n    \"network\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/networks/default\",\n    \"priority\": 65534,\n    \"selfLink\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/firewalls/default-allow-ssh\",\n    \"sourceRanges\": [\n      \"0.0.0.0/0\"\n    ]\n  },\n  {\n    \"allowed\": [\n      {\n        \"IPProtocol\": \"tcp\",\n        \"ports\": [\n          \"22\"\n        ]\n      }\n    ],\n    \"creationTimestamp\": \"2026-11-09T13:23:49.245-08:00\",\n    \"description\": \"\",\n    \"direction\": \"INGRESS\",\n    \"disabled\": false,\n    \"id\": \"2261950971915503370\",\n    \"kind\": \"compute#firewall\",\n    \"logConfig\": {\n      \"enable\": false\n    },\n    \"name\": \"hh-iap-ssh\",\n    \"network\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/networks/hh-net\",\n    \"priority\": 1000,\n    \"selfLink\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/firewalls/hh-iap-ssh\",\n    \"sourceRanges\": [\n      \"35.235.240.0/20\"\n    ]\n  }\n]\n",
+      "stdout_sha256": "560d98d612317b281b4a9d782f4730a9e7f2f006f30b11dc026832a636d20fe3"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "instances",
+        "list",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-20T15:38:24Z",
+      "exit": 0,
+      "started_at": "2026-11-20T15:38:23Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[]\n",
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "instances",
+        "list",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-20T15:38:24Z",
+      "exit": 0,
+      "started_at": "2026-11-20T15:38:24Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[]\n",
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "disks",
+        "list",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-20T15:38:25Z",
+      "exit": 0,
+      "started_at": "2026-11-20T15:38:25Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[]\n",
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "addresses",
+        "list",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-20T15:38:26Z",
+      "exit": 0,
+      "started_at": "2026-11-20T15:38:25Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[]\n",
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "snapshots",
+        "list",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-20T15:38:27Z",
+      "exit": 0,
+      "started_at": "2026-11-20T15:38:26Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[]\n",
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "images",
+        "list",
+        "--no-standard-images",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-20T15:38:28Z",
+      "exit": 0,
+      "started_at": "2026-11-20T15:38:27Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[]\n",
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "forwarding-rules",
+        "list",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-20T15:38:28Z",
+      "exit": 0,
+      "started_at": "2026-11-20T15:38:28Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[]\n",
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "routers",
+        "list",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-20T15:38:29Z",
+      "exit": 0,
+      "started_at": "2026-11-20T15:38:28Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[]\n",
+      "stdout_sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "firewall-rules",
+        "list",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-20T15:38:30Z",
+      "exit": 0,
+      "started_at": "2026-11-20T15:38:29Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "[\n  {\n    \"allowed\": [\n      {\n        \"IPProtocol\": \"icmp\"\n      }\n    ],\n    \"creationTimestamp\": \"2026-11-09T13:22:45.161-08:00\",\n    \"description\": \"Allow ICMP from anywhere\",\n    \"direction\": \"INGRESS\",\n    \"disabled\": false,\n    \"id\": \"1508537906319296330\",\n    \"kind\": \"compute#firewall\",\n    \"logConfig\": {\n      \"enable\": false\n    },\n    \"name\": \"default-allow-icmp\",\n    \"network\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/networks/default\",\n    \"priority\": 65534,\n    \"selfLink\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/firewalls/default-allow-icmp\",\n    \"sourceRanges\": [\n      \"0.0.0.0/0\"\n    ]\n  },\n  {\n    \"allowed\": [\n      {\n        \"IPProtocol\": \"tcp\",\n        \"ports\": [\n          \"0-65535\"\n        ]\n      },\n      {\n        \"IPProtocol\": \"udp\",\n        \"ports\": [\n          \"0-65535\"\n        ]\n      },\n      {\n        \"IPProtocol\": \"icmp\"\n      }\n    ],\n    \"creationTimestamp\": \"2026-11-09T13:22:45.146-08:00\",\n    \"description\": \"Allow internal traffic on the default network\",\n    \"direction\": \"INGRESS\",\n    \"disabled\": false,\n    \"id\": \"7440129260991252298\",\n    \"kind\": \"compute#firewall\",\n    \"logConfig\": {\n      \"enable\": false\n    },\n    \"name\": \"default-allow-internal\",\n    \"network\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/networks/default\",\n    \"priority\": 65534,\n    \"selfLink\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/firewalls/default-allow-internal\",\n    \"sourceRanges\": [\n      \"10.128.0.0/9\"\n    ]\n  },\n  {\n    \"allowed\": [\n      {\n        \"IPProtocol\": \"tcp\",\n        \"ports\": [\n          \"3389\"\n        ]\n      }\n    ],\n    \"creationTimestamp\": \"2026-11-09T13:22:45.156-08:00\",\n    \"description\": \"Allow RDP from anywhere\",\n    \"direction\": \"INGRESS\",\n    \"disabled\": false,\n    \"id\": \"8681670204500969290\",\n    \"kind\": \"compute#firewall\",\n    \"logConfig\": {\n      \"enable\": false\n    },\n    \"name\": \"default-allow-rdp\",\n    \"network\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/networks/default\",\n    \"priority\": 65534,\n    \"selfLink\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/firewalls/default-allow-rdp\",\n    \"sourceRanges\": [\n      \"0.0.0.0/0\"\n    ]\n  },\n  {\n    \"allowed\": [\n      {\n        \"IPProtocol\": \"tcp\",\n        \"ports\": [\n          \"22\"\n        ]\n      }\n    ],\n    \"creationTimestamp\": \"2026-11-09T13:22:45.152-08:00\",\n    \"description\": \"Allow SSH from anywhere\",\n    \"direction\": \"INGRESS\",\n    \"disabled\": false,\n    \"id\": \"8919409481991817034\",\n    \"kind\": \"compute#firewall\",\n    \"logConfig\": {\n      \"enable\": false\n    },\n    \"name\": \"default-allow-ssh\",\n    \"network\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/networks/default\",\n    \"priority\": 65534,\n    \"selfLink\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/firewalls/default-allow-ssh\",\n    \"sourceRanges\": [\n      \"0.0.0.0/0\"\n    ]\n  },\n  {\n    \"allowed\": [\n      {\n        \"IPProtocol\": \"tcp\",\n        \"ports\": [\n          \"22\"\n        ]\n      }\n    ],\n    \"creationTimestamp\": \"2026-11-09T13:23:49.245-08:00\",\n    \"description\": \"\",\n    \"direction\": \"INGRESS\",\n    \"disabled\": false,\n    \"id\": \"2261950971915503370\",\n    \"kind\": \"compute#firewall\",\n    \"logConfig\": {\n      \"enable\": false\n    },\n    \"name\": \"hh-iap-ssh\",\n    \"network\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/networks/hh-net\",\n    \"priority\": 1000,\n    \"selfLink\": \"https://www.googleapis.com/compute/v1/projects/hh-fp-a1b2c3/global/firewalls/hh-iap-ssh\",\n    \"sourceRanges\": [\n      \"35.235.240.0/20\"\n    ]\n  }\n]\n",
+      "stdout_sha256": "560d98d612317b281b4a9d782f4730a9e7f2f006f30b11dc026832a636d20fe3"
+    },
+    {
+      "argv_redacted": [
+        "compute",
+        "instances",
+        "describe",
+        "hh-fp-w4xv",
+        "--project",
+        "hh-fp-a1b2c3",
+        "--zone",
+        "us-central1-a",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-20T15:38:31Z",
+      "exit": 1,
+      "started_at": "2026-11-20T15:38:30Z",
+      "stderr_excerpt": "ERROR: (gcloud.compute.instances.describe) Could not fetch resource:\n - The resource 'projects/hh-fp-a1b2c3/zones/us-central1-a/instances/hh-fp-w4xv' was not found\n\n",
+      "stdout_excerpt": "",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv_redacted": [
+        "projects",
+        "delete",
+        "hh-fp-a1b2c3",
+        "--quiet"
+      ],
+      "ended_at": "2026-11-20T15:38:34Z",
+      "exit": 0,
+      "started_at": "2026-11-20T15:38:31Z",
+      "stderr_excerpt": "Deleted [https://cloudresourcemanager.googleapis.com/v1/projects/hh-fp-a1b2c3].\n\nYou can undo this operation for a limited period by running the command below.\n    $ gcloud projects undelete hh-fp-a1b2c3\n\nSee https://cloud.google.com/resource-manager/docs/creating-managing-projects for information on shutting down projects.\n",
+      "stdout_excerpt": "",
+      "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "argv_redacted": [
+        "projects",
+        "describe",
+        "hh-fp-a1b2c3",
+        "--format",
+        "json"
+      ],
+      "ended_at": "2026-11-20T15:38:35Z",
+      "exit": 0,
+      "started_at": "2026-11-20T15:38:34Z",
+      "stderr_excerpt": "",
+      "stdout_excerpt": "{\n  \"createTime\": \"2026-11-09T21:21:53.431Z\",\n  \"lifecycleState\": \"DELETE_REQUESTED\",\n  \"name\": \"hh-fp-a1b2c3\",\n  \"projectId\": \"hh-fp-a1b2c3\",\n  \"projectNumber\": \"290612983212\"\n}\n",
+      "stdout_sha256": "9987b0aa6de61b501f4812c5ce8907ab11fa4071a75e9362741ec9dadf68d055"
+    }
+  ],
+  "cost_record": {
+    "path": "/private/tmp/hh-r6.53-wt/docs/build/reports/compute/2026-11-20-fp-w4xv-cost.json",
+    "sha256": "b706e5b7d35601a2fd3d80a221e1ef31566253eb4e3966ac6f5f094059b5405e"
+  },
+  "declaration": {
+    "path": "scripts/gce-backend/declarations/fp-w4xv-r656.json",
+    "sha256": "6eee766eec3124a4f3fe7b7b2f30017fa3aec6f5791bb3ac75d920ad60ccf22d"
+  },
+  "h_r": {
+    "declared_hours": 6,
+    "elapsed_hours": 0.0,
+    "exceeded": false,
+    "requires_dated_df_row": false
+  },
+  "kind": "teardown",
+  "lifecycle": {
+    "creation_timestamp": null,
+    "deletion_operation_end": "2026-11-20T15:38:35Z",
+    "last_stop_timestamp": null
+  },
+  "phase": "fp",
+  "post_state": {
+    "addresses": 0,
+    "disks": 0,
+    "firewalls": 5,
+    "forwarding": 0,
+    "images": 0,
+    "instances": 0,
+    "nats": 0,
+    "routers": 0,
+    "snapshots": 0
+  },
+  "provided": {
+    "OLLAMA_API_KEY": "yes",
+    "gcloud_auth": "yes"
+  },
+  "recipe": {
+    "git_head": "82cdfa74d14ef45de271510f4994fc8e917190f1",
+    "path": "scripts/gce-backend.sh",
+    "sha256": "7a415c041c6660f6e1f1fa7814eff0f62c721e64ed67d2a4acbeeb32ae138590"
+  },
+  "recorded_at": "2026-11-20T15:38:35Z",
+  "resources": {
+    "creation_timestamp": null,
+    "deletion_operation_end": null,
+    "disks": [],
+    "external_ipv4": "absent",
+    "instance_id": null,
+    "instance_name": null,
+    "machine_type": "e2-standard-8",
+    "project_id": "hh-fp-a1b2c3",
+    "project_number": null,
+    "zone": "us-central1-a"
+  },
+  "schema": "hh-compute-receipt/1",
+  "settlement": {
+    "last_model_call_utc_hour": "n/a{no_model_calls}"
+  },
+  "steps": [
+    {
+      "at": "2026-11-20T15:38:11Z",
+      "n": 1,
+      "name": "stop_admissions",
+      "result": "\"inconclusive{teardown}\""
+    },
+    {
+      "at": "2026-11-20T15:38:15Z",
+      "n": 2,
+      "name": "harvest",
+      "result": "\"verified\""
+    },
+    {
+      "at": "2026-11-20T15:38:16Z",
+      "n": 3,
+      "name": "serial_and_usage",
+      "result": "\"captured\""
+    },
+    {
+      "at": "2026-11-20T15:38:23Z",
+      "n": 4,
+      "name": "inventory",
+      "result": "\"recorded\""
+    },
+    {
+      "at": "2026-11-20T15:38:24Z",
+      "n": 5,
+      "name": "delete_instances",
+      "result": "\"none\""
+    },
+    {
+      "at": "2026-11-20T15:38:31Z",
+      "n": 6,
+      "name": "reinventory",
+      "result": "\"checked\""
+    },
+    {
+      "at": "2026-11-20T15:38:35Z",
+      "n": 7,
+      "name": "project_delete",
+      "result": "\"DELETE_REQUESTED\""
+    },
+    {
+      "at": "2026-11-20T15:38:35Z",
+      "n": 8,
+      "name": "kill_local_helpers",
+      "result": "\"0\""
+    }
+  ],
+  "ticket": "R6.56",
+  "verification": null,
+  "window": "w4xv"
+}

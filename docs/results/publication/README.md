@@ -16,7 +16,7 @@ for a superseding HUMAN-H17 visibility-flip record (CAP6.2 / DF-CAP6.1-5):
 | `pages` | URL prefixes the record publishes; must cover `/<phase>/` (or `/` for the home readings) |
 | `inputs` | `[{path, sha256}]` — the phase's exact input set, one entry per named generator input for that phase |
 | `inputs_digest` | `sha256:` + sha256 over the canonical inputs list (sorted keys, compact separators — the same construction as `hh-site-data/1` provenance) |
-| `gate_row` | the manifest gate row id authorizing the publish: `GATE-G22` (phase-1), `GATE-G31` (phase-2 first-pass) — a phase without a manifest gate cannot publish |
+| `gate_row` | the manifest gate row id authorizing the publish: `GATE-G22` (phase-1), `GATE-G31` (first pass — phases 2–4), `GATE-G38` (phase-4 second pass) — a phase without a manifest gate cannot publish |
 | `readout` | repo-relative path of the gate readout under `docs/build/`; the file must exist and name the gate. The operator's decision lives there — never copied into the record |
 | `labels` | `{evidence_class, outside_verified: false}` — `outside_verified` stays `false` until a graduation record exists |
 | `dataset` | `{visibility, revision, secret_scan_ref, contamination_scan_ref}` — while `private`, the three refs are `null`; `public` requires all three plus a superseding record (HUMAN-H17) |

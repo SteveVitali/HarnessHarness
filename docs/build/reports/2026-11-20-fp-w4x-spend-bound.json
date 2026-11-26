@@ -1,0 +1,49 @@
+{
+ "authorization": {
+  "gate": "ADR-0453",
+  "readout_path": "docs/adr/ADR-0453-w4x-extension-unblock-rulings.md",
+  "ruling": "Extension window: \"$100 ceiling\" \u2014 runs Pi (50 slots) + Claude-Code (50) + corrected-V5 (50) on the undeleted GCP project; adapters + PP0 smoke evidence built first (offline).",
+  "verbatim_sha256": "ad92a45346d3440877020e06e016754499169148f4d5d2d811759ab12077549e"
+ },
+ "bound_micros": 100000000,
+ "dead_man": "the declaration's own bounds stand \u2014 D 22.5 h max-run STOP + in-guest 1365 min timer + h_r 6 h residual horizon; if the window cannot complete inside the bound the driver withholds verbatim and teardown runs",
+ "operator_verbatim": "$100 ceiling",
+ "phase": "fp",
+ "pinned_schedule": {
+  "concurrency": 4,
+  "drop_order": [
+   "v5",
+   "claude-code",
+   "pi"
+  ],
+  "replicates": 5,
+  "seed": "fp-w4-schedule-r6.33-2026-11-10",
+  "slot_deadline_s": 3738,
+  "slot_slice_micros": 850000,
+  "tasks": "overfull-hbox,write-compressor,fix-code-vulnerability,regex-log,build-cython-ext,headless-terminal,multi-source-data-merger,largest-eigenval,gcode-to-text,sanitize-git-repo"
+ },
+ "projection_micros": {
+  "compute": {
+   "ceiling": 7988890,
+   "source": "docs/build/reports/2026-11-20-fp-w4x-quote.json pq-feb61167ae35dd0f (D 22.5h dead-man + 1h restart + disk + egress)"
+  },
+  "model": {
+   "ceiling": 64188120,
+   "expected": 43068050,
+   "source": "docs/build/reports/2026-11-19-fp-e-comparative-quote.json fp_e_full row: n_trials 150 \u2014 the committed prior; W4 measured 6,983,035 \u00b5$ over 120 settled slots as the nearer evidence"
+  },
+  "total_ceiling_shape": 72177010
+ },
+ "recorded_at": "2026-11-20T02:20:26Z",
+ "recorded_before_first_metered_call": true,
+ "schema": "hh-fp-spend-bound/1",
+ "scope": [
+  "provision GCE instance per scripts/gce-backend/declarations/fp-w4x-r656.json",
+  "lane probe + composed k=5 schedule: 10 held tasks x 5 replicates x 3 arms (150 admitted slots)",
+  "arms: pi@0.52.3 (hosted lane, admission amendment docs/build/reports/2026-11-20-fp-w4x-admission-pi.json) + claude-code@2.1.50 (hosted, \u2026-admission-claude-code.json) + v5 corrected-seal (hh-fp-sweep-level/1 docs/build/reports/2026-11-20-fp-sweep-v5-corrected.json level_ref sha256:2e064214\u2026)",
+  "harvest + teardown (phase_close: project delete) + archive upload + settlement"
+ ],
+ "stage": "r6.56-execution",
+ "ticket": "R6.56",
+ "window": "w4x"
+}
