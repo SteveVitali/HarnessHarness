@@ -1,0 +1,10 @@
+# Declared exceptions for check-compute-receipts.sh (R7.8 records
+# hygiene). A committed declaration whose recorded defect is unfixable
+# post-hoc — the executed window ran with the authored value, so the
+# record's bytes stand append-only — is rowed here, never greenwashed:
+# the checker re-verifies the verbatim refusal reason still matches and
+# the named DF row exists; a reason drift, a missing row, or an unrowed
+# refusal still fails.
+#
+# Format: <filename> | <verbatim validate_decl refusal reason> | <DF row>
+fp-p4c2.json | dead_man.in_guest_timer | DF-R7.8-1

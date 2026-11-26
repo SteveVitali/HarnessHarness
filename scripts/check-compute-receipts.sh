@@ -54,15 +54,40 @@ done
 echo "check-compute-receipts: $n receipt(s) + $c cost record(s) valid ($skip non-compute record(s) skipped)"
 
 m=0
+x=0
+EXC="$B/declarations/EXCEPTIONS.txt"
 for f in scripts/gce-backend/declarations/*.json; do
   [ -f "$f" ] || continue
-  if python3 -I "$B/validate_decl.py" "$f"; then
+  if err=$(python3 -I "$B/validate_decl.py" "$f" 2>&1); then
     m=$((m + 1))
   else
-    fail=1
+    # Rowed exception (R7.8 records hygiene): a committed declaration
+    # whose recorded defect is unfixable post-hoc — the executed window
+    # ran with the authored value, so the bytes stand append-only. The
+    # exception names the verbatim refusal reason + the DF row that owns
+    # the permanent disposition; a reason drift, a missing row, or an
+    # unrowed refusal still fails — the exception never greenwashes.
+    base=$(basename "$f")
+    exc=$(grep -F "$base | " "$EXC" 2>/dev/null | head -1 || true)
+    ok=0
+    if [ -n "$exc" ]; then
+      ereason=$(printf '%s' "$exc" | cut -d'|' -f2 | sed 's/^ *//;s/ *$//')
+      erow=$(printf '%s' "$exc" | cut -d'|' -f3 | sed 's/^ *//;s/ *$//')
+      if printf '%s' "$err" | grep -qF "Refused{decl.${ereason}}" \
+         && grep -qF "| ${erow} |" docs/tickets/DEFERRALS.md; then
+        ok=1
+      fi
+    fi
+    if [ "$ok" -eq 1 ]; then
+      x=$((x + 1))
+      echo "check-compute-receipts: $f excepted (rowed: $erow — $ereason)" >&2
+    else
+      printf '%s\n' "$err" >&2
+      fail=1
+    fi
   fi
 done
-echo "check-compute-receipts: $m declaration(s) valid"
+echo "check-compute-receipts: $m declaration(s) valid, $x excepted (rowed)"
 
 [ "$fail" -eq 0 ] || { echo "check-compute-receipts: FAIL" >&2; exit 1; }
 echo "check-compute-receipts: OK"

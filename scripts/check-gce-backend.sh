@@ -276,8 +276,17 @@ printf 'slot-1 receipt\n' > "$T/runroot/slot-1.txt"
 printf 'runner log\n'      > "$T/runroot/runner.log"
 ( cd "$T/runroot" && { sha256sum slot-1.txt runner.log 2>/dev/null || shasum -a 256 slot-1.txt runner.log; } > "$STATE/scp_src/hh-manifest.sha256" )
 ( cd "$T/runroot" && tar czf "$STATE/scp_src/hh-harvest.tar.gz" . )
-HREMOTE="sudo sh -c 'rm -f /tmp/hh-manifest.sha256; mkdir -p \"/var/lib/hh/runs/run-root-w1x\" && cd \"/var/lib/hh/runs/run-root-w1x\" && find . -type f -print0 | sort -z | xargs -0 --no-run-if-empty sha256sum > /tmp/hh-manifest.sha256 && tar czf /tmp/hh-harvest.tar.gz . && sha256sum /tmp/hh-manifest.sha256 /tmp/hh-harvest.tar.gz'"
+HREMOTE="sudo sh -c 'rm -f /tmp/hh-manifest.sha256; cd \"/var/lib/hh/runs/run-root-w1x\" && find . -type f -print0 | sort -z | xargs -0 --no-run-if-empty sha256sum > /tmp/hh-manifest.sha256 && tar czf /tmp/hh-harvest.tar.gz . && sha256sum /tmp/hh-manifest.sha256 /tmp/hh-harvest.tar.gz'"
 sshf "$HREMOTE" "$(cd "$STATE/scp_src" && { sha256sum hh-manifest.sha256 hh-harvest.tar.gz 2>/dev/null || shasum -a 256 hh-manifest.sha256 hh-harvest.tar.gz; })"
+# DF-R7.3-4(a) divergence fixture: the driver's recorded --out can
+# diverge from run-root-$WINDOW (X1: window p4x1 → run-root-p4x). The
+# driver stamps last-run-root-<window> beside the roots; the harvest
+# resolves the run root from the marker, never the derived name.
+mkdecl "$DECLS/diverge.json" 'd["window"]="w9d"; d["labels"]["hh-window"]="w9d"'
+set_qid "$DECLS/diverge.json"
+sshf 'cat /var/lib/hh/runs/last-run-root-w9d 2>/dev/null' '/var/lib/hh/runs/run-root-p4x'
+HREMOTE2="sudo sh -c 'rm -f /tmp/hh-manifest.sha256; cd \"/var/lib/hh/runs/run-root-p4x\" && find . -type f -print0 | sort -z | xargs -0 --no-run-if-empty sha256sum > /tmp/hh-manifest.sha256 && tar czf /tmp/hh-harvest.tar.gz . && sha256sum /tmp/hh-manifest.sha256 /tmp/hh-harvest.tar.gz'"
+sshf "$HREMOTE2" "$(cd "$STATE/scp_src" && { sha256sum hh-manifest.sha256 hh-harvest.tar.gz 2>/dev/null || shasum -a 256 hh-manifest.sha256 hh-harvest.tar.gz; })"
 
 SCAN="$REPO/target/debug/hh-secret-scan"
 [ -x "$SCAN" ] || (cd "$REPO" && cargo build -q -p hharness-secrets --bins)
@@ -562,6 +571,17 @@ printf '1' > "$STATE/ssh_rc/$(snorm "$HREMOTE")"
 expect_rc 2 "teardown refuses when harvest fails" teardown_case "$DECLS/base.json"
 lacks 'instances] [delete' "delete never runs without harvest"
 rm -f "$STATE/ssh_rc/$(snorm "$HREMOTE")"
+# DF-R7.3-4(a) — window-id/run-root-dir divergence: the marker names
+# run-root-p4x while the window is w9d; the harvest must target the
+# driver's recorded --out, not run-root-w9d (which would mkdir an
+# empty dir under the pre-fix code and "verify" trivially).
+: > "$LOG"; prep_live
+G harvest "$DECLS/diverge.json" >/dev/null \
+  && ok "harvest resolves run-root from the driver marker (w9d→p4x)" \
+  || bad "marker-resolved harvest failed"
+has 'cd "/var/lib/hh/runs/run-root-p4x"' \
+  "remote manifest+tar ran on the marker-resolved run-root, not run-root-w9d"
+lacks 'mkdir -p' "harvest never mints an empty run-root dir"
 # leftover disk refuses
 : > "$LOG"; prep_live
 printf '[{"name":"leftover","type":"pd-balanced"}]\n' > "$LIVE/after_delete_disks.json"
@@ -827,6 +847,21 @@ done
 python3 scripts/gce-backend/test_w4_main_driver.py >/dev/null 2>&1 \
   && ok "run_verifier commit-clone fixture battery" \
   || bad "run_verifier commit-clone fixture battery"
+
+# ── the p4c/p4x driver machinery batteries (R7.8 DF-sweep) ──────────
+# fixture regression for DF-R7.5-1 (run_id-keyed session artifacts),
+# DF-R7.5-2 (cell_spec memory bound), DF-CAP7.1-1 (post-seal cost
+# reconciliation), DF-CAP7.1-2 (run-keyed verify-cell + bounded
+# container_conflict retry) — offline fixtures, never live evidence.
+for t in scripts/gce-backend/test_p4c_main_driver.py \
+         scripts/gce-backend/test_p4x_main_driver.py; do
+  if PYTHONDONTWRITEBYTECODE=1 python3 "$t" >"$T/$(basename "$t").log" 2>&1; then
+    ok "$(basename "$t") ($(grep -Eo '^Ran [0-9]+ tests' "$T/$(basename "$t").log"))"
+  else
+    tail -n 40 "$T/$(basename "$t").log" >&2
+    bad "$(basename "$t")"
+  fi
+done
 
 
 printf 'check-gce-backend: %d passed, %d failed\n' "$PASS" "$FAILED"

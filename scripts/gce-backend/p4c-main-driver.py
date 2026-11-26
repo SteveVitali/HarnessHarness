@@ -56,7 +56,7 @@ usage (on the compute VM):
     --slot-deadline-s 3738 --harvest-reserve-s 21600 \
     --dead-man-epoch EPOCH --window P4C --out RUN_ROOT
 """
-import argparse, hashlib, json, os, subprocess, sys, time, urllib.request
+import argparse, hashlib, json, os, re, subprocess, sys, time, urllib.request
 
 # The frozen executable member-set — V2–V7 absent by selection
 # (`selected{m=1}`); V8/V9 never enter it
@@ -124,6 +124,125 @@ def seed_settled_results(slots_dir):
             except Exception:
                 pass
     return out
+
+def safe_run_id(run_id):
+    """run_id as a filename-safe fragment (runs name files)."""
+    return re.sub(r"[^A-Za-z0-9._-]+", "-", run_id)
+
+def session_artifact_paths(out_dir, run_id):
+    """DF-R7.5-1 — session/probe artifact names keyed on run_id so a
+    prior attempt's dead-token session file can never shadow this
+    run's provisioning (the P4-C r2a stale-session false hold:
+    222 × `withheld{admission:native_lane_hold}` on 401'd grants)."""
+    safe = safe_run_id(run_id)
+    return {"session": os.path.join(out_dir,
+                                    f"proxy-session-{safe}.json"),
+            "sentinel": os.path.join(out_dir,
+                                     f"proxy-{safe}.sentinel"),
+            "log": os.path.join(out_dir,
+                                f"proxy-session-{safe}.log"),
+            "probe": os.path.join(out_dir,
+                                  f"lane-probe-{safe}.json")}
+
+def archive_stale_session(sess_file, run_id):
+    """DF-R7.5-1 — a same-path session file left by a prematurely-
+    terminated attempt carries dead tokens: archive it byte-untouched
+    (`<file>.stale-<epoch_ms>`) so the shim provisions fresh. A file
+    recording a DIFFERENT run_id at this run's keyed path is a planted
+    or misnamed artifact — refused, never trusted, never touched.
+    Returns None (absent) / ("archived", path) / ("refuse", run_id)."""
+    if not os.path.exists(sess_file):
+        return None
+    try:
+        stale = read_json(sess_file)
+    except Exception:
+        stale = None
+    other = (stale or {}).get("run_id") if isinstance(stale, dict) \
+        else None
+    if other is not None and other != run_id:
+        return ("refuse", other)
+    arch = f"{sess_file}.stale-{int(time.time() * 1000)}"
+    os.replace(sess_file, arch)
+    return ("archived", arch)
+
+def stamp_run_root_marker(a):
+    """DF-R7.3-4(a) — the harvest leg resolves the run root from the
+    driver's recorded --out, not `run-root-$WINDOW` (X1: window p4x1
+    wrote run-root-p4x and the empty-dir harvest deleted the real
+    root). Stamp the absolute --out into a window-keyed marker beside
+    the run roots; gce-backend.sh's harvest_impl reads it first and
+    falls back to the window-derived name only when it is absent."""
+    try:
+        parent = os.path.dirname(os.path.abspath(a.out))
+        with open(os.path.join(
+                parent, f"last-run-root-{a.window.lower()}"), "w") as f:
+            f.write(os.path.abspath(a.out) + "\n")
+    except OSError as e:
+        eprint(f"run-root marker write failed ({e}) — harvest falls "
+               "back to run-root-$WINDOW")
+
+def verify_tag(run_id, slot_id):
+    """DF-CAP7.1-2 — verify-cell image/container names keyed on
+    run_id + slot_id so a resumed window never collides with a dead
+    attempt's containers (the r4 `hh-verify-run-…` name collision →
+    bare rc-125 → `recorded{reward_absent}` anomaly)."""
+    return hashlib.sha256(
+        f"{run_id}/{slot_id}".encode()).hexdigest()[:16]
+
+def reconcile_costs(store_root, results, slots_dir, prior_ids=()):
+    """DF-CAP7.1-1 — post-seal per-slot cost reconciliation. The
+    reap-time `cost_micros` is a WAL snapshot:
+    `measurement.cost.attributed` events landing between the reap and
+    the session seal undercount it (recorded: X1 −102,917 µ$, P4-C
+    −258,131 µ$ vs the WAL-authoritative recompute). After the proxy
+    session seals, recompute every settled slot from the sealed WAL:
+    this run's slots commit the WAL-authoritative value with the reap
+    snapshot preserved under `cost_snapshot{approximate}`;
+    resume-seeded prior results keep their committed bytes — the
+    snapshot-vs-WAL residual lands on their window row only, never on
+    the prior slot-result.json. Returns the
+    `measurement.cost.reconciled` rows for the window record."""
+    evs = read_events(store_root)
+    rows = []
+    for sid in sorted(results):
+        row = results[sid]
+        if not isinstance(row, dict) or "rc" not in row:
+            continue
+        snap = row.get("cost_micros") or 0
+        wal = slot_cost_micros(evs, sid)
+        residual = wal - snap
+        if sid in prior_ids:
+            row["cost_snapshot"] = {
+                "class": "cost_snapshot{approximate}",
+                "sampled_at": "reap",
+                "wal_recompute_micros": wal,
+                "residual_micros": residual}
+            rows.append({"participant_ref": sid,
+                         "class": "measurement.cost.reconciled",
+                         "snapshot_micros": snap,
+                         "wal_micros": wal,
+                         "residual_micros": residual,
+                         "disposition": "prior{byte_untouched}"})
+            continue
+        if residual == 0:
+            continue
+        row["cost_micros"] = wal
+        row["cost_snapshot"] = {
+            "class": "cost_snapshot{approximate}",
+            "sampled_at": "reap",
+            "reap_micros": snap,
+            "reconciled_micros": wal,
+            "residual_micros": residual}
+        with open(os.path.join(slots_dir, sid, "slot-result.json"),
+                  "w") as f:
+            json.dump(row, f, indent=1, sort_keys=True)
+        rows.append({"participant_ref": sid,
+                     "class": "measurement.cost.reconciled",
+                     "snapshot_micros": snap,
+                     "wal_micros": wal,
+                     "residual_micros": residual,
+                     "disposition": "reconciled"})
+    return rows
 
 def eprint(*a): print(*a, file=sys.stderr)
 
@@ -206,10 +325,11 @@ def http_call(listen, route, body, token, timeout=600):
     except Exception:
         return -1
 
-def run_lane_probe(a, sess, out_dir):
+def run_lane_probe(a, sess, probe_path):
     """`hh-lane-probe/1` — one receipted call through the loopback
     listener at the session's declared high, before the first native
-    slot (REQ-XH-124; holds.rs's committed shape)."""
+    slot (REQ-XH-124; holds.rs's committed shape). The record lands at
+    `probe_path` — the caller's run_id-keyed name (DF-R7.5-1)."""
     probe_id = "p4c-lane-probe"
     grant = (sess.get("grants") or {}).get(probe_id) or {}
     token = grant.get("slot_token")
@@ -246,7 +366,7 @@ def run_lane_probe(a, sess, out_dir):
            "evidence_label": "live-executed",
            "recorded_at": time.strftime("%Y-%m-%dT%H:%M:%SZ",
                                         time.gmtime())}
-    with open(os.path.join(out_dir, "lane-probe.json"), "w") as f:
+    with open(probe_path, "w") as f:
         json.dump(rec, f, indent=1, sort_keys=True)
     return rec, disp == "pass"
 
@@ -348,7 +468,7 @@ def run_verifier(a, m, slot_dir):
                     "verifier_unavailable{phase_boundary:tests_present}"}
         verify_s, src = task_verify_deadline_s(
             a.tasks_dir, m["task"], a.cfg_obj)
-        tag = hashlib.sha256(m["slot_id"].encode()).hexdigest()[:16]
+        tag = verify_tag(a.run_id, m["slot_id"])
         vimg = f"hh-verify-{tag}"
         vname = f"hh-verify-run-{tag}"
         p = subprocess.run(["podman", "commit", cid, vimg],
@@ -368,19 +488,34 @@ def run_verifier(a, m, slot_dir):
                     "-v", f"{ws}:/work:rw",
                     "-v", f"{tests_src}:/tests:ro",
                     "-v", f"{collect}:/logs/verifier:rw",
-                    "--workdir", workdir,
-                    vimg, "bash", "/tests/test.sh"]
-        try:
-            p = subprocess.run(run_argv, capture_output=True, text=True,
-                               timeout=verify_s)
-            row = {"disposition": "recorded", "returncode": p.returncode,
-                   "stdout_tail": p.stdout[-4000:],
-                   "stderr_tail": p.stderr[-4000:],
-                   "verify_cell": "commit_clone",
-                   "verify_egress": "bridge",
-                   "workdir": workdir,
-                   "deadline_s": verify_s, "deadline_source": src}
-        except subprocess.TimeoutExpired:
+                    "--workdir", workdir]
+        # DF-R7.5-2 — the verify clone carries the same per-cell
+        # memory bound as the slot cell.
+        if a.slot_memory_mb:
+            run_argv += ["--memory", f"{a.slot_memory_mb}m"]
+        run_argv += [vimg, "bash", "/tests/test.sh"]
+        # DF-CAP7.1-2 — a lingering same-named container from a dead
+        # attempt must never mint a bare rc-125: the run_id-keyed name
+        # makes collisions impossible across attempts; the pre-clean +
+        # one bounded retry covers an in-window remnant, and a persisting
+        # collision types `verifier_unavailable{container_conflict}`.
+        subprocess.run(["podman", "rm", "-f", vname], capture_output=True)
+        timed_out = False
+        p = None
+        for attempt in range(2):
+            try:
+                p = subprocess.run(run_argv, capture_output=True,
+                                   text=True, timeout=verify_s)
+            except subprocess.TimeoutExpired:
+                timed_out = True
+                break
+            conflict = (p.returncode == 125
+                        and "already in use" in (p.stderr or ""))
+            if not (conflict and attempt == 0):
+                break
+            subprocess.run(["podman", "rm", "-f", vname],
+                           capture_output=True)
+        if timed_out:
             subprocess.run(["podman", "stop", "-t", "5", vname],
                            capture_output=True)
             subprocess.run(["podman", "rm", "-f", vname],
@@ -388,6 +523,23 @@ def run_verifier(a, m, slot_dir):
             row = {"disposition":
                    "verifier_unavailable{verifier_timeout}",
                    "verify_cell": "commit_clone",
+                   "deadline_s": verify_s, "deadline_source": src}
+        elif p is not None and p.returncode == 125 \
+                and "already in use" in (p.stderr or ""):
+            row = {"disposition":
+                   "verifier_unavailable{container_conflict}",
+                   "returncode": p.returncode,
+                   "stderr_tail": p.stderr[-2000:],
+                   "verify_cell": "commit_clone",
+                   "verify_egress": "bridge",
+                   "deadline_s": verify_s, "deadline_source": src}
+        else:
+            row = {"disposition": "recorded", "returncode": p.returncode,
+                   "stdout_tail": p.stdout[-4000:],
+                   "stderr_tail": p.stderr[-4000:],
+                   "verify_cell": "commit_clone",
+                   "verify_egress": "bridge",
+                   "workdir": workdir,
                    "deadline_s": verify_s, "deadline_source": src}
         # The reward + CTRF bytes landed host-side through the collect
         # mount — report the reward file verbatim like the W4 leg did.
@@ -459,7 +611,13 @@ def launch_member(a, sess, m, slot_dir):
         json.dump({"arm_id": arm, "task": m["task"],
                    "replicate": m["replicate"],
                    "effort": ARM_EFFORT.get(arm, DEFAULT_EFFORT),
-                   "pack_reasoning": ARM_PACK.get(arm, DEFAULT_PACK)},
+                   "pack_reasoning": ARM_PACK.get(arm, DEFAULT_PACK),
+                   # DF-R7.5-2 — the declared per-cell memory bound the
+                   # launch spec carries (0 = unbounded, recorded
+                   # verbatim).
+                   "applied_limits": (
+                       {"memory_mb": a.slot_memory_mb}
+                       if a.slot_memory_mb else {})},
                   f, indent=1, sort_keys=True)
     ovf = os.path.join(slot_dir, "overrides.json")
     with open(ovf, "w") as f:
@@ -468,6 +626,13 @@ def launch_member(a, sess, m, slot_dir):
                     "value": "env:HH_L1_API_KEY"}], f)
     conn = {"class": "local_container", "image": image,
             "exec_allow": ["/"], "workspace_roots": [stage]}
+    # DF-R7.5-2 — the declared per-trial memory bound rides
+    # connection_info.cell_spec verbatim into the env record's
+    # ext["cell_spec"]: podman create gets --memory <mb>m and a
+    # subject memory bomb dies inside its own cgroup before
+    # host-global OOM takes ens4/journald (P4-C r3 17:39Z).
+    if a.slot_memory_mb:
+        conn["cell_spec"] = {"memory_mb": a.slot_memory_mb}
     cmd = [a.l1_drive_bin, "--store-root", os.path.join(slot_dir, "store"),
            "--workspace-root", stage, "--holder", "hh-native",
            "--definition", docf, "--override", ovf,
@@ -519,6 +684,12 @@ def main():
     ap.add_argument("--slot-slice-micros", type=int, required=True)
     ap.add_argument("--concurrency", type=int, default=4)
     ap.add_argument("--slot-deadline-s", type=int, default=3738)
+    ap.add_argument("--slot-memory-mb", type=int, default=6144,
+                    help="per-slot container memory bound in MiB — "
+                         "the declaration's memory_per_trial_gib 6 "
+                         "(DF-R7.5-2: a subject memory bomb dies "
+                         "inside its own cgroup before host-global "
+                         "OOM; 0 disables the bound)")
     ap.add_argument("--harvest-reserve-s", type=int, default=21_600)
     ap.add_argument("--dead-man-epoch", type=float, required=True)
     ap.add_argument("--checkpoint-round", type=int, default=2)
@@ -541,16 +712,23 @@ def main():
                          "relaunched or re-emitted")
     ap.add_argument("--window-name", default=None,
                     help="window record filename under --out "
-                         "(default {slot_prefix}-window.json) — a "
-                         "resumed run MUST pass a distinct name; the "
-                         "prior terminal record stays append-only")
+                         "(default {slot_prefix}-window-{run_id}.json "
+                         "— DF-R7.5-1 keyed) — a resumed run MUST pass "
+                         "a distinct name; the prior terminal record "
+                         "stays append-only")
     ap.add_argument("--checkpoint-name", default=None,
                     help="checkpoint record filename under --out "
-                         "(default checkpoint-r{checkpoint_round}.json)")
+                         "(default checkpoint-r{checkpoint_round}-"
+                         "{run_id}.json — DF-R7.5-1 keyed)")
     a = ap.parse_args()
-    a.window_name = a.window_name or f"{a.slot_prefix}-window.json"
+    # DF-R7.5-1 — record names default to run_id-keyed so a later
+    # attempt never overwrites prior-window evidence; an explicit
+    # name still wins (the resume contract's distinct-name rule).
+    rid = safe_run_id(a.run_id)
+    a.window_name = (a.window_name
+                     or f"{a.slot_prefix}-window-{rid}.json")
     a.checkpoint_name = (a.checkpoint_name
-                         or f"checkpoint-r{a.checkpoint_round}.json")
+                         or f"checkpoint-r{a.checkpoint_round}-{rid}.json")
 
     tasks = a.tasks.split(",")
     cfg = read_json(a.cfg)
@@ -579,6 +757,7 @@ def main():
     os.makedirs(a.out, exist_ok=True)
     slots_dir = os.path.join(a.out, "slots")
     os.makedirs(slots_dir, exist_ok=True)
+    stamp_run_root_marker(a)
 
     # ── the session proxy — slot grants before the first call ────────
     slot_lines = [f"p4c-lane-probe:{PROBE_SLICE_MICROS}:{DEFAULT_EFFORT}"]
@@ -588,8 +767,20 @@ def main():
                 eff = ARM_EFFORT.get(m["arm"], DEFAULT_EFFORT)
                 slot_lines.append(
                     f"{m['slot_id']}:{a.slot_slice_micros}:{eff}")
-    sess_file = os.path.join(a.out, "proxy-session.json")
-    sentinel = os.path.join(a.out, "proxy.sentinel")
+    # DF-R7.5-1 — run_id-keyed session artifacts: a prior attempt's
+    # dead-token session file can never satisfy this run's poll.
+    art = session_artifact_paths(a.out, a.run_id)
+    sess_file = art["session"]
+    sentinel = art["sentinel"]
+    st = archive_stale_session(sess_file, a.run_id)
+    if st and st[0] == "refuse":
+        eprint(f"provision_refused{{stale_session:run_id_mismatch}} — "
+               f"{sess_file} records run_id {st[1]!r}, the launch "
+               f"declares {a.run_id!r} (DF-R7.5-1)")
+        return 2
+    if st:
+        eprint(f"stale session artifact archived byte-untouched → "
+               f"{st[1]} (DF-R7.5-1)")
     ps_cmd = ["python3", a.proxy_session, "--proxy-bin",
               cfg.get("proxy_bin", "hh-model-proxy"),
               "--lane-file", a.lane_file,
@@ -601,8 +792,7 @@ def main():
               "--session-out", sess_file, "--sentinel", sentinel,
               "--max-wait-seconds", "86400"]
     shim = subprocess.Popen(ps_cmd,
-                            stdout=open(os.path.join(
-                                a.out, "proxy-session.log"), "w"),
+                            stdout=open(art["log"], "w"),
                             stderr=subprocess.STDOUT, text=True)
     t0 = time.time()
     sess = None
@@ -612,6 +802,13 @@ def main():
                 sess = read_json(sess_file)
             except Exception:
                 sess = None
+            if sess and sess.get("run_id") != a.run_id:
+                shim.kill()
+                eprint(f"provision_refused{{session_run_id_mismatch}} "
+                       f"— the provisioned session records run_id "
+                       f"{sess.get('run_id')!r}, the launch declares "
+                       f"{a.run_id!r} (DF-R7.5-1)")
+                return 2
             if sess and sess.get("grants"):
                 break
         if shim.poll() is not None:
@@ -649,7 +846,7 @@ def main():
               "withheld": [], "checkpoint": None,
               "lane_probe": None}
 
-    probe_rec, probe_ok = run_lane_probe(a, sess, a.out)
+    probe_rec, probe_ok = run_lane_probe(a, sess, art["probe"])
     window["lane_probe"] = probe_rec
     native_held = not probe_ok
     # the native-lane hold binds every member — both ride the
@@ -664,6 +861,9 @@ def main():
                       # budget checkpoint fails the batch
     measured_costs = {a_: [] for a_ in arms}
     measured_walls = {a_: [] for a_ in arms}
+    prior_ids = set()   # resume-seeded slot_ids — DF-CAP7.1-1's
+                        # reconciliation labels these, never rewrites
+                        # their committed slot-result.json bytes
 
     if a.resume:
         # GATE-G36 amendment resume leg — settled slot-results seed
@@ -673,6 +873,7 @@ def main():
         # recorded hung walls predate, so priors for the projection
         # reflect the bound the fence enforces.
         prior = seed_settled_results(slots_dir)
+        prior_ids = set(prior)
         results.update(prior)
         window["resumed"] = {"recorded_at_start": len(prior),
                              "prior_window":
@@ -881,6 +1082,29 @@ def main():
             shim.terminate()
         except Exception:
             pass
+    # DF-CAP7.1-1 — post-seal per-slot cost reconciliation: the
+    # reap-time cost_micros snapshots undercount late-landing
+    # measurement.cost.attributed events; the sealed WAL is
+    # authoritative. Committed slot records carry the WAL sum, the
+    # snapshot stays typed under cost_snapshot{approximate}, and the
+    # window records the reconciled rows keyed on participant_ref.
+    store_root = sess.get("store_root") or a.store_root
+    recon = reconcile_costs(store_root, results, slots_dir,
+                            prior_ids=prior_ids)
+    window["cost_reconciliation"] = {
+        "class": "measurement.cost.reconciled",
+        "store_root": store_root,
+        "slots_checked": sum(1 for r in results.values()
+                             if isinstance(r, dict) and "rc" in r),
+        "slots_reconciled": sum(1 for r_ in recon
+                                if r_["disposition"] == "reconciled"),
+        "residual_micros": sum(r_["residual_micros"]
+                               for r_ in recon),
+        "sealed_at": time.strftime("%Y-%m-%dT%H:%M:%SZ",
+                                   time.gmtime()),
+        "rows": recon}
+    with open(os.path.join(a.out, a.window_name), "w") as f:
+        json.dump(window, f, indent=1, sort_keys=True)
     n = len(results)
     recorded = sum(1 for r in results.values()
                    if isinstance(r, dict) and "rc" in r)

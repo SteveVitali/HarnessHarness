@@ -667,7 +667,19 @@ harvest_manifest_nonempty() {
 harvest_impl() { # returns rc; fills $HARV_DIR; records gdo/vm calls
   HARV_DIR="$REPORTS/harvest/${PHASE}-${WINDOW}"
   mkdir -p "$HARV_DIR"
-  local rroot="/var/lib/hh/runs/run-root-$WINDOW"
+  # DF-R7.3-4(a) — the run-root dir is the driver's recorded --out,
+  # which can diverge from `run-root-$WINDOW` (X1: window p4x1 drove
+  # --out run-root-p4x; the derived path harvested an empty dir and
+  # delete destroyed the real root). The driver stamps its --out into
+  # a window-keyed marker beside the roots at launch; resolve it
+  # first, falling back to the window-derived name when absent.
+  local rroot
+  rroot="$(vm "cat /var/lib/hh/runs/last-run-root-$WINDOW 2>/dev/null" \
+    2>/dev/null | head -1 | tr -d '[:space:]')"
+  case "$rroot" in
+    /var/lib/hh/runs/*) ;;
+    *) rroot="/var/lib/hh/runs/run-root-$WINDOW" ;;
+  esac
   # Re-entry after a partial teardown: when no instance remains and a
   # prior verified harvest already stands for this phase+window, the
   # remote legs have no target — re-verify the standing manifest
@@ -697,8 +709,10 @@ harvest_impl() { # returns rc; fills $HARV_DIR; records gdo/vm calls
   # 2a: remote sha256 manifest + tar over the run root
   # run-roots carry root-owned evidence (0600 slot tokens, container-
   # bind native-log dirs) — the manifest+tar step must read as root or
-  # the manifest silently skips members (REQ-XB-220 completeness)
-  vm "sudo sh -c 'rm -f /tmp/hh-manifest.sha256; mkdir -p \"$rroot\" && cd \"$rroot\" && find . -type f -print0 | sort -z | xargs -0 --no-run-if-empty sha256sum > /tmp/hh-manifest.sha256 && tar czf /tmp/hh-harvest.tar.gz . && sha256sum /tmp/hh-manifest.sha256 /tmp/hh-harvest.tar.gz'" \
+  # the manifest silently skips members (REQ-XB-220 completeness).
+  # DF-R7.3-4: no `mkdir -p` — a missing run root fails closed at `cd`
+  # instead of minting a trivially-"verified" empty dir (the X1 loss).
+  vm "sudo sh -c 'rm -f /tmp/hh-manifest.sha256; cd \"$rroot\" && find . -type f -print0 | sort -z | xargs -0 --no-run-if-empty sha256sum > /tmp/hh-manifest.sha256 && tar czf /tmp/hh-harvest.tar.gz . && sha256sum /tmp/hh-manifest.sha256 /tmp/hh-harvest.tar.gz'" \
     > "$TMPD/remote.sha" || return 1
   # 2b: copy back over IAP-scp
   gdo compute scp --tunnel-through-iap --project "$PROJECT" --zone "$ZONE" \
