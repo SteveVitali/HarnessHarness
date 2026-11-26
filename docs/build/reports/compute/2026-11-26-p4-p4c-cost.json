@@ -1,0 +1,153 @@
+{
+  "attribution": {
+    "idle_seconds": 0.0,
+    "interval_source": "gcloud compute operations list --project hh-p4-a1b2c3 (14 lifecycle ops verbatim) + serial-console-r4.txt + p4c-watch.log \u2014 a parked VM has no teardown receipt, so the lifecycle member the recipe reads is reconstructed here verbatim",
+    "slot_wall_ms": 135917725,
+    "utilization_ppm": 1000000
+  },
+  "billed": {
+    "amount_micros": null,
+    "read_at": null,
+    "reason": null,
+    "record": null,
+    "source": "Cloud Billing report, project filter, read by operator",
+    "status": "pending"
+  },
+  "estimate": {
+    "free_tier_applied": false,
+    "lines_micros": {
+      "disk": 488574,
+      "egress": 360000,
+      "instance": 2957520,
+      "ipv4": 55170,
+      "nat": 0
+    },
+    "rounding": "ceil per line",
+    "total_micros": 3861264
+  },
+  "phase": "p4",
+  "project_id": "hh-p4-a1b2c3",
+  "provided": {
+    "OLLAMA_API_KEY": "yes",
+    "gcloud_auth": "yes"
+  },
+  "provider": "gce",
+  "quote": {
+    "ceiling_micros": 12229780,
+    "dead_man_h": 36,
+    "id": "3a4187759b2d8411"
+  },
+  "rate_table": {
+    "path": "docs/build/reports/live/pricing.json",
+    "rows": [
+      {
+        "price_micros": 268040,
+        "retrieved": "2026-11-07",
+        "sku": "e2-standard-8",
+        "source": "https://cloud.google.com/compute/vm-instance-pricing#e2_standard_machine_types",
+        "unit": "hour"
+      },
+      {
+        "price_micros": 120000,
+        "retrieved": "2026-11-07",
+        "sku": "egress",
+        "source": "https://cloud.google.com/vpc/network-pricing#egress",
+        "unit": "gib"
+      },
+      {
+        "price_micros": 5000,
+        "retrieved": "2026-11-07",
+        "sku": "ipv4",
+        "source": "https://cloud.google.com/vpc/network-pricing#ipaddress",
+        "unit": "hour"
+      },
+      {
+        "price_micros": 44000,
+        "retrieved": "2026-11-07",
+        "sku": "nat_gateway",
+        "source": "https://cloud.google.com/nat/pricing",
+        "unit": "hour"
+      },
+      {
+        "price_micros": 137,
+        "retrieved": "2026-11-07",
+        "sku": "pd-balanced",
+        "source": "https://cloud.google.com/compute/disks-image-pricing#persistent-disk-pricing",
+        "unit": "gib_hour"
+      }
+    ],
+    "schema": "hh-live-pricing/2",
+    "sha256": "045e0b8612e901505b9dbd66cbb460286ba763f8b6a169bef7721eb6251033e2"
+  },
+  "receipts": {
+    "provision": {
+      "path": "docs/build/reports/compute/2026-11-24-p4-p4c-provision.json",
+      "sha256": "410ee4c6d2ac29e3666cd8d916a63ec3e0c782c3a37148b9cd4128acddd49cbc"
+    },
+    "teardown": {
+      "path": "n/a{vm_parked:hh-p4-p4c_TERMINATED_disk_retained_pending_operator_teardown_ruling;lifecycle_intervals_reconstructed_from_operations_log+serial+watch_log}",
+      "sha256": "n/a{receipt_absent}"
+    }
+  },
+  "reconciliation": {
+    "delta_micros": null,
+    "tolerance_micros": null,
+    "verdict": "pending"
+  },
+  "record_id": "cc-f28083e4cb6a168f",
+  "recorded_at": "2026-11-26T04:51:23Z",
+  "schema": "hh-compute-cost/1",
+  "ticket": "GATE-G36",
+  "usage": {
+    "disk": {
+      "gib_seconds": 12838427.1,
+      "intervals": [
+        {
+          "from": "2026-11-24T20:21:15.870Z",
+          "to": "2026-11-25T08:14:30.627Z"
+        }
+      ],
+      "micros": 488574,
+      "note": "parked_retention \u2014 the boot disk bills ~41,100 \u00b5$/h past the estimate horizon while the VM stays TERMINATED/retained; the residual accrues until the operator teardown ruling (H21-reconcile class)",
+      "size_gib": 300,
+      "type": "pd-balanced"
+    },
+    "egress": {
+      "gib_bound": 3.0,
+      "gib_measured": null,
+      "label": "estimated",
+      "method": "declared estimate \u2014 guest NIC counters unrecorded",
+      "micros": 360000
+    },
+    "instance": {
+      "billable_seconds": 39721.94,
+      "intervals": [
+        {
+          "from": "2026-11-24T20:21:15.870Z",
+          "state": "RUNNING",
+          "to": "2026-11-25T07:16:56.714Z"
+        },
+        {
+          "from": "2026-11-25T07:20:41.717Z",
+          "state": "RUNNING",
+          "to": "2026-11-25T07:27:02.813Z"
+        }
+      ],
+      "machine_type": "e2-standard-8",
+      "micros": 2957520,
+      "seconds": 39721.94
+    },
+    "ipv4": {
+      "kind": "ephemeral",
+      "micros": 55170,
+      "seconds": 39721.94
+    },
+    "nat": {
+      "micros": 0,
+      "present": false,
+      "seconds": 0
+    }
+  },
+  "window": "p4c",
+  "zone": "us-central1-a"
+}
