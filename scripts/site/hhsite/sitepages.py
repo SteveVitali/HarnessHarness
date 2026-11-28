@@ -1833,10 +1833,20 @@ def _tree_cell(o):
         if isinstance(o.get("state"), str):
             return _absent_span(o)
         if "text" in o or "v" in o:
+            if isinstance(o.get("text"), str) \
+                    and len(o["text"]) > 240 \
+                    and o["text"][:1] in ("{", "["):
+                return ('<details class="micro"><summary>raw '
+                        '(%d&nbsp;B)</summary>%s</details>'
+                        % (len(o["text"]), _span(o)))
             return _span(o)
         if o.get("derived"):
-            return '<span class="micro">%s</span>' % ESC(
-                json.dumps(o["v"]))
+            blob = json.dumps(o["v"])
+            if len(blob) > 240:
+                return ('<details class="micro"><summary>raw '
+                        '(%d&nbsp;B)</summary><span class="micro">%s'
+                        '</span></details>' % (len(blob), ESC(blob)))
+            return '<span class="micro">%s</span>' % ESC(blob)
         return "".join(
             '<div class="kv"><span>%s</span>%s</div>'
             % (ESC(k), _tree_cell(v)) for k, v in sorted(o.items()))
@@ -1904,8 +1914,8 @@ def _fp_withheld_page(sd, pkts, commit, title, path):
         '<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'
         % (_tree_cell(m.get("member")),
            _tree_cell(m.get("status") or m.get("disposition")),
-           _tree_cell(m.get("raw_p_ppm", m.get("raw_ppm"))),
-           _tree_cell(m.get("adjusted_ppm")))
+           _ppm_cell(m.get("raw_p_ppm", m.get("raw_ppm"))),
+           _ppm_cell(m.get("adjusted_ppm")))
         for m in fam.get("members", []))
     fam_tbl = ('<table class="data"><thead><tr><th>member</th>'
                '<th>status</th><th>raw p</th><th>adjusted p</th></tr>'
@@ -1914,7 +1924,7 @@ def _fp_withheld_page(sd, pkts, commit, title, path):
                 'reference %s</p>'
                 % (_tree_cell(fam.get("id")),
                    _tree_cell(fam.get("method")),
-                   _tree_cell(fam.get("alpha_ppm")),
+                   _ppm_cell(fam.get("alpha_ppm")),
                    _tree_cell(fam.get("reference"))))
 
     arm_sections = []
@@ -2094,6 +2104,34 @@ def phase3_page(sd, pkts, commit):
                                     commit))
 
 
+def _prob_str(ppm):
+    """Integer ppm → a 0–1 probability display at the packet's own
+    precision (50000 → '0.05', 45455 → '0.045455', 1000000 → '1')."""
+    if ppm % 1000000 == 0:
+        return str(ppm // 1000000)
+    return ("%.6f" % (ppm / 1000000.0)).rstrip("0").rstrip(".")
+
+
+def _ppm_cell(o, percent=False, sign=False):
+    """A projected *_ppm member at human units — probabilities as
+    decimals, rates/deltas as percent (D-2) — with the packet's raw ppm
+    annotated (the provenance leg needs the raw value in the displayed
+    text). A typed marker or absent member stays the packet's own
+    token, never a numeral."""
+    if isinstance(o, dict) and isinstance(o.get("v"), (int, float)):
+        v = o["v"]
+        txt = (derive.DERIVATIONS["D-2"]["fmt"](v, 0, "ppm")
+               if percent else _prob_str(v))
+        raw = str(v)
+        if sign and v > 0:
+            txt = "+" + txt
+            raw = "+" + raw
+        txt = "%s <span class=\"micro\">(%s ppm)</span>" % (txt, raw)
+        return '<span class="num"%s>%s</span>' % (
+            prov_attrs(o.get("src")), txt)
+    return _tree_cell(o)
+
+
 def _p4c_bound_cell(b):
     """A projected bound block {low, high, …extras} → an interval cell;
     a typed marker stays the packet's own token."""
@@ -2157,8 +2195,8 @@ def _p4c_section(p, pkts):
         '<td>%s</td></tr>'
         % (_tree_cell(m.get("member")),
            _tree_cell(m.get("status") or m.get("disposition")),
-           _tree_cell(m.get("raw_p_ppm", m.get("raw_ppm"))),
-           _tree_cell(m.get("adjusted_p_ppm", m.get("adjusted_ppm"))),
+           _ppm_cell(m.get("raw_p_ppm", m.get("raw_ppm"))),
+           _ppm_cell(m.get("adjusted_p_ppm", m.get("adjusted_ppm"))),
            _tree_cell(m.get("unavailable")))
         for m in fam.get("members", []))
     fam_tbl = ('<table class="data"><thead><tr><th>member</th>'
@@ -2174,7 +2212,7 @@ def _p4c_section(p, pkts):
         % (_span(a["arm"]), _p4c_bound_cell(a["bound_ppm"]),
            _tree_cell(a["completion_envelope"]),
            _tree_cell(a["conditional_secondary"]),
-           _tree_cell(a["theta_ppm"]),
+           _ppm_cell(a["theta_ppm"], percent=True),
            _tree_cell(a["unresolved_tasks"]))
         for a in c["estimand"]["arms"])
     arm_tbl = ('<table class="data"><thead><tr><th>arm</th>'
@@ -2191,7 +2229,7 @@ def _p4c_section(p, pkts):
                _verdict_stamp(m["disposition"]["text"])),
             '<div class="kv"><span>Δ̂ vs control (%s)</span>%s</div>'
             % (ESC(c["estimand"]["contrast"]["direction"]["text"]),
-               _tree_cell(m["delta_ppm"])),
+               _ppm_cell(m["delta_ppm"], percent=True, sign=True)),
             '<div class="kv"><span>all-planned bound</span>%s</div>'
             % _p4c_bound_cell(m["bound_ppm"]),
             '<div class="kv"><span>task-bootstrap interval '
@@ -2200,9 +2238,9 @@ def _p4c_section(p, pkts):
             '<div class="kv"><span>FM interval</span>%s</div>'
             % _tree_cell(m["fm_interval"]),
             '<div class="kv"><span>raw p</span>%s</div>'
-            % _tree_cell(m["raw_p_ppm"]),
+            % _ppm_cell(m["raw_p_ppm"]),
             '<div class="kv"><span>Holm-adjusted p</span>%s</div>'
-            % _tree_cell(m["adjusted_p_ppm"]),
+            % _ppm_cell(m["adjusted_p_ppm"]),
             '<div class="kv"><span>Holm rejected at α</span>%s</div>'
             % _tree_cell(m["holm_rejected_at_alpha"]),
             '<div class="kv"><span>status</span>%s</div>'
@@ -2231,7 +2269,8 @@ def _p4c_section(p, pkts):
 
     est_members = "".join(
         '<div class="kv"><span>%s</span>Δ̂ %s · %s · %s</div>'
-        % (_tree_cell(m["member"]), _tree_cell(m["delta_ppm"]),
+        % (_tree_cell(m["member"]),
+           _ppm_cell(m["delta_ppm"], percent=True, sign=True),
            _tree_cell(m["factor"]), _tree_cell(m["label"]))
         for m in cl["exploratory_estimates"]["members"])
 
@@ -2252,7 +2291,7 @@ def _p4c_section(p, pkts):
         "<h3>Family</h3>",
         '<p class="meta">family %s · method %s · α %s · note %s</p>'
         % (_tree_cell(fam.get("id")), _tree_cell(fam.get("method")),
-           _tree_cell(fam.get("alpha_ppm")),
+           _ppm_cell(fam.get("alpha_ppm")),
            _tree_cell(fam.get("note"))),
         fam_labels, fam_tbl,
         '<p class="meta">exploratory family %s · method %s</p>'
@@ -2312,8 +2351,8 @@ def phase4_page(sd, pkts, commit):
         '<tr><td>%s</td><td>%s</td><td>%s</td><td>%s</td></tr>'
         % (_tree_cell(m.get("member")),
            _tree_cell(m.get("status") or m.get("disposition")),
-           _tree_cell(m.get("raw_p_ppm", m.get("raw_ppm"))),
-           _tree_cell(m.get("adjusted_ppm")))
+           _ppm_cell(m.get("raw_p_ppm", m.get("raw_ppm"))),
+           _ppm_cell(m.get("adjusted_ppm")))
         for m in fam.get("members", []))
     fam_tbl = ('<table class="data"><thead><tr><th>member</th>'
                '<th>status</th><th>raw p</th><th>adjusted p</th></tr>'
@@ -2322,7 +2361,7 @@ def phase4_page(sd, pkts, commit):
                 'reference %s</p>'
                 % (_tree_cell(fam.get("id")),
                    _tree_cell(fam.get("method")),
-                   _tree_cell(fam.get("alpha_ppm")),
+                   _ppm_cell(fam.get("alpha_ppm")),
                    _tree_cell(fam.get("reference"))))
 
     arm_sections = []
@@ -2363,6 +2402,11 @@ def phase4_page(sd, pkts, commit):
         '<p class="meta">%s</p>' % ESC(p["executed_evidence"]["text"]),
         _pkt_cite(pkts, ("p4-fp", "p3-l2", "p4c-confirm")),
         _baseline_block(p),
+        _p4c_section(p, pkts),
+        "<h2>First pass — fp-w4x capability demonstration</h2>",
+        '<p class="meta">the exploratory first pass below is context, '
+        'not the confirmatory result — the held-out confirmation is '
+        'the second pass above</p>',
         "<h2>Family</h2>", fam_head, fam_tbl,
         '<h2>Exploratory family</h2>',
         '<p class="meta">%s · %s</p>'
@@ -2377,7 +2421,6 @@ def phase4_page(sd, pkts, commit):
                 for s in p["sources"]),
         '<div class="kv"><span>seal/open</span>%s</div>'
         % _tree_cell(p["seal_open_ref"]),
-        _p4c_section(p, pkts),
     ]
     return pages.shell("Phase 4 — configuration experiments", "phase-4/",
                        "".join(body), labels, "phase-4",
