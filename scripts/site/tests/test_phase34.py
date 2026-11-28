@@ -262,8 +262,12 @@ def leg_public(tmp):
         if "publication gate pending" in t:
             fail("public", "%s gate-pending under a pinning record"
                  % rel)
-        if FP_LABEL not in t or "withheld{" not in t:
-            fail("public", "%s lacks first-pass label/typed withholds"
+        # typed markers at full prominence — under GATE-G38's second-pass
+        # records the withheld{...} states resolved (v5 corrected-seal);
+        # the invariant that survives is the absent-token class itself
+        # (unavailable{/refused/not_computed), never an imputed value.
+        if FP_LABEL not in t or "absent-token" not in t:
+            fail("public", "%s lacks first-pass label/typed markers"
                  % rel)
         if "fixture ·" in t or "fixture-labelled" in t:
             fail("public", "%s leaks fixture content" % rel)
