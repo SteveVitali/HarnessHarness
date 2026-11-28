@@ -1,0 +1,43 @@
+{
+ "attribution": {
+  "balance_delta_vs_settle_usd": -2e-05,
+  "conclusion": ">=24 h post-teardown confirming read (due >= 2026-11-27 ~07:26Z): provider trailing-24h total 20 \u00b5$ = $0.00002, all from one 2-request bucket 2026-11-26T11:00-12:00Z (glm-5.3-flash, 38 in / 19 out tokens \u2014 ping-sized, consistent with the R7.9 uncached-token probe's 2 live calls ~that hour; no window spend). Purchased balance 3.42963 USD \u2014 down exactly $0.00002 from the settle record's observed 3.42965, reconciling to the micro. GCP compute: project hh-fp-a1b2c3 now returns not found \u2014 the project itself is deleted, strictly stronger than the earlier zero-billables read; no billed compute possible. The p4c settlement stands as recorded: model `within` (WAL-authoritative $16.90), compute `unavailable` (estimates stand), teardown confirmed.",
+  "provider_trailing_24h_usd": 2e-05,
+  "unexplained_post_teardown_usd": 0
+ },
+ "balance_observed": "purchased 3.42963 USD remaining (settle record observed 3.42965); included allowance 0",
+ "boundary_flags": [
+  "trailing_24h_spans_3.5h_pre_mark_window_post_teardown"
+ ],
+ "kind": "confirming_read",
+ "phase": "fp",
+ "provided": {
+  "OLLAMA_API_KEY": "yes"
+ },
+ "reads": [
+  {
+   "file": "~/hh-retained/p4c/settle/h21-confirm-usage.json",
+   "kind": "usage-24h",
+   "read_at": "2026-11-27T07:30:00Z",
+   "status": 200
+  },
+  {
+   "file": "~/hh-retained/p4c/settle/h21-confirm-balance.json",
+   "kind": "balance",
+   "read_at": "2026-11-27T07:31:01Z",
+   "status": 200
+  },
+  {
+   "file": "~/hh-retained/p4c/settle/h21-confirm-gcloud.txt",
+   "kind": "gcloud-zero-billables",
+   "read_at": "2026-11-27T07:31:0xZ",
+   "status": "project hh-fp-a1b2c3 not found \u2014 deleted"
+  }
+ ],
+ "recorded_at": "2026-11-28T17:5xZ",
+ "schema": "hh-fp-settlement/1",
+ "status": "confirmed \u2014 pending{clock} resolved: no unexplained post-teardown model usage (20 \u00b5$ trailing-24h attributable to the R7.9 probe's 2 live calls); GCP project deleted; settlement stands as recorded",
+ "supersedes": "amends docs/build/readouts/HUMAN-H21.md P4-C entry `pending{clock}` \u2014 amends, never rewrites",
+ "ticket": "HUMAN-H21",
+ "window": "p4c"
+}

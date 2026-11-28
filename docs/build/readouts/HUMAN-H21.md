@@ -34,3 +34,24 @@ recompute uses billed figures where they exist, estimates flagged otherwise).
   operator's teardown ruling, recorded as executed.
 - Layer: `signed` — two entries complete; no fabricated figures; `unavailable`/`pending{clock}`
   are landed tokens.
+
+## Amendment 2026-11-28 — P4-C ≥ 24 h confirming read landed (`pending{clock}` resolved)
+
+The clock-gated confirming read executed 2026-11-27T07:30–07:31Z (≥ 24 h after the
+~07:26Z Nov-26 teardown, at the recorded mark). It reads **clean**:
+
+- Provider usage trailing-24 h: **20 µ$ = $0.00002** total — one 2-request bucket
+  2026-11-26T11:00–12:00Z (glm-5.3-flash, 38 in / 19 out tokens — ping-sized,
+  consistent with the R7.9 uncached-token probe's 2 live calls that hour;
+  no window spend). Read `docs/build/reports/2026-11-27-fp-p4c-settle-confirm-read.json`.
+- Purchased balance: **USD 3.42963** — down exactly $0.00002 from the settle record's
+  observed 3.42965; the delta reconciles the 20 µ$ to the micro.
+- GCP compute: project `hh-fp-a1b2c3` now returns **not found** — the project itself
+  is deleted; strictly stronger than the earlier zero-billables read. No billed
+  compute possible.
+
+The P4-C entry's `pending{clock}` is hereby **resolved** — the settlement stands as
+recorded: model `within` (WAL-authoritative USD 16.90), compute `unavailable`
+(recorded estimates stand), teardown confirmed. Wrapped record:
+`docs/build/reports/2026-11-27-fp-p4c-settlement-confirm.json` (+ `.sha256` sidecar).
+Per the criterion the original entry is not rewritten — this amendment governs.
